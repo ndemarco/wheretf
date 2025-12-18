@@ -144,14 +144,30 @@ export async function resetToDefault(
 }
 
 /**
- * Upsert an agent - create if not exists, skip if exists
+ * Upsert a system agent - create if not exists, update if exists (for system agents only)
  */
 export async function upsertDefault(input: CreateAgentInput): Promise<IAgent> {
   await dbConnect();
 
   const result = await Agent.findOneAndUpdate(
     { user: input.userId, name: input.name.toLowerCase() },
-    { $setOnInsert: { ...input, name: input.name.toLowerCase() } },
+    {
+      $set: {
+        displayName: input.displayName,
+        description: input.description,
+        instructions: input.instructions,
+        aiModel: input.aiModel || 'gpt-4o',
+        tools: input.tools || [],
+        temperature: input.temperature ?? 0.7,
+        isRouter: input.isRouter || false,
+        isSystem: input.isSystem || false,
+      },
+      $setOnInsert: {
+        user: input.userId,
+        name: input.name.toLowerCase(),
+        active: true,
+      },
+    },
     { upsert: true, new: true }
   );
 

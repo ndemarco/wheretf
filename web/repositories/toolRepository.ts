@@ -4,7 +4,7 @@ import dbConnect from '@/lib/mongodb';
 export interface CreateToolInput {
   name: string;
   description?: string;
-  category: 'agents' | 'items' | 'modules' | 'templates' | 'params' | 'units' | 'utility';
+  category: 'agents' | 'items' | 'modules' | 'storage-types' | 'params' | 'units' | 'utility';
   parameters: IToolParameter[];
   handler: string;
   isSystem?: boolean;
