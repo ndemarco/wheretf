@@ -3,13 +3,18 @@ import { seedParameterKeys } from './parameters';
 import { seedUnits } from './units';
 import { seedTools } from './tools';
 import { seedAgents } from './agents';
-import { seedTemplates } from './templates';
+import { seedStorageTypes } from './storageTypes';
 
 export { seedParameterKeys } from './parameters';
 export { seedUnits } from './units';
 export { seedTools } from './tools';
 export { seedAgents } from './agents';
-export { seedTemplates } from './templates';
+export { seedStorageTypes } from './storageTypes';
+
+// Cache to track which seeds have been completed this process lifetime
+// Global defaults only need to run once per server start
+let globalSeeded = false;
+const userSeededCache = new Set<string>();
 
 /**
  * Seed all default data for a user
@@ -23,7 +28,7 @@ export async function seedDefaults(userId: string): Promise<void> {
   await seedTools();
   await seedParameterKeys();
   await seedUnits();
-  await seedTemplates();
+  await seedStorageTypes();
 
   // Per-user data
   await seedAgents(userId);
@@ -32,10 +37,14 @@ export async function seedDefaults(userId: string): Promise<void> {
 }
 
 /**
- * Seed global data only (tools, parameters, units, templates)
- * Call this on app startup
+ * Seed global data only (tools, parameters, units)
+ * Only runs once per server lifetime - cached in memory
  */
 export async function seedGlobalDefaults(): Promise<void> {
+  if (globalSeeded) {
+    return;
+  }
+
   await dbConnect();
 
   console.log('Seeding global defaults...');
@@ -43,25 +52,30 @@ export async function seedGlobalDefaults(): Promise<void> {
   await seedTools();
   await seedParameterKeys();
   await seedUnits();
-  await seedTemplates();
+  await seedStorageTypes();
 
+  globalSeeded = true;
   console.log('Global seed complete!');
 }
 
 /**
- * Check if user needs seeding and seed if necessary
+ * Ensure user's system agents are up to date
+ * Cached per-user - only runs once per user per server lifetime
  */
 export async function ensureUserSeeded(userId: string): Promise<void> {
-  await dbConnect();
-
-  // Import here to avoid circular dependencies
-  const { agentRepository } = await import('@/repositories');
-
-  // Check if user has agents
-  const agents = await agentRepository.list(userId);
-
-  if (agents.length === 0) {
-    console.log(`User ${userId} needs seeding...`);
-    await seedAgents(userId);
+  if (userSeededCache.has(userId)) {
+    return;
   }
+
+  await dbConnect();
+  await seedAgents(userId);
+  userSeededCache.add(userId);
+}
+
+/**
+ * Force re-seed on next request (useful after code updates)
+ */
+export function invalidateSeedCache(): void {
+  globalSeeded = false;
+  userSeededCache.clear();
 }
