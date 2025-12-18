@@ -1,5 +1,4 @@
-import StorageModule from '@/models/StorageModule';
-import DimensionTemplate from '@/models/DimensionTemplate';
+import StorageModule, { ICellGroup, ISubdimensions } from '@/models/StorageModule';
 import dbConnect from '@/lib/mongodb';
 
 export interface PathValidationResult {
@@ -7,6 +6,9 @@ export interface PathValidationResult {
   error?: string;
   module?: string;
   segments?: { label: string; value: string }[];
+  resolvedPath?: string; // If cell was merged, this is the canonical path
+  merged?: boolean; // True if this path resolves to a merged cell
+  cellGroup?: ICellGroup; // The cell group if merged
 }
 
 /**
@@ -36,8 +38,9 @@ export async function validatePath(path: string): Promise<PathValidationResult> 
 
   const segments: { label: string; value: string }[] = [];
   let dimensionIndex = 0;
-  let templateDimensions: { label: string; values: string[] }[] | null = null;
-  let templateDimensionIndex = 0;
+  let subdimensions: ISubdimensions | null = null;
+  let subdimensionIndex = 0;
+  let currentSubdimParentValue: string | null = null; // Track which dimension value has the subdimensions
 
   // Process each path segment after the module name
   for (let i = 1; i < parts.length; i++) {
@@ -61,28 +64,55 @@ export async function validatePath(path: string): Promise<PathValidationResult> 
       };
     }
 
-    // Check if we're processing template dimensions
-    if (templateDimensions) {
-      if (templateDimensionIndex >= templateDimensions.length) {
-        // Template dimensions exhausted, switch back to module dimensions
-        templateDimensions = null;
-        templateDimensionIndex = 0;
+    // Check if we're processing subdimensions
+    if (subdimensions) {
+      if (subdimensionIndex >= subdimensions.dimensions.length) {
+        // Subdimensions exhausted, switch back to module dimensions
+        subdimensions = null;
+        subdimensionIndex = 0;
+        currentSubdimParentValue = null;
       } else {
-        const templateDim = templateDimensions[templateDimensionIndex];
-        if (label !== templateDim.label) {
+        const subdim = subdimensions.dimensions[subdimensionIndex];
+        if (label !== subdim.label) {
           return {
             valid: false,
-            error: `Expected dimension "${templateDim.label}" but got "${label}"`,
+            error: `Expected dimension "${subdim.label}" but got "${label}"`,
           };
         }
-        if (!templateDim.values.includes(value)) {
+        if (!subdim.values.includes(value)) {
           return {
             valid: false,
-            error: `Invalid value "${value}" for dimension "${label}". Valid values: ${templateDim.values.join(', ')}`,
+            error: `Invalid value "${value}" for dimension "${label}". Valid values: ${subdim.values.join(', ')}`,
           };
         }
         segments.push({ label, value });
-        templateDimensionIndex++;
+        subdimensionIndex++;
+
+        // Check for cell groups (merged cells) at the end of subdimensions
+        if (subdimensionIndex >= subdimensions.dimensions.length && subdimensions.cellGroups) {
+          // Build the cell address from all subdimension segments
+          const subdimSegments = segments.slice(segments.length - subdimensions.dimensions.length);
+          const cellAddress = subdimSegments.map((s) => `${s.label}-${s.value}`).join(':');
+
+          // Check if this cell is part of a merged group
+          const cellGroup = subdimensions.cellGroups.find((g) => g.members.includes(cellAddress));
+          if (cellGroup) {
+            // Build the resolved path with canonical address
+            const baseSegments = segments.slice(0, segments.length - subdimensions.dimensions.length);
+            const basePath = [moduleName, ...baseSegments.map((s) => `${s.label}-${s.value}`)].join(':');
+            const resolvedPath = `${basePath}:${cellGroup.canonical}`;
+
+            return {
+              valid: true,
+              module: moduleName,
+              segments,
+              resolvedPath,
+              merged: true,
+              cellGroup,
+            };
+          }
+        }
+
         continue;
       }
     }
@@ -113,30 +143,33 @@ export async function validatePath(path: string): Promise<PathValidationResult> 
 
     segments.push({ label, value });
 
-    // Check if this value has a template mapping
-    const templateName = dimension.templateMapping?.[value];
-    if (templateName) {
-      const template = await DimensionTemplate.findOne({
-        name: templateName.toLowerCase(),
-      });
-      if (template) {
-        templateDimensions = template.dimensions;
-        templateDimensionIndex = 0;
-      }
+    // Check if this value has subdimensions
+    const subdims = dimension.subdimensions?.[value];
+    if (subdims) {
+      subdimensions = subdims;
+      subdimensionIndex = 0;
+      currentSubdimParentValue = value;
     }
 
     dimensionIndex++;
   }
-
-  // Check if we've consumed all required dimensions
-  // This is tricky because templates can add dimensions
-  // For now, we'll consider it valid if we've processed at least the first dimension
 
   return {
     valid: true,
     module: moduleName,
     segments,
   };
+}
+
+/**
+ * Resolve a path to its canonical form (handling merged cells)
+ */
+export async function resolvePath(path: string): Promise<string> {
+  const result = await validatePath(path);
+  if (!result.valid) {
+    throw new Error(result.error);
+  }
+  return result.resolvedPath || path;
 }
 
 /**

@@ -186,3 +186,30 @@ export async function move(
 
   return item;
 }
+
+/**
+ * Update location prefix for all items (used when renaming dimension values)
+ * Returns the count of items updated
+ */
+export async function updateLocationPrefix(
+  userId: string,
+  oldPrefix: string,
+  newPrefix: string
+): Promise<number> {
+  await dbConnect();
+
+  // Find all items with locations starting with oldPrefix
+  const items = await Item.find({
+    user: userId,
+    location: { $regex: `^${oldPrefix}` },
+  });
+
+  let count = 0;
+  for (const item of items) {
+    item.location = item.location.replace(oldPrefix, newPrefix);
+    await item.save();
+    count++;
+  }
+
+  return count;
+}
