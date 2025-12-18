@@ -4,9 +4,10 @@ import { NextRequest } from "next/server";
 
 const { auth } = NextAuth(authConfig);
 
-// Use edge-compatible auth config (no database adapter)
-export default async function middleware(request: NextRequest) {
-  return auth(request as any);
+// Next.js 16 proxy - replaces middleware
+// Auth check using NextAuth's authorized callback
+export async function proxy(request: NextRequest) {
+  return auth(request as unknown as Parameters<typeof auth>[0]);
 }
 
 export const config = {
