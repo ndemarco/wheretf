@@ -202,7 +202,13 @@ export async function executeAgent(
             result = {
               response: specialistResponse.content,
               agent: specialistResponse.agent,
+              toolCalls: specialistResponse.toolCalls,
             };
+            // Also add specialist's tool calls to the top-level response
+            // so they're visible for location extraction
+            if (specialistResponse.toolCalls) {
+              allToolCalls.push(...specialistResponse.toolCalls);
+            }
           }
         } else {
           // Execute DB/utility tool
