@@ -1,5 +1,7 @@
 'use client';
 
+import NextImage from 'next/image';
+
 import { useState, useRef, KeyboardEvent } from 'react';
 
 interface ChatInputProps {
@@ -54,11 +56,14 @@ export function ChatInput({ onSend, disabled }: ChatInputProps) {
         <div className="flex gap-2 mb-2 flex-wrap">
           {images.map((img, idx) => (
             <div key={idx} className="relative">
-              <img
-                src={img}
-                alt={`Upload ${idx + 1}`}
-                className="w-16 h-16 object-cover rounded"
-              />
+              <div className="relative w-16 h-16 rounded overflow-hidden">
+                <NextImage
+                  src={img}
+                  alt={`Upload ${idx + 1}`}
+                  fill
+                  className="object-cover"
+                />
+              </div>
               <button
                 onClick={() => removeImage(idx)}
                 className="absolute -top-1 -right-1 w-5 h-5 bg-red-500 text-white rounded-full text-xs flex items-center justify-center hover:bg-red-600"

@@ -14,6 +14,82 @@ interface ExtractedLocationData {
 }
 
 /**
+ * Process a single tool call and extract location data
+ */
+function processToolCall(
+  call: ToolCall,
+  results: LocationResult[],
+  resultIndexRef: { value: number }
+): ModuleInfo | null {
+  let moduleInfo: ModuleInfo | null = null;
+
+  // Handle item search results
+  if (call.name === 'searchItems' || call.name === 'createItem') {
+    const result = call.result as unknown;
+    const items = Array.isArray(result) ? result : result ? [result] : [];
+
+    for (const item of items) {
+      if (item && typeof item === 'object' && 'location' in item && 'name' in item) {
+        const typedItem = item as { location: string; name: string };
+        const parsed = parsePath(typedItem.location);
+
+        if (parsed) {
+          results.push({
+            resultIndex: resultIndexRef.value,
+            itemName: typedItem.name,
+            location: typedItem.location,
+            moduleName: parsed.storageModule,
+            path: parsed.segments,
+          });
+          resultIndexRef.value++;
+        }
+      }
+    }
+  }
+
+  // Handle module search for module overview
+  if (call.name === 'searchModules') {
+    const result = call.result as unknown;
+    const modules = Array.isArray(result) ? result : result ? [result] : [];
+
+    // If we got exactly one module back, show its overview
+    if (modules.length === 1) {
+      const mod = modules[0] as {
+        name: string;
+        description?: string;
+        dimensions: {
+          label: string;
+          values: string[];
+          subdimensions?: Record<string, { dimensions: { label: string; values: string[] }[] }>;
+        }[];
+      };
+
+      moduleInfo = {
+        name: mod.name,
+        description: mod.description,
+        dimensions: mod.dimensions,
+      };
+    }
+  }
+
+  // Handle specialist agent calls (runSearchAgent, runInventoryAgent, etc.)
+  // These nest the actual tool calls inside the result
+  if (call.name.startsWith('run') && call.name.endsWith('Agent')) {
+    const result = call.result as { toolCalls?: ToolCall[] } | undefined;
+    if (result && result.toolCalls && Array.isArray(result.toolCalls)) {
+      for (const nestedCall of result.toolCalls) {
+        const nestedModuleInfo = processToolCall(nestedCall, results, resultIndexRef);
+        if (nestedModuleInfo) {
+          moduleInfo = nestedModuleInfo;
+        }
+      }
+    }
+  }
+
+  return moduleInfo;
+}
+
+/**
  * Extract location data from AI tool call results
  */
 export function extractLocationData(toolCalls?: ToolCall[]): ExtractedLocationData {
@@ -23,56 +99,12 @@ export function extractLocationData(toolCalls?: ToolCall[]): ExtractedLocationDa
 
   const results: LocationResult[] = [];
   let moduleInfo: ModuleInfo | null = null;
-  let resultIndex = 0;
+  const resultIndexRef = { value: 0 };
 
   for (const call of toolCalls) {
-    // Handle item search results
-    if (call.name === 'searchItems' || call.name === 'createItem') {
-      const result = call.result as unknown;
-      const items = Array.isArray(result) ? result : result ? [result] : [];
-
-      for (const item of items) {
-        if (item && typeof item === 'object' && 'location' in item && 'name' in item) {
-          const typedItem = item as { location: string; name: string };
-          const parsed = parsePath(typedItem.location);
-
-          if (parsed) {
-            results.push({
-              resultIndex,
-              itemName: typedItem.name,
-              location: typedItem.location,
-              moduleName: parsed.module,
-              path: parsed.segments,
-            });
-            resultIndex++;
-          }
-        }
-      }
-    }
-
-    // Handle module search for module overview
-    if (call.name === 'searchModules') {
-      const result = call.result as unknown;
-      const modules = Array.isArray(result) ? result : result ? [result] : [];
-
-      // If we got exactly one module back, show its overview
-      if (modules.length === 1) {
-        const mod = modules[0] as {
-          name: string;
-          description?: string;
-          dimensions: {
-            label: string;
-            values: string[];
-            subdimensions?: Record<string, { dimensions: { label: string; values: string[] }[] }>;
-          }[];
-        };
-
-        moduleInfo = {
-          name: mod.name,
-          description: mod.description,
-          dimensions: mod.dimensions,
-        };
-      }
+    const callModuleInfo = processToolCall(call, results, resultIndexRef);
+    if (callModuleInfo) {
+      moduleInfo = callModuleInfo;
     }
   }
 

@@ -6,3 +6,4 @@ export * as agentRepository from './agentRepository';
 export * as toolRepository from './toolRepository';
 export * as sessionRepository from './sessionRepository';
 export * as storageTypeRepository from './storageTypeRepository';
+export * as auditRepository from './auditRepository';

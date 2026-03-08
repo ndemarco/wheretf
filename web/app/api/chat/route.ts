@@ -4,6 +4,7 @@ import { sessionRepository } from '@/repositories';
 import { runChat } from '@/lib/agentRunner';
 import { estimateTokens, calculateContextStatus } from '@/lib/contextManager';
 import { ensureUserSeeded, seedGlobalDefaults } from '@/lib/seeds';
+import { generateSessionName } from '@/lib/sessionNaming';
 
 // POST /api/chat - Send a message to the AI
 export async function POST(request: NextRequest) {
@@ -36,10 +37,11 @@ export async function POST(request: NextRequest) {
         return Response.json({ error: 'Session not found' }, { status: 404 });
       }
     } else {
-      // Create a new session
+      // Create a new session with AI-generated name
+      const sessionName = await generateSessionName(message);
       chatSession = await sessionRepository.create({
         userId: session.user.id,
-        name: message.slice(0, 50) + (message.length > 50 ? '...' : ''),
+        name: sessionName,
       });
     }
 

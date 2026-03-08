@@ -37,6 +37,11 @@ const navItems = [
 export function Sidebar() {
   const pathname = usePathname();
 
+  const handleNewChat = () => {
+    // Force a hard navigation to reset all state
+    window.location.href = '/chat';
+  };
+
   return (
     <aside className="w-64 bg-gray-900 text-white flex flex-col h-full">
       {/* Logo */}
@@ -73,15 +78,15 @@ export function Sidebar() {
 
       {/* New Chat Button */}
       <div className="p-4 border-t border-gray-800">
-        <Link
-          href="/chat"
+        <button
+          onClick={handleNewChat}
           className="flex items-center justify-center gap-2 w-full px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors"
         >
           <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
           </svg>
           <span>New Chat</span>
-        </Link>
+        </button>
       </div>
     </aside>
   );

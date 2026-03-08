@@ -2,6 +2,7 @@ import StorageModule, { IStorageModule, IModuleDimension, ISubdimensions, ICellG
 import dbConnect from '@/lib/mongodb';
 
 export interface CreateModuleInput {
+  userId: string;
   name: string;
   description?: string;
   dimensions: IModuleDimension[];
@@ -16,18 +17,40 @@ export async function create(input: CreateModuleInput): Promise<IStorageModule> 
   await dbConnect();
 
   const moduleName = input.name.toUpperCase();
-  const existing = await StorageModule.findOne({ name: moduleName });
+
+  // Create does not require userId in the input based on the interface, 
+  // but the model requires it. This suggests the input might be incomplete 
+  // or we should be getting userId from a context which isn't passed here.
+  // However, looking at usage in `toolHandlers.ts`:
+  // `const storageModule = await moduleRepo.create({ userId, ... })`
+  // The interface `CreateModuleInput` in file seems to NOT have userId, but usage HAS it.
+  // I should update the interface to match usage or cast input.
+
+  // Let's assume the input object actually has userId even if interface lies, 
+  // or I'll add userId to the interface in a separate edit if needed.
+  // For now, I'll use `input as any` to access userId to fix the build, 
+  // or better, I will check if I can update the interface.
+
+  // Wait, I can see the file content in previous turn.
+  // `export interface CreateModuleInput { name: string; description?: string; dimensions: IModuleDimension[]; }`
+  // But usage in `toolHandlers.ts` (which I also saw) passed `userId`.
+  // I will update the interface AND the implementation.
+
+  const { name, description, dimensions, userId } = input;
+
+  const existing = await StorageModule.findOne({ user: userId, name: moduleName });
   if (existing) {
     throw new Error(`Module "${moduleName}" already exists`);
   }
 
-  const module = await StorageModule.create({
+  const newModule = await StorageModule.create({
+    user: userId,
     name: moduleName,
-    description: input.description,
-    dimensions: input.dimensions,
+    description,
+    dimensions,
   });
 
-  return module;
+  return newModule;
 }
 
 export async function search(input: SearchModulesInput): Promise<IStorageModule[]> {
@@ -63,8 +86,8 @@ export async function update(
 ): Promise<IStorageModule> {
   await dbConnect();
 
-  const module = await StorageModule.findOne({ name: name.toUpperCase() });
-  if (!module) {
+  const storageModule = await StorageModule.findOne({ name: name.toUpperCase() });
+  if (!storageModule) {
     throw new Error(`Module "${name}" not found`);
   }
 
@@ -72,10 +95,10 @@ export async function update(
     updates.name = updates.name.toUpperCase();
   }
 
-  Object.assign(module, updates);
-  await module.save();
+  Object.assign(storageModule, updates);
+  await storageModule.save();
 
-  return module;
+  return storageModule;
 }
 
 export async function remove(name: string): Promise<{ success: boolean }> {
@@ -96,8 +119,8 @@ export async function remove(name: string): Promise<{ success: boolean }> {
 export async function getValidPaths(name: string): Promise<string[]> {
   await dbConnect();
 
-  const module = await StorageModule.findOne({ name: name.toUpperCase() });
-  if (!module) {
+  const storageModule = await StorageModule.findOne({ name: name.toUpperCase() });
+  if (!storageModule) {
     throw new Error(`Module "${name}" not found`);
   }
 
@@ -115,7 +138,7 @@ export async function getValidPaths(name: string): Promise<string[]> {
 
       for (const value of dim.values) {
         const newPath = `${currentPath}:${dim.label}-${value}`;
-        if (remainingSubdims.length === 0 && dimensionIndex >= module.dimensions.length) {
+        if (remainingSubdims.length === 0 && dimensionIndex >= storageModule.dimensions.length) {
           paths.push(newPath);
         } else {
           expandDimensions(dimensionIndex, newPath, remainingSubdims);
@@ -125,15 +148,15 @@ export async function getValidPaths(name: string): Promise<string[]> {
     }
 
     // If we've processed all module dimensions, we're done
-    if (dimensionIndex >= module.dimensions.length) {
+    if (dimensionIndex >= storageModule.dimensions.length) {
       paths.push(currentPath);
       return;
     }
 
-    const dim = module.dimensions[dimensionIndex];
+    const dim = storageModule.dimensions[dimensionIndex];
 
     for (const value of dim.values) {
-      const newPath = currentPath ? `${currentPath}:${dim.label}-${value}` : `${module.name}:${dim.label}-${value}`;
+      const newPath = currentPath ? `${currentPath}:${dim.label}-${value}` : `${storageModule.name}:${dim.label}-${value}`;
 
       // Check if this value has subdimensions
       const subdims = dim.subdimensions?.[value];
@@ -160,12 +183,12 @@ export async function getSubdimensions(
 ): Promise<ISubdimensions | null> {
   await dbConnect();
 
-  const module = await StorageModule.findOne({ name: moduleName.toUpperCase() });
-  if (!module) {
+  const storageModule = await StorageModule.findOne({ name: moduleName.toUpperCase() });
+  if (!storageModule) {
     throw new Error(`Module "${moduleName}" not found`);
   }
 
-  const dimension = module.dimensions.find((d: IModuleDimension) => d.label === dimensionLabel);
+  const dimension = storageModule.dimensions.find((d: IModuleDimension) => d.label === dimensionLabel);
   if (!dimension) {
     throw new Error(`Dimension "${dimensionLabel}" not found in module "${moduleName}"`);
   }
@@ -184,12 +207,12 @@ export async function setSubdimensions(
 ): Promise<IStorageModule> {
   await dbConnect();
 
-  const module = await StorageModule.findOne({ name: moduleName.toUpperCase() });
-  if (!module) {
+  const storageModule = await StorageModule.findOne({ name: moduleName.toUpperCase() });
+  if (!storageModule) {
     throw new Error(`Module "${moduleName}" not found`);
   }
 
-  const dimension = module.dimensions.find((d: IModuleDimension) => d.label === dimensionLabel);
+  const dimension = storageModule.dimensions.find((d: IModuleDimension) => d.label === dimensionLabel);
   if (!dimension) {
     throw new Error(`Dimension "${dimensionLabel}" not found in module "${moduleName}"`);
   }
@@ -204,9 +227,9 @@ export async function setSubdimensions(
   }
 
   dimension.subdimensions[dimensionValue] = subdimensions;
-  await module.save();
+  await storageModule.save();
 
-  return module;
+  return storageModule;
 }
 
 /**
@@ -220,12 +243,12 @@ export async function addCellGroup(
 ): Promise<IStorageModule> {
   await dbConnect();
 
-  const module = await StorageModule.findOne({ name: moduleName.toUpperCase() });
-  if (!module) {
+  const storageModule = await StorageModule.findOne({ name: moduleName.toUpperCase() });
+  if (!storageModule) {
     throw new Error(`Module "${moduleName}" not found`);
   }
 
-  const dimension = module.dimensions.find((d: IModuleDimension) => d.label === dimensionLabel);
+  const dimension = storageModule.dimensions.find((d: IModuleDimension) => d.label === dimensionLabel);
   if (!dimension) {
     throw new Error(`Dimension "${dimensionLabel}" not found`);
   }
@@ -249,9 +272,9 @@ export async function addCellGroup(
     subdims.cellGroups = [];
   }
   subdims.cellGroups.push(cellGroup);
-  await module.save();
+  await storageModule.save();
 
-  return module;
+  return storageModule;
 }
 
 /**
@@ -265,12 +288,12 @@ export async function removeCellGroup(
 ): Promise<IStorageModule> {
   await dbConnect();
 
-  const module = await StorageModule.findOne({ name: moduleName.toUpperCase() });
-  if (!module) {
+  const storageModule = await StorageModule.findOne({ name: moduleName.toUpperCase() });
+  if (!storageModule) {
     throw new Error(`Module "${moduleName}" not found`);
   }
 
-  const dimension = module.dimensions.find((d: IModuleDimension) => d.label === dimensionLabel);
+  const dimension = storageModule.dimensions.find((d: IModuleDimension) => d.label === dimensionLabel);
   if (!dimension) {
     throw new Error(`Dimension "${dimensionLabel}" not found`);
   }
@@ -286,9 +309,9 @@ export async function removeCellGroup(
   }
 
   subdims.cellGroups.splice(groupIndex, 1);
-  await module.save();
+  await storageModule.save();
 
-  return module;
+  return storageModule;
 }
 
 /**
@@ -302,12 +325,12 @@ export async function findCellGroup(
 ): Promise<ICellGroup | null> {
   await dbConnect();
 
-  const module = await StorageModule.findOne({ name: moduleName.toUpperCase() });
-  if (!module) {
+  const storageModule = await StorageModule.findOne({ name: moduleName.toUpperCase() });
+  if (!storageModule) {
     return null;
   }
 
-  const dimension = module.dimensions.find((d: IModuleDimension) => d.label === dimensionLabel);
+  const dimension = storageModule.dimensions.find((d: IModuleDimension) => d.label === dimensionLabel);
   if (!dimension) {
     return null;
   }
@@ -332,12 +355,12 @@ export async function renameDimensionValue(
 ): Promise<{ module: IStorageModule; oldPathPrefix: string; newPathPrefix: string }> {
   await dbConnect();
 
-  const module = await StorageModule.findOne({ name: moduleName.toUpperCase() });
-  if (!module) {
+  const storageModule = await StorageModule.findOne({ name: moduleName.toUpperCase() });
+  if (!storageModule) {
     throw new Error(`Module "${moduleName}" not found`);
   }
 
-  const dimension = module.dimensions.find((d: IModuleDimension) => d.label === dimensionLabel);
+  const dimension = storageModule.dimensions.find((d: IModuleDimension) => d.label === dimensionLabel);
   if (!dimension) {
     throw new Error(`Dimension "${dimensionLabel}" not found in module "${moduleName}"`);
   }
@@ -360,13 +383,13 @@ export async function renameDimensionValue(
     delete dimension.subdimensions[oldValue];
   }
 
-  await module.save();
+  await storageModule.save();
 
   // Return path prefixes for item updates
-  const oldPathPrefix = `${module.name}:${dimensionLabel}-${oldValue}`;
-  const newPathPrefix = `${module.name}:${dimensionLabel}-${newValue}`;
+  const oldPathPrefix = `${storageModule.name}:${dimensionLabel}-${oldValue}`;
+  const newPathPrefix = `${storageModule.name}:${dimensionLabel}-${newValue}`;
 
-  return { module, oldPathPrefix, newPathPrefix };
+  return { module: storageModule, oldPathPrefix, newPathPrefix };
 }
 
 /**
@@ -380,12 +403,12 @@ export async function addDimensionValue(
 ): Promise<IStorageModule> {
   await dbConnect();
 
-  const module = await StorageModule.findOne({ name: moduleName.toUpperCase() });
-  if (!module) {
+  const storageModule = await StorageModule.findOne({ name: moduleName.toUpperCase() });
+  if (!storageModule) {
     throw new Error(`Module "${moduleName}" not found`);
   }
 
-  const dimension = module.dimensions.find((d: IModuleDimension) => d.label === dimensionLabel);
+  const dimension = storageModule.dimensions.find((d: IModuleDimension) => d.label === dimensionLabel);
   if (!dimension) {
     throw new Error(`Dimension "${dimensionLabel}" not found in module "${moduleName}"`);
   }
@@ -401,8 +424,8 @@ export async function addDimensionValue(
     dimension.values.push(newValue);
   }
 
-  await module.save();
-  return module;
+  await storageModule.save();
+  return storageModule;
 }
 
 /**
@@ -416,12 +439,12 @@ export async function removeDimensionValue(
 ): Promise<IStorageModule> {
   await dbConnect();
 
-  const module = await StorageModule.findOne({ name: moduleName.toUpperCase() });
-  if (!module) {
+  const storageModule = await StorageModule.findOne({ name: moduleName.toUpperCase() });
+  if (!storageModule) {
     throw new Error(`Module "${moduleName}" not found`);
   }
 
-  const dimension = module.dimensions.find((d: IModuleDimension) => d.label === dimensionLabel);
+  const dimension = storageModule.dimensions.find((d: IModuleDimension) => d.label === dimensionLabel);
   if (!dimension) {
     throw new Error(`Dimension "${dimensionLabel}" not found in module "${moduleName}"`);
   }
@@ -439,6 +462,6 @@ export async function removeDimensionValue(
     delete dimension.subdimensions[value];
   }
 
-  await module.save();
-  return module;
+  await storageModule.save();
+  return storageModule;
 }

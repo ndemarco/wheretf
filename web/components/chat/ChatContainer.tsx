@@ -4,7 +4,7 @@ import { useState, useRef, useEffect, useMemo } from 'react';
 import { ChatMessage } from './ChatMessage';
 import { ChatInput } from './ChatInput';
 import { ContextIndicator } from './ContextIndicator';
-import { LocationView, LocationResult, ModuleInfo } from '@/components/location';
+import { useVisualization, SearchResult } from '@/components/visualization/VisualizationContext';
 import { extractLocationData } from '@/lib/locationExtractor';
 
 interface ToolCall {
@@ -35,32 +35,94 @@ interface ChatContainerProps {
   initialMessages?: Message[];
 }
 
+interface ResultGroup {
+  messageIndex: number;
+  results: LocationResult[];
+  timestamp?: Date;
+}
+
 export function ChatContainer({ sessionId: initialSessionId, initialMessages = [] }: ChatContainerProps) {
   const [messages, setMessages] = useState<Message[]>(initialMessages);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [sessionId, setSessionId] = useState<string | undefined>(initialSessionId);
   const [context, setContext] = useState<ContextStatus | undefined>();
-  const [selectedResultIndex, setSelectedResultIndex] = useState<number | null>(null);
+  const [highlightedMessageIndex, setHighlightedMessageIndex] = useState<number | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const messageRefs = useRef<Map<number, HTMLDivElement>>(new Map());
 
-  // Extract location data from the most recent assistant message with tool calls
-  const { locationResults, moduleInfo } = useMemo(() => {
-    // Find the most recent assistant message with tool calls
-    for (let i = messages.length - 1; i >= 0; i--) {
-      const msg = messages[i];
+  // Extract location data from ALL assistant messages with tool calls (grouped by message)
+  const { resultGroups, moduleInfo } = useMemo(() => {
+    const groups: ResultGroup[] = [];
+    let moduleInfo: ModuleInfo | null = null;
+    let globalResultIndex = 0;
+
+    messages.forEach((msg, idx) => {
       if (msg.role === 'assistant' && msg.toolCalls && msg.toolCalls.length > 0) {
         const data = extractLocationData(msg.toolCalls);
-        return { locationResults: data.results, moduleInfo: data.moduleInfo };
+        if (data.results.length > 0) {
+          // Re-index results with global indices
+          const reindexedResults = data.results.map((result) => ({
+            ...result,
+            resultIndex: globalResultIndex++,
+          }));
+          groups.push({
+            messageIndex: idx,
+            results: reindexedResults,
+          });
+        }
+        if (data.moduleInfo) {
+          moduleInfo = data.moduleInfo;
+        }
       }
-    }
-    return { locationResults: [] as LocationResult[], moduleInfo: null as ModuleInfo | null };
+    });
+
+    return { resultGroups: groups, moduleInfo };
   }, [messages]);
 
-  // Reset selection when results change
+  // Sync with Visualization Context
+  const { setResults, showLocation, setActiveResultId, activeResultId, isNavigatorOpen, setNavigatorOpen } = useVisualization();
+
+  // Update context results whenever messages change (and thus resultGroups change)
   useEffect(() => {
-    setSelectedResultIndex(null);
-  }, [locationResults]);
+    // Flatten resultGroups to SearchResult[]
+    const flatResults: SearchResult[] = resultGroups.flatMap(group =>
+      group.results.map((r, i) => ({
+        id: r.location, // Use location as ID for now or generate one? r has specific properties? 
+        // We need a unique ID. 
+        // LocationResult usually has name, location.
+        // Let's use `location` + index if needed, or just location if unique.
+        name: r.item, // Check `LocationResult` shape from extractor?
+        location: r.location,
+        moduleName: r.moduleName || r.location.split(':')[0]
+      }))
+    );
+    setResults(flatResults);
+
+    // Also if we have moduleInfo (from "tell me about MUSE"), we might want to trigger something?
+    // For now, let's focus on search results.
+    // If we have moduleInfo, maybe we should auto-open that module?
+    if (moduleInfo && !isNavigatorOpen) {
+      // Only if latest message? 
+      // For now keep simple.
+    }
+
+  }, [resultGroups, moduleInfo, setResults]);
+
+
+  // Handle clicking a location link in chat messages
+  const handleLocationClick = (location: string) => {
+    showLocation(location);
+  };
+
+  /* 
+  // Handle selecting a result from the Results panel - NO LONGER NEEDED HERE
+  // The Context handles it.
+  const handleSelectResult = (result: LocationResult, messageIndex: number) => {
+    setSelectedResult(result);
+    setHighlightedMessageIndex(messageIndex);
+  };
+  */
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -125,7 +187,7 @@ export function ChatContainer({ sessionId: initialSessionId, initialMessages = [
   };
 
   // Determine if we should show the location panel
-  const showLocationPanel = locationResults.length > 0 || moduleInfo !== null;
+  const showLocationPanel = resultGroups.length > 0 || moduleInfo !== null;
 
   return (
     <div className="flex h-full">
@@ -165,13 +227,24 @@ export function ChatContainer({ sessionId: initialSessionId, initialMessages = [
           ) : (
             <>
               {messages.map((msg, idx) => (
-                <ChatMessage
+                <div
                   key={idx}
-                  role={msg.role}
-                  content={msg.content}
-                  agent={msg.agent}
-                  toolCalls={msg.toolCalls}
-                />
+                  ref={(el) => {
+                    if (el) messageRefs.current.set(idx, el);
+                  }}
+                  className={`transition-all duration-300 ${highlightedMessageIndex === idx
+                      ? 'ring-2 ring-blue-400 ring-offset-2 dark:ring-offset-gray-900 rounded-lg'
+                      : ''
+                    }`}
+                >
+                  <ChatMessage
+                    role={msg.role}
+                    content={msg.content}
+                    agent={msg.agent}
+                    toolCalls={msg.toolCalls}
+                    onLocationClick={handleLocationClick}
+                  />
+                </div>
               ))}
               {isLoading && (
                 <div className="flex justify-start">
@@ -206,18 +279,7 @@ export function ChatContainer({ sessionId: initialSessionId, initialMessages = [
         {/* Input area */}
         <ChatInput onSend={sendMessage} disabled={isLoading} />
       </div>
-
-      {/* Location panel - side panel */}
-      {showLocationPanel && (
-        <div className="w-72 border-l border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900 flex-shrink-0">
-          <LocationView
-            results={locationResults}
-            selectedResultIndex={selectedResultIndex}
-            onSelectResult={(idx) => setSelectedResultIndex(idx >= 0 ? idx : null)}
-            moduleInfo={moduleInfo}
-          />
-        </div>
-      )}
+      {/* Removed Side Panels - handled by ChatLayout / NavigatorPanel */}
     </div>
   );
 }

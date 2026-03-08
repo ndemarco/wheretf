@@ -29,11 +29,26 @@ export async function GET(request: NextRequest) {
       dimensionValue
     );
 
+    // No subdimensions means this is a flat location (no grid)
+    // Return a "flat" response instead of 404
     if (!subdimensions) {
-      return Response.json(
-        { error: 'No grid defined for this location' },
-        { status: 404 }
-      );
+      // Get items at this flat location
+      const locationPrefix = `${moduleName.toUpperCase()}:${dimensionLabel}-${dimensionValue}`;
+      const items = await itemRepository.search({
+        userId: session.user.id,
+        location: locationPrefix,
+      });
+
+      return Response.json({
+        flat: true,
+        location: locationPrefix,
+        items: items.map((item) => ({
+          name: item.name,
+          location: item.location,
+          description: item.description,
+          parameters: item.parameters,
+        })),
+      });
     }
 
     // Extract row/col dimensions

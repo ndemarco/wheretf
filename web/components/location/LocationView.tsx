@@ -41,30 +41,17 @@ export function LocationView({
   }>({ module: null, dimension: null });
   const [occupiedCells, setOccupiedCells] = useState<Set<string>>(new Set());
   const [gridDimensions, setGridDimensions] = useState<{ rows: string[]; cols: string[] } | null>(null);
-
-  // When a result is selected, update the view to show that location
-  useEffect(() => {
-    if (selectedResultIndex !== null && results[selectedResultIndex]) {
-      const result = results[selectedResultIndex];
-      setViewState({
-        module: result.moduleName,
-        dimension: result.path.length > 0 ? result.path[0] : null,
-      });
-
-      // Fetch grid info and occupancy for this location
-      fetchGridInfo(result.moduleName, result.path[0]);
-    }
-  }, [selectedResultIndex, results]);
-
-  // When moduleInfo is provided (from "tell me about NEON"), show module overview
-  useEffect(() => {
-    if (moduleInfo && !selectedResultIndex) {
-      setViewState({ module: moduleInfo.name, dimension: null });
-    }
-  }, [moduleInfo, selectedResultIndex]);
+  const [flatLocation, setFlatLocation] = useState<{
+    location: string;
+    items: { name: string; location: string; description?: string }[];
+  } | null>(null);
 
   const fetchGridInfo = async (moduleName: string, dimension?: { label: string; value: string }) => {
     if (!dimension) return;
+
+    // Reset previous state
+    setGridDimensions(null);
+    setFlatLocation(null);
 
     try {
       const params = new URLSearchParams({
@@ -75,8 +62,14 @@ export function LocationView({
       const response = await fetch(`/api/modules/grid?${params}`);
       if (response.ok) {
         const data = await response.json();
-        setGridDimensions(data.grid);
-        setOccupiedCells(new Set(data.occupiedCells));
+        if (data.flat) {
+          // Flat location (no grid)
+          setFlatLocation({ location: data.location, items: data.items });
+        } else {
+          // Grid location
+          setGridDimensions(data.grid);
+          setOccupiedCells(new Set(data.occupiedCells));
+        }
       }
     } catch {
       // Silently fail - grid just won't show occupancy
@@ -195,6 +188,93 @@ export function LocationView({
         module={moduleInfo}
         onDimensionClick={handleDimensionClick}
       />
+    );
+  }
+
+  // Flat location view (no grid, just item list)
+  if (viewState.module && viewState.dimension && flatLocation) {
+    const selectedResult = selectedResultIndex !== null ? results[selectedResultIndex] : null;
+
+    return (
+      <div className="h-full flex flex-col p-4">
+        {/* Back button + Breadcrumb */}
+        <div className="flex items-center gap-2 text-sm mb-4">
+          {results.length > 1 && (
+            <button
+              onClick={() => onSelectResult(-1)}
+              className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
+              title="Back to results"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+              </svg>
+            </button>
+          )}
+          <span className="font-semibold text-gray-900 dark:text-gray-100">
+            {viewState.module}
+          </span>
+          <span className="text-gray-400">›</span>
+          <span className="text-gray-600 dark:text-gray-300">
+            {viewState.dimension.value}
+          </span>
+        </div>
+
+        {/* Selected item highlight */}
+        {selectedResult && (
+          <div className="mb-3 p-2 bg-blue-50 dark:bg-blue-900/20 rounded border border-blue-200 dark:border-blue-800">
+            <div className="flex items-center gap-2">
+              <div
+                className={`w-5 h-5 ${RESULT_COLORS[selectedResult.resultIndex % RESULT_COLORS.length]} rounded flex items-center justify-center text-white text-xs font-bold flex-shrink-0`}
+              >
+                {selectedResult.resultIndex + 1}
+              </div>
+              <span className="text-sm font-medium text-gray-900 dark:text-gray-100">
+                {selectedResult.itemName}
+              </span>
+            </div>
+          </div>
+        )}
+
+        {/* Items in this location */}
+        <div className="flex-1 overflow-auto">
+          <div className="text-xs text-gray-500 dark:text-gray-400 mb-2">
+            {flatLocation.items.length} item{flatLocation.items.length !== 1 ? 's' : ''} at this location
+          </div>
+          <div className="space-y-2">
+            {flatLocation.items.map((item, idx) => {
+              const isSearchResult = results.some((r) => r.itemName === item.name);
+              const resultForItem = results.find((r) => r.itemName === item.name);
+              return (
+                <div
+                  key={idx}
+                  className={`p-2 rounded border ${isSearchResult
+                      ? 'border-blue-300 dark:border-blue-700 bg-blue-50 dark:bg-blue-900/20'
+                      : 'border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800'
+                    }`}
+                >
+                  <div className="flex items-center gap-2">
+                    {resultForItem && (
+                      <div
+                        className={`w-4 h-4 ${RESULT_COLORS[resultForItem.resultIndex % RESULT_COLORS.length]} rounded flex items-center justify-center text-white text-[10px] font-bold flex-shrink-0`}
+                      >
+                        {resultForItem.resultIndex + 1}
+                      </div>
+                    )}
+                    <span className="text-sm font-medium text-gray-900 dark:text-gray-100">
+                      {item.name}
+                    </span>
+                  </div>
+                  {item.description && (
+                    <p className="text-xs text-gray-500 dark:text-gray-400 mt-1 ml-6">
+                      {item.description}
+                    </p>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      </div>
     );
   }
 

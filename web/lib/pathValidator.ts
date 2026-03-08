@@ -30,9 +30,9 @@ export async function validatePath(path: string): Promise<PathValidationResult> 
   }
 
   const moduleName = parts[0].toUpperCase();
-  const module = await StorageModule.findOne({ name: moduleName });
+  const storageModule = await StorageModule.findOne({ name: moduleName });
 
-  if (!module) {
+  if (!storageModule) {
     return { valid: false, error: `Module "${moduleName}" not found` };
   }
 
@@ -118,14 +118,14 @@ export async function validatePath(path: string): Promise<PathValidationResult> 
     }
 
     // Process module dimension
-    if (dimensionIndex >= module.dimensions.length) {
+    if (dimensionIndex >= storageModule.dimensions.length) {
       return {
         valid: false,
         error: `Unexpected dimension "${label}". Path has more dimensions than module defines`,
       };
     }
 
-    const dimension = module.dimensions[dimensionIndex];
+    const dimension = storageModule.dimensions[dimensionIndex];
 
     if (label !== dimension.label) {
       return {

@@ -7,6 +7,7 @@ export { default as Item } from './Item';
 export { default as Agent } from './Agent';
 export { default as Tool } from './Tool';
 export { default as Session } from './Session';
+export { default as AuditLog } from './AuditLog';
 
 export type { IUser } from './User';
 export type { IParameterKey } from './ParameterKey';
@@ -17,3 +18,4 @@ export type { IItem, IParameterValue } from './Item';
 export type { IAgent } from './Agent';
 export type { ITool, IToolParameter } from './Tool';
 export type { ISession, IMessage, IToolCall } from './Session';
+export type { IAuditLog, AuditAction } from './AuditLog';

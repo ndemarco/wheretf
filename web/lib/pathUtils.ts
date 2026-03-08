@@ -6,7 +6,7 @@
  * Parse a location path into its components
  */
 export function parsePath(path: string): {
-  module: string;
+  storageModule: string;
   segments: { label: string; value: string }[];
 } | null {
   if (!path || typeof path !== 'string') {
@@ -18,7 +18,7 @@ export function parsePath(path: string): {
     return null;
   }
 
-  const module = parts[0].toUpperCase();
+  const storageModule = parts[0].toUpperCase();
   const segments: { label: string; value: string }[] = [];
 
   for (let i = 1; i < parts.length; i++) {
@@ -39,7 +39,7 @@ export function parsePath(path: string): {
     segments.push({ label, value });
   }
 
-  return { module, segments };
+  return { storageModule, segments };
 }
 
 /**

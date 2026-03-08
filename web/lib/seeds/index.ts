@@ -60,10 +60,13 @@ export async function seedGlobalDefaults(): Promise<void> {
 
 /**
  * Ensure user's system agents are up to date
- * Cached per-user - only runs once per user per server lifetime
+ * In development, always re-seed to pick up instruction changes
+ * In production, cached per-user - only runs once per user per server lifetime
  */
 export async function ensureUserSeeded(userId: string): Promise<void> {
-  if (userSeededCache.has(userId)) {
+  const isDev = process.env.NODE_ENV === 'development';
+
+  if (!isDev && userSeededCache.has(userId)) {
     return;
   }
 

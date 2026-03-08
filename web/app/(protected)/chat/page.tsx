@@ -27,6 +27,11 @@ function ChatPageContent() {
   useEffect(() => {
     if (sessionId) {
       loadSession(sessionId);
+    } else {
+      // Reset state when sessionId is cleared (new chat)
+      setInitialMessages([]);
+      setLoading(false);
+      setError(null);
     }
   }, [sessionId]);
 
@@ -82,7 +87,11 @@ function ChatPageContent() {
     <>
       <Header title="Chat" />
       <div className="flex-1 flex flex-col overflow-hidden">
-        <ChatContainer sessionId={sessionId || undefined} initialMessages={initialMessages} />
+        <ChatContainer
+          key={sessionId || 'new'}
+          sessionId={sessionId || undefined}
+          initialMessages={initialMessages}
+        />
       </div>
     </>
   );

@@ -4,11 +4,40 @@ import {
   parameterKeyRepository,
   unitRepository,
   storageTypeRepository,
+  auditRepository,
 } from '@/repositories';
 import { validatePath } from '@/lib/pathValidator';
 import { IMergeConstraints } from '@/models/StorageType';
+import { AuditAction } from '@/models/AuditLog';
 
 type ToolHandler = (args: Record<string, unknown>, userId: string) => Promise<unknown>;
+
+// Helper to log audit events
+async function audit(
+  userId: string,
+  action: AuditAction,
+  entityType: 'item' | 'module',
+  entityName: string,
+  before: unknown,
+  after: unknown,
+  options?: { location?: string; metadata?: Record<string, unknown> }
+) {
+  try {
+    await auditRepository.log({
+      userId,
+      action,
+      entityType,
+      entityName,
+      location: options?.location,
+      before: auditRepository.serializeForAudit(before),
+      after: auditRepository.serializeForAudit(after),
+      metadata: options?.metadata,
+    });
+  } catch (error) {
+    // Log but don't fail the operation if audit logging fails
+    console.error('Audit logging failed:', error);
+  }
+}
 
 const handlers: Record<string, ToolHandler> = {
   // Item tools
@@ -28,7 +57,9 @@ const handlers: Record<string, ToolHandler> = {
       parameters?: { key: string; value: string; unit?: string }[];
       location: string;
     };
-    return itemRepository.create({ userId, name, description, parameters, location });
+    const result = await itemRepository.create({ userId, name, description, parameters, location });
+    await audit(userId, 'item.create', 'item', name, null, result, { location });
+    return result;
   },
 
   'db.items.update': async (args, userId) => {
@@ -36,17 +67,35 @@ const handlers: Record<string, ToolHandler> = {
       location: string;
       updates: Record<string, unknown>;
     };
-    return itemRepository.update({ userId, location, updates });
+    // Get before state
+    const beforeItems = await itemRepository.search({ userId, location });
+    const before = beforeItems.length > 0 ? beforeItems[0] : null;
+    const result = await itemRepository.update({ userId, location, updates });
+    await audit(userId, 'item.update', 'item', before?.name || location, before, result, { location });
+    return result;
   },
 
   'db.items.delete': async (args, userId) => {
     const { location } = args as { location: string };
-    return itemRepository.remove(userId, location);
+    // Get before state
+    const beforeItems = await itemRepository.search({ userId, location });
+    const before = beforeItems.length > 0 ? beforeItems[0] : null;
+    const result = await itemRepository.remove(userId, location);
+    await audit(userId, 'item.delete', 'item', before?.name || location, before, null, { location });
+    return result;
   },
 
   'db.items.move': async (args, userId) => {
     const { fromLocation, toLocation } = args as { fromLocation: string; toLocation: string };
-    return itemRepository.move(userId, fromLocation, toLocation);
+    // Get before state
+    const beforeItems = await itemRepository.search({ userId, location: fromLocation });
+    const before = beforeItems.length > 0 ? beforeItems[0] : null;
+    const result = await itemRepository.move(userId, fromLocation, toLocation);
+    await audit(userId, 'item.move', 'item', before?.name || fromLocation, before, result, {
+      location: toLocation,
+      metadata: { fromLocation, toLocation },
+    });
+    return result;
   },
 
   // Module tools
@@ -55,21 +104,28 @@ const handlers: Record<string, ToolHandler> = {
     return moduleRepository.search({ query, name });
   },
 
-  'db.modules.create': async (args) => {
+  'db.modules.create': async (args, userId) => {
     const { name, description, dimensions } = args as {
       name: string;
       description?: string;
       dimensions: { label: string; values: string[] }[];
     };
-    return moduleRepository.create({ name, description, dimensions });
+    const result = await moduleRepository.create({ userId, name, description, dimensions });
+    await audit(userId, 'module.create', 'module', name, null, result);
+    return result;
   },
 
-  'db.modules.update': async (args) => {
+  'db.modules.update': async (args, userId) => {
     const { name, updates } = args as {
       name: string;
       updates: Record<string, unknown>;
     };
-    return moduleRepository.update(name, updates);
+    // Get before state
+    const beforeModules = await moduleRepository.search({ name });
+    const before = beforeModules.length > 0 ? beforeModules[0] : null;
+    const result = await moduleRepository.update(name, updates);
+    await audit(userId, 'module.update', 'module', name, before, result);
+    return result;
   },
 
   'db.modules.delete': async (args, userId) => {
@@ -86,10 +142,15 @@ const handlers: Record<string, ToolHandler> = {
       };
     }
 
-    return moduleRepository.remove(name);
+    // Get before state
+    const beforeModules = await moduleRepository.search({ name });
+    const before = beforeModules.length > 0 ? beforeModules[0] : null;
+    const result = await moduleRepository.remove(name);
+    await audit(userId, 'module.delete', 'module', name, before, null);
+    return result;
   },
 
-  'db.modules.setSubdimensions': async (args) => {
+  'db.modules.setSubdimensions': async (args, userId) => {
     const { moduleName, dimensionLabel, dimensionValue, storageType, subdimensions } = args as {
       moduleName: string;
       dimensionLabel: string;
@@ -97,6 +158,10 @@ const handlers: Record<string, ToolHandler> = {
       storageType?: string;
       subdimensions?: { label: string; values: string[] }[];
     };
+
+    // Get before state
+    const beforeModules = await moduleRepository.search({ name: moduleName });
+    const before = beforeModules.length > 0 ? beforeModules[0] : null;
 
     // If storageType provided, look it up and use its configuration
     if (storageType) {
@@ -111,12 +176,16 @@ const handlers: Record<string, ToolHandler> = {
         throw new Error(`Storage type "${storageType}" has no default grid. Provide subdimensions manually.`);
       }
 
-      return moduleRepository.setSubdimensions(moduleName, dimensionLabel, dimensionValue, {
+      const result = await moduleRepository.setSubdimensions(moduleName, dimensionLabel, dimensionValue, {
         dimensions,
         cellGroups: [],
         storageType: storageTypeDoc.name,
         mergeConstraints: storageTypeDoc.mergeConstraints,
       });
+      await audit(userId, 'module.setSubdimensions', 'module', moduleName, before, result, {
+        metadata: { dimensionLabel, dimensionValue, storageType },
+      });
+      return result;
     }
 
     // No storageType - require subdimensions
@@ -124,10 +193,14 @@ const handlers: Record<string, ToolHandler> = {
       throw new Error('Either storageType or subdimensions must be provided');
     }
 
-    return moduleRepository.setSubdimensions(moduleName, dimensionLabel, dimensionValue, {
+    const result = await moduleRepository.setSubdimensions(moduleName, dimensionLabel, dimensionValue, {
       dimensions: subdimensions,
       cellGroups: [],
     });
+    await audit(userId, 'module.setSubdimensions', 'module', moduleName, before, result, {
+      metadata: { dimensionLabel, dimensionValue },
+    });
+    return result;
   },
 
   'db.modules.mergeCells': async (args, userId) => {
@@ -147,10 +220,10 @@ const handlers: Record<string, ToolHandler> = {
     if (modules.length === 0) {
       throw new Error(`Module "${moduleName}" not found`);
     }
-    const module = modules[0];
+    const storageModule = modules[0];
 
     // Find the dimension and check subdimensions for merge constraints
-    const dimension = module.dimensions.find(
+    const dimension = storageModule.dimensions.find(
       (d: { label: string }) => d.label.toLowerCase() === dimensionLabel.toLowerCase()
     );
     if (!dimension) {
@@ -246,6 +319,10 @@ const handlers: Record<string, ToolHandler> = {
 
     const result = await moduleRepository.addCellGroup(moduleName, dimensionLabel, dimensionValue, cellGroup);
 
+    await audit(userId, 'module.mergeCells', 'module', moduleName, storageModule, result, {
+      metadata: { dimensionLabel, dimensionValue, cells, canonical },
+    });
+
     return {
       success: true,
       message: `Merged ${cells.length} cells. Canonical address: ${canonical}`,
@@ -263,11 +340,19 @@ const handlers: Record<string, ToolHandler> = {
       canonical: string;
     };
 
+    // Get before state
+    const beforeModules = await moduleRepository.search({ name: moduleName });
+    const before = beforeModules.length > 0 ? beforeModules[0] : null;
+
     // Check if there's an item at the canonical address
     const canonicalPath = `${moduleName.toUpperCase()}:${dimensionLabel}-${dimensionValue}:${canonical}`;
     const items = await itemRepository.search({ userId, location: canonicalPath });
 
     const result = await moduleRepository.removeCellGroup(moduleName, dimensionLabel, dimensionValue, canonical);
+
+    await audit(userId, 'module.unmergeCells', 'module', moduleName, before, result, {
+      metadata: { dimensionLabel, dimensionValue, canonical },
+    });
 
     return {
       success: true,
@@ -312,6 +397,10 @@ const handlers: Record<string, ToolHandler> = {
       newValue: string;
     };
 
+    // Get before state
+    const beforeModules = await moduleRepository.search({ name: moduleName });
+    const before = beforeModules.length > 0 ? beforeModules[0] : null;
+
     const result = await moduleRepository.renameDimensionValue(
       moduleName,
       dimensionLabel,
@@ -326,6 +415,10 @@ const handlers: Record<string, ToolHandler> = {
       result.newPathPrefix
     );
 
+    await audit(userId, 'module.renameDimensionValue', 'module', moduleName, before, result.module, {
+      metadata: { dimensionLabel, oldValue, newValue, itemsUpdated },
+    });
+
     return {
       success: true,
       message: `Renamed ${dimensionLabel} "${oldValue}" to "${newValue}"`,
@@ -336,7 +429,7 @@ const handlers: Record<string, ToolHandler> = {
     };
   },
 
-  'db.modules.addDimensionValue': async (args) => {
+  'db.modules.addDimensionValue': async (args, userId) => {
     const { moduleName, dimensionLabel, newValue, position } = args as {
       moduleName: string;
       dimensionLabel: string;
@@ -344,17 +437,25 @@ const handlers: Record<string, ToolHandler> = {
       position?: number;
     };
 
-    const module = await moduleRepository.addDimensionValue(
+    // Get before state
+    const beforeModules = await moduleRepository.search({ name: moduleName });
+    const before = beforeModules.length > 0 ? beforeModules[0] : null;
+
+    const storageModule = await moduleRepository.addDimensionValue(
       moduleName,
       dimensionLabel,
       newValue,
       position
     );
 
+    await audit(userId, 'module.addDimensionValue', 'module', moduleName, before, storageModule, {
+      metadata: { dimensionLabel, newValue, position },
+    });
+
     return {
       success: true,
       message: `Added "${newValue}" to ${dimensionLabel}`,
-      module,
+      module: storageModule,
     };
   },
 
@@ -378,16 +479,24 @@ const handlers: Record<string, ToolHandler> = {
       };
     }
 
-    const module = await moduleRepository.removeDimensionValue(
+    // Get before state
+    const beforeModules = await moduleRepository.search({ name: moduleName });
+    const before = beforeModules.length > 0 ? beforeModules[0] : null;
+
+    const storageModule = await moduleRepository.removeDimensionValue(
       moduleName,
       dimensionLabel,
       value
     );
 
+    await audit(userId, 'module.removeDimensionValue', 'module', moduleName, before, storageModule, {
+      metadata: { dimensionLabel, value },
+    });
+
     return {
       success: true,
       message: `Removed "${value}" from ${dimensionLabel}`,
-      module,
+      module: storageModule,
     };
   },
 
