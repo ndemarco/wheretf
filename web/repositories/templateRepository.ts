@@ -1,4 +1,4 @@
-import Template, { ITemplate } from '@/models/v2/Template';
+import Template, { ITemplate } from '@/models/Template';
 import { Types, FilterQuery } from 'mongoose';
 
 export interface CreateTemplateInput {

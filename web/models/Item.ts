@@ -1,58 +1,44 @@
 import mongoose, { Schema, Document, Types } from 'mongoose';
 
-export interface IParameterValue {
+export interface IParameter {
   key: string;
   value: string;
   unit?: string;
 }
 
 export interface IItem extends Document {
-  user: Types.ObjectId;
+  _id: Types.ObjectId;
   name: string;
   description?: string;
-  parameters: IParameterValue[];
-  location: string;
+  userId: Types.ObjectId;
+  parameters: IParameter[];
+  metadata: Map<string, unknown>;
   createdAt: Date;
   updatedAt: Date;
 }
 
-const parameterValueSchema = new Schema<IParameterValue>(
+const ParameterSchema = new Schema<IParameter>(
   {
-    key: { type: String, required: true, lowercase: true },
+    key: { type: String, required: true },
     value: { type: String, required: true },
-    unit: { type: String, lowercase: true },
+    unit: { type: String },
   },
   { _id: false }
 );
 
-const itemSchema = new Schema<IItem>(
+const ItemSchema = new Schema<IItem>(
   {
-    user: {
-      type: Schema.Types.ObjectId,
-      ref: 'User',
-      required: true,
-      index: true,
-    },
     name: { type: String, required: true },
     description: { type: String },
-    parameters: [parameterValueSchema],
-    location: {
-      type: String,
-      required: true,
-      index: true,
-    },
+    userId: { type: Schema.Types.ObjectId, required: true, index: true },
+    parameters: { type: [ParameterSchema], default: [] },
+    metadata: { type: Map, of: Schema.Types.Mixed, default: () => new Map() },
   },
   { timestamps: true }
 );
 
-// Compound unique index - location unique per user
-itemSchema.index({ user: 1, location: 1 }, { unique: true });
-
-// Text index for searching by name/description
-itemSchema.index({ name: 'text', description: 'text' });
-
-// Index for parameter-based queries
-itemSchema.index({ 'parameters.key': 1, 'parameters.value': 1 });
+ItemSchema.index({ userId: 1, name: 1 });
+ItemSchema.index({ name: 'text', description: 'text' });
 
 export default mongoose.models.Item ||
-  mongoose.model<IItem>('Item', itemSchema);
+  mongoose.model<IItem>('Item', ItemSchema);

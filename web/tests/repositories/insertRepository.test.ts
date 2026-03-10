@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import mongoose from 'mongoose';
-import { insertRepository } from '@/repositories/v2/insertRepository';
+import { insertRepository } from '@/repositories/insertRepository';
 
 const userId = new mongoose.Types.ObjectId();
 const templateId = new mongoose.Types.ObjectId();

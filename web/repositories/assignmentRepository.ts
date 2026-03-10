@@ -1,4 +1,4 @@
-import Assignment, { IAssignment, buildLocationKey } from '@/models/v2/Assignment';
+import Assignment, { IAssignment, buildLocationKey } from '@/models/Assignment';
 import { Types } from 'mongoose';
 
 export interface CreateAssignmentInput {

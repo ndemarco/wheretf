@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import mongoose from 'mongoose';
-import { moduleRepository } from '@/repositories/v2/moduleRepository';
-import Template from '@/models/v2/Template';
+import { moduleRepository } from '@/repositories/moduleRepository';
+import Template from '@/models/Template';
 
 const userId = new mongoose.Types.ObjectId();
 

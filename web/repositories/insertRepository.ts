@@ -1,5 +1,5 @@
-import Insert, { IInsert, IInsertLocation } from '@/models/v2/Insert';
-import { IOverride } from '@/models/v2/Module';
+import Insert, { IInsert, IInsertLocation } from '@/models/Insert';
+import { IOverride } from '@/models/Module';
 import { Types, FilterQuery } from 'mongoose';
 
 export interface CreateInsertInput {

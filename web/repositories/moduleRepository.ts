@@ -1,467 +1,318 @@
-import StorageModule, { IStorageModule, IModuleDimension, ISubdimensions, ICellGroup } from '@/models/StorageModule';
-import dbConnect from '@/lib/mongodb';
+import Module, { IModule, ILocation, IOverride } from '@/models/Module';
+import { Types, FilterQuery } from 'mongoose';
 
 export interface CreateModuleInput {
-  userId: string;
   name: string;
   description?: string;
-  dimensions: IModuleDimension[];
+  userId: Types.ObjectId;
+  primaryDimension: {
+    name: string;
+    labeling: {
+      type: 'numeric' | 'alpha' | 'custom';
+      prefix?: string;
+      startAt?: number;
+    };
+    values: {
+      label: string;
+      location: {
+        label: string;
+        type: 'receptacle' | 'fixed' | 'leaf';
+        interfaceTypeAccepted?: string;
+        templateId?: Types.ObjectId;
+        templateRows?: number;
+        templateCols?: number;
+        children?: CreateLocationInput[];
+      };
+    }[];
+  };
+  metadata?: Record<string, unknown>;
 }
 
-export interface SearchModulesInput {
-  query?: string;
-  name?: string;
+export interface CreateLocationInput {
+  label: string;
+  type: 'receptacle' | 'fixed' | 'leaf';
+  interfaceTypeAccepted?: string;
+  templateId?: Types.ObjectId;
+  templateRows?: number;
+  templateCols?: number;
+  children?: CreateLocationInput[];
 }
 
-export async function create(input: CreateModuleInput): Promise<IStorageModule> {
-  await dbConnect();
+export const moduleRepository = {
+  async create(input: CreateModuleInput): Promise<IModule> {
+    return Module.create(input);
+  },
 
-  const moduleName = input.name.toUpperCase();
+  async findById(id: Types.ObjectId | string, userId: Types.ObjectId | string): Promise<IModule | null> {
+    return Module.findOne({ _id: id, userId });
+  },
 
-  // Create does not require userId in the input based on the interface, 
-  // but the model requires it. This suggests the input might be incomplete 
-  // or we should be getting userId from a context which isn't passed here.
-  // However, looking at usage in `toolHandlers.ts`:
-  // `const storageModule = await moduleRepo.create({ userId, ... })`
-  // The interface `CreateModuleInput` in file seems to NOT have userId, but usage HAS it.
-  // I should update the interface to match usage or cast input.
+  async findByName(name: string, userId: Types.ObjectId | string): Promise<IModule | null> {
+    return Module.findOne({ name, userId });
+  },
 
-  // Let's assume the input object actually has userId even if interface lies, 
-  // or I'll add userId to the interface in a separate edit if needed.
-  // For now, I'll use `input as any` to access userId to fix the build, 
-  // or better, I will check if I can update the interface.
-
-  // Wait, I can see the file content in previous turn.
-  // `export interface CreateModuleInput { name: string; description?: string; dimensions: IModuleDimension[]; }`
-  // But usage in `toolHandlers.ts` (which I also saw) passed `userId`.
-  // I will update the interface AND the implementation.
-
-  const { name, description, dimensions, userId } = input;
-
-  const existing = await StorageModule.findOne({ user: userId, name: moduleName });
-  if (existing) {
-    throw new Error(`Module "${moduleName}" already exists`);
-  }
-
-  const newModule = await StorageModule.create({
-    user: userId,
-    name: moduleName,
-    description,
-    dimensions,
-  });
-
-  return newModule;
-}
-
-export async function search(input: SearchModulesInput): Promise<IStorageModule[]> {
-  await dbConnect();
-
-  const filter: Record<string, unknown> = {};
-
-  if (input.name) {
-    filter.name = input.name.toUpperCase();
-  } else if (input.query) {
-    filter.$or = [
-      { name: { $regex: input.query, $options: 'i' } },
-      { description: { $regex: input.query, $options: 'i' } },
-    ];
-  }
-
-  return StorageModule.find(filter).sort({ name: 1 });
-}
-
-export async function findByName(name: string): Promise<IStorageModule | null> {
-  await dbConnect();
-  return StorageModule.findOne({ name: name.toUpperCase() });
-}
-
-export async function list(): Promise<IStorageModule[]> {
-  await dbConnect();
-  return StorageModule.find().sort({ name: 1 });
-}
-
-export async function update(
-  name: string,
-  updates: Partial<CreateModuleInput>
-): Promise<IStorageModule> {
-  await dbConnect();
-
-  const storageModule = await StorageModule.findOne({ name: name.toUpperCase() });
-  if (!storageModule) {
-    throw new Error(`Module "${name}" not found`);
-  }
-
-  if (updates.name) {
-    updates.name = updates.name.toUpperCase();
-  }
-
-  Object.assign(storageModule, updates);
-  await storageModule.save();
-
-  return storageModule;
-}
-
-export async function remove(name: string): Promise<{ success: boolean }> {
-  await dbConnect();
-
-  const result = await StorageModule.deleteOne({ name: name.toUpperCase() });
-  if (result.deletedCount === 0) {
-    throw new Error(`Module "${name}" not found`);
-  }
-
-  return { success: true };
-}
-
-/**
- * Get all valid location paths for a module
- * Expands subdimensions to generate full path structure
- */
-export async function getValidPaths(name: string): Promise<string[]> {
-  await dbConnect();
-
-  const storageModule = await StorageModule.findOne({ name: name.toUpperCase() });
-  if (!storageModule) {
-    throw new Error(`Module "${name}" not found`);
-  }
-
-  const paths: string[] = [];
-
-  function expandDimensions(
-    dimensionIndex: number,
-    currentPath: string,
-    subdimensions?: { label: string; values: string[] }[]
-  ): void {
-    // If we have subdimensions to process, process them first
-    if (subdimensions && subdimensions.length > 0) {
-      const dim = subdimensions[0];
-      const remainingSubdims = subdimensions.slice(1);
-
-      for (const value of dim.values) {
-        const newPath = `${currentPath}:${dim.label}-${value}`;
-        if (remainingSubdims.length === 0 && dimensionIndex >= storageModule.dimensions.length) {
-          paths.push(newPath);
-        } else {
-          expandDimensions(dimensionIndex, newPath, remainingSubdims);
-        }
-      }
-      return;
+  async search(
+    userId: Types.ObjectId | string,
+    query?: { name?: string }
+  ): Promise<IModule[]> {
+    const filter: FilterQuery<IModule> = { userId };
+    if (query?.name) {
+      filter.name = { $regex: query.name, $options: 'i' };
     }
+    return Module.find(filter).sort({ name: 1 });
+  },
 
-    // If we've processed all module dimensions, we're done
-    if (dimensionIndex >= storageModule.dimensions.length) {
-      paths.push(currentPath);
-      return;
+  async update(
+    id: Types.ObjectId | string,
+    userId: Types.ObjectId | string,
+    input: Partial<Pick<IModule, 'name' | 'description' | 'metadata'>>
+  ): Promise<IModule | null> {
+    return Module.findOneAndUpdate(
+      { _id: id, userId },
+      { $set: input },
+      { new: true, runValidators: true }
+    );
+  },
+
+  async remove(id: Types.ObjectId | string, userId: Types.ObjectId | string): Promise<boolean> {
+    const result = await Module.deleteOne({ _id: id, userId });
+    return result.deletedCount === 1;
+  },
+
+  // --- Location operations ---
+
+  /**
+   * Resolve a path (array of labels) to the location at that path.
+   * Returns null if any segment doesn't match.
+   */
+  resolveLocation(module: IModule, path: string[]): ILocation | null {
+    if (path.length === 0) return null;
+
+    const [primaryLabel, ...rest] = path;
+    const dimValue = module.primaryDimension.values.find(
+      (v) => v.label === primaryLabel
+    );
+    if (!dimValue) return null;
+
+    let current: ILocation = dimValue.location;
+    for (const segment of rest) {
+      const child = current.children.find((c) => c.label === segment);
+      if (!child) return null;
+      current = child;
     }
+    return current;
+  },
 
-    const dim = storageModule.dimensions[dimensionIndex];
-
-    for (const value of dim.values) {
-      const newPath = currentPath ? `${currentPath}:${dim.label}-${value}` : `${storageModule.name}:${dim.label}-${value}`;
-
-      // Check if this value has subdimensions
-      const subdims = dim.subdimensions?.[value];
-      if (subdims) {
-        expandDimensions(dimensionIndex + 1, newPath, subdims.dimensions);
-        continue;
-      }
-
-      expandDimensions(dimensionIndex + 1, newPath);
+  /**
+   * Add a new value to the primary dimension.
+   */
+  async addPrimaryDimensionValue(
+    id: Types.ObjectId | string,
+    userId: Types.ObjectId | string,
+    label: string,
+    location: {
+      type: 'receptacle' | 'fixed' | 'leaf';
+      interfaceTypeAccepted?: string;
     }
-  }
+  ): Promise<IModule | null> {
+    return Module.findOneAndUpdate(
+      { _id: id, userId },
+      {
+        $push: {
+          'primaryDimension.values': {
+            label,
+            location: {
+              label,
+              type: location.type,
+              interfaceTypeAccepted: location.interfaceTypeAccepted,
+              overrides: [],
+              disabled: false,
+              children: [],
+            },
+          },
+        },
+      },
+      { new: true, runValidators: true }
+    );
+  },
 
-  expandDimensions(0, '');
-  return paths;
-}
+  /**
+   * Remove a primary dimension value by label.
+   */
+  async removePrimaryDimensionValue(
+    id: Types.ObjectId | string,
+    userId: Types.ObjectId | string,
+    label: string
+  ): Promise<IModule | null> {
+    return Module.findOneAndUpdate(
+      { _id: id, userId },
+      {
+        $pull: {
+          'primaryDimension.values': { label },
+        },
+      },
+      { new: true }
+    );
+  },
 
-/**
- * Get subdimensions for a specific dimension value
- */
-export async function getSubdimensions(
-  moduleName: string,
-  dimensionLabel: string,
-  dimensionValue: string
-): Promise<ISubdimensions | null> {
-  await dbConnect();
+  /**
+   * Apply a template to a location, creating child locations from the grid.
+   * The location becomes 'fixed' with children generated from template dimensions.
+   */
+  async applyTemplate(
+    id: Types.ObjectId | string,
+    userId: Types.ObjectId | string,
+    path: string[],
+    templateId: Types.ObjectId,
+    rows: number,
+    cols: number,
+    rowLabeling: { type: 'numeric' | 'alpha' | 'custom'; prefix?: string; labels?: string[]; startAt?: number },
+    colLabeling: { type: 'numeric' | 'alpha' | 'custom'; prefix?: string; labels?: string[]; startAt?: number },
+    childLocationType: 'receptacle' | 'fixed' | 'leaf' = 'leaf',
+    interfaceTypeAccepted?: string
+  ): Promise<IModule | null> {
+    const module = await Module.findOne({ _id: id, userId });
+    if (!module) return null;
 
-  const storageModule = await StorageModule.findOne({ name: moduleName.toUpperCase() });
-  if (!storageModule) {
-    throw new Error(`Module "${moduleName}" not found`);
-  }
+    const location = this.resolveLocation(module, path);
+    if (!location) return null;
 
-  const dimension = storageModule.dimensions.find((d: IModuleDimension) => d.label === dimensionLabel);
-  if (!dimension) {
-    throw new Error(`Dimension "${dimensionLabel}" not found in module "${moduleName}"`);
-  }
-
-  return dimension.subdimensions?.[dimensionValue] || null;
-}
-
-/**
- * Set subdimensions for a specific dimension value
- */
-export async function setSubdimensions(
-  moduleName: string,
-  dimensionLabel: string,
-  dimensionValue: string,
-  subdimensions: ISubdimensions
-): Promise<IStorageModule> {
-  await dbConnect();
-
-  const storageModule = await StorageModule.findOne({ name: moduleName.toUpperCase() });
-  if (!storageModule) {
-    throw new Error(`Module "${moduleName}" not found`);
-  }
-
-  const dimension = storageModule.dimensions.find((d: IModuleDimension) => d.label === dimensionLabel);
-  if (!dimension) {
-    throw new Error(`Dimension "${dimensionLabel}" not found in module "${moduleName}"`);
-  }
-
-  if (!dimension.values.includes(dimensionValue)) {
-    throw new Error(`Value "${dimensionValue}" not valid for dimension "${dimensionLabel}"`);
-  }
-
-  // Initialize subdimensions map if needed
-  if (!dimension.subdimensions) {
-    dimension.subdimensions = {};
-  }
-
-  dimension.subdimensions[dimensionValue] = subdimensions;
-  await storageModule.save();
-
-  return storageModule;
-}
-
-/**
- * Add a cell group (merge cells) within a subdimension
- */
-export async function addCellGroup(
-  moduleName: string,
-  dimensionLabel: string,
-  dimensionValue: string,
-  cellGroup: ICellGroup
-): Promise<IStorageModule> {
-  await dbConnect();
-
-  const storageModule = await StorageModule.findOne({ name: moduleName.toUpperCase() });
-  if (!storageModule) {
-    throw new Error(`Module "${moduleName}" not found`);
-  }
-
-  const dimension = storageModule.dimensions.find((d: IModuleDimension) => d.label === dimensionLabel);
-  if (!dimension) {
-    throw new Error(`Dimension "${dimensionLabel}" not found`);
-  }
-
-  const subdims = dimension.subdimensions?.[dimensionValue];
-  if (!subdims) {
-    throw new Error(`No subdimensions defined for ${dimensionLabel}-${dimensionValue}`);
-  }
-
-  // Check for overlapping groups
-  for (const existingGroup of subdims.cellGroups || []) {
-    for (const member of cellGroup.members) {
-      if (existingGroup.members.includes(member)) {
-        throw new Error(`Cell "${member}" is already part of a merged group (canonical: ${existingGroup.canonical})`);
+    // Generate child locations
+    const children: ILocation[] = [];
+    for (let r = 0; r < rows; r++) {
+      for (let c = 0; c < cols; c++) {
+        const rowLabel = generateLabel(rowLabeling, r);
+        const colLabel = generateLabel(colLabeling, c);
+        children.push({
+          label: `${rowLabel},${colLabel}`,
+          type: childLocationType,
+          interfaceTypeAccepted,
+          overrides: [],
+          disabled: false,
+          children: [],
+        } as ILocation);
       }
     }
+
+    location.type = 'fixed';
+    location.templateId = templateId;
+    location.templateRows = rows;
+    location.templateCols = cols;
+    location.children = children;
+
+    await module.save();
+    return module;
+  },
+
+  /**
+   * Add an override to a location at the given path.
+   */
+  async addOverride(
+    id: Types.ObjectId | string,
+    userId: Types.ObjectId | string,
+    path: string[],
+    override: IOverride
+  ): Promise<IModule | null> {
+    const module = await Module.findOne({ _id: id, userId });
+    if (!module) return null;
+
+    const location = this.resolveLocation(module, path);
+    if (!location) return null;
+
+    location.overrides.push(override);
+    await module.save();
+    return module;
+  },
+
+  /**
+   * Disable a location at the given path.
+   */
+  async disableLocation(
+    id: Types.ObjectId | string,
+    userId: Types.ObjectId | string,
+    path: string[],
+    reason?: string
+  ): Promise<IModule | null> {
+    const module = await Module.findOne({ _id: id, userId });
+    if (!module) return null;
+
+    const location = this.resolveLocation(module, path);
+    if (!location) return null;
+
+    location.disabled = true;
+    location.disableReason = reason;
+    location.overrides.push({
+      type: 'disable',
+      position: { row: 0, col: 0 },
+      reason,
+    } as IOverride);
+
+    await module.save();
+    return module;
+  },
+
+  /**
+   * Enable a previously disabled location.
+   */
+  async enableLocation(
+    id: Types.ObjectId | string,
+    userId: Types.ObjectId | string,
+    path: string[]
+  ): Promise<IModule | null> {
+    const module = await Module.findOne({ _id: id, userId });
+    if (!module) return null;
+
+    const location = this.resolveLocation(module, path);
+    if (!location) return null;
+
+    location.disabled = false;
+    location.disableReason = undefined;
+    // Remove disable overrides
+    location.overrides = location.overrides.filter((o) => o.type !== 'disable') as typeof location.overrides;
+
+    await module.save();
+    return module;
+  },
+
+  /**
+   * Get all leaf locations as path arrays.
+   */
+  getLeafPaths(module: IModule): string[][] {
+    const paths: string[][] = [];
+
+    function walk(location: ILocation, currentPath: string[]) {
+      const fullPath = [...currentPath, location.label];
+      if (location.children.length === 0 && !location.disabled) {
+        paths.push(fullPath);
+      }
+      for (const child of location.children) {
+        walk(child, fullPath);
+      }
+    }
+
+    for (const value of module.primaryDimension.values) {
+      walk(value.location, []);
+    }
+
+    return paths;
+  },
+};
+
+// --- Helpers ---
+
+function generateLabel(
+  labeling: { type: 'numeric' | 'alpha' | 'custom'; prefix?: string; labels?: string[]; startAt?: number },
+  index: number
+): string {
+  const prefix = labeling.prefix || '';
+  switch (labeling.type) {
+    case 'numeric':
+      return `${prefix}${(labeling.startAt || 0) + index}`;
+    case 'alpha':
+      return `${prefix}${String.fromCharCode(65 + index)}`;
+    case 'custom':
+      return labeling.labels?.[index] || `${index}`;
+    default:
+      return `${index}`;
   }
-
-  // Add the new group
-  if (!subdims.cellGroups) {
-    subdims.cellGroups = [];
-  }
-  subdims.cellGroups.push(cellGroup);
-  await storageModule.save();
-
-  return storageModule;
-}
-
-/**
- * Remove a cell group (unmerge cells) within a subdimension
- */
-export async function removeCellGroup(
-  moduleName: string,
-  dimensionLabel: string,
-  dimensionValue: string,
-  canonical: string
-): Promise<IStorageModule> {
-  await dbConnect();
-
-  const storageModule = await StorageModule.findOne({ name: moduleName.toUpperCase() });
-  if (!storageModule) {
-    throw new Error(`Module "${moduleName}" not found`);
-  }
-
-  const dimension = storageModule.dimensions.find((d: IModuleDimension) => d.label === dimensionLabel);
-  if (!dimension) {
-    throw new Error(`Dimension "${dimensionLabel}" not found`);
-  }
-
-  const subdims = dimension.subdimensions?.[dimensionValue];
-  if (!subdims || !subdims.cellGroups) {
-    throw new Error(`No cell groups defined for ${dimensionLabel}-${dimensionValue}`);
-  }
-
-  const groupIndex = subdims.cellGroups.findIndex((g: ICellGroup) => g.canonical === canonical);
-  if (groupIndex === -1) {
-    throw new Error(`Cell group with canonical "${canonical}" not found`);
-  }
-
-  subdims.cellGroups.splice(groupIndex, 1);
-  await storageModule.save();
-
-  return storageModule;
-}
-
-/**
- * Find which cell group (if any) a cell belongs to
- */
-export async function findCellGroup(
-  moduleName: string,
-  dimensionLabel: string,
-  dimensionValue: string,
-  cellAddress: string
-): Promise<ICellGroup | null> {
-  await dbConnect();
-
-  const storageModule = await StorageModule.findOne({ name: moduleName.toUpperCase() });
-  if (!storageModule) {
-    return null;
-  }
-
-  const dimension = storageModule.dimensions.find((d: IModuleDimension) => d.label === dimensionLabel);
-  if (!dimension) {
-    return null;
-  }
-
-  const subdims = dimension.subdimensions?.[dimensionValue];
-  if (!subdims || !subdims.cellGroups) {
-    return null;
-  }
-
-  return subdims.cellGroups.find((g: ICellGroup) => g.members.includes(cellAddress)) || null;
-}
-
-/**
- * Rename a dimension value (e.g., rename level "2" to "plano-box")
- * Returns the old and new path prefixes for updating items
- */
-export async function renameDimensionValue(
-  moduleName: string,
-  dimensionLabel: string,
-  oldValue: string,
-  newValue: string
-): Promise<{ module: IStorageModule; oldPathPrefix: string; newPathPrefix: string }> {
-  await dbConnect();
-
-  const storageModule = await StorageModule.findOne({ name: moduleName.toUpperCase() });
-  if (!storageModule) {
-    throw new Error(`Module "${moduleName}" not found`);
-  }
-
-  const dimension = storageModule.dimensions.find((d: IModuleDimension) => d.label === dimensionLabel);
-  if (!dimension) {
-    throw new Error(`Dimension "${dimensionLabel}" not found in module "${moduleName}"`);
-  }
-
-  const valueIndex = dimension.values.indexOf(oldValue);
-  if (valueIndex === -1) {
-    throw new Error(`Value "${oldValue}" not found in dimension "${dimensionLabel}"`);
-  }
-
-  if (dimension.values.includes(newValue)) {
-    throw new Error(`Value "${newValue}" already exists in dimension "${dimensionLabel}"`);
-  }
-
-  // Update the value in the array
-  dimension.values[valueIndex] = newValue;
-
-  // Move subdimensions if they exist
-  if (dimension.subdimensions && dimension.subdimensions[oldValue]) {
-    dimension.subdimensions[newValue] = dimension.subdimensions[oldValue];
-    delete dimension.subdimensions[oldValue];
-  }
-
-  await storageModule.save();
-
-  // Return path prefixes for item updates
-  const oldPathPrefix = `${storageModule.name}:${dimensionLabel}-${oldValue}`;
-  const newPathPrefix = `${storageModule.name}:${dimensionLabel}-${newValue}`;
-
-  return { module: storageModule, oldPathPrefix, newPathPrefix };
-}
-
-/**
- * Add a new dimension value to an existing dimension
- */
-export async function addDimensionValue(
-  moduleName: string,
-  dimensionLabel: string,
-  newValue: string,
-  position?: number
-): Promise<IStorageModule> {
-  await dbConnect();
-
-  const storageModule = await StorageModule.findOne({ name: moduleName.toUpperCase() });
-  if (!storageModule) {
-    throw new Error(`Module "${moduleName}" not found`);
-  }
-
-  const dimension = storageModule.dimensions.find((d: IModuleDimension) => d.label === dimensionLabel);
-  if (!dimension) {
-    throw new Error(`Dimension "${dimensionLabel}" not found in module "${moduleName}"`);
-  }
-
-  if (dimension.values.includes(newValue)) {
-    throw new Error(`Value "${newValue}" already exists in dimension "${dimensionLabel}"`);
-  }
-
-  // Add at position or end
-  if (position !== undefined && position >= 0 && position <= dimension.values.length) {
-    dimension.values.splice(position, 0, newValue);
-  } else {
-    dimension.values.push(newValue);
-  }
-
-  await storageModule.save();
-  return storageModule;
-}
-
-/**
- * Remove a dimension value from an existing dimension
- * Will fail if items exist at that location
- */
-export async function removeDimensionValue(
-  moduleName: string,
-  dimensionLabel: string,
-  value: string
-): Promise<IStorageModule> {
-  await dbConnect();
-
-  const storageModule = await StorageModule.findOne({ name: moduleName.toUpperCase() });
-  if (!storageModule) {
-    throw new Error(`Module "${moduleName}" not found`);
-  }
-
-  const dimension = storageModule.dimensions.find((d: IModuleDimension) => d.label === dimensionLabel);
-  if (!dimension) {
-    throw new Error(`Dimension "${dimensionLabel}" not found in module "${moduleName}"`);
-  }
-
-  const valueIndex = dimension.values.indexOf(value);
-  if (valueIndex === -1) {
-    throw new Error(`Value "${value}" not found in dimension "${dimensionLabel}"`);
-  }
-
-  // Remove the value
-  dimension.values.splice(valueIndex, 1);
-
-  // Remove subdimensions if they exist
-  if (dimension.subdimensions && dimension.subdimensions[value]) {
-    delete dimension.subdimensions[value];
-  }
-
-  await storageModule.save();
-  return storageModule;
 }

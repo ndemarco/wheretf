@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, beforeAll } from 'vitest';
 import mongoose from 'mongoose';
-import Assignment from '@/models/v2/Assignment';
-import { assignmentRepository } from '@/repositories/v2/assignmentRepository';
+import Assignment from '@/models/Assignment';
+import { assignmentRepository } from '@/repositories/assignmentRepository';
 
 const userId = new mongoose.Types.ObjectId();
 const moduleId = new mongoose.Types.ObjectId();
