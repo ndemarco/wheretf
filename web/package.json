@@ -4,6 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
+    "dev:mem": "tsx scripts/dev-memory-db.mts",
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
@@ -32,10 +33,12 @@
     "@types/react-dom": "^19",
     "@vitest/coverage-v8": "^4.0.18",
     "babel-plugin-react-compiler": "1.0.0",
+    "baseline-browser-mapping": "^2.10.0",
     "eslint": "^9",
     "eslint-config-next": "16.0.10",
     "mongodb-memory-server": "^11.0.1",
     "tailwindcss": "^4",
+    "tsx": "^4.21.0",
     "typescript": "^5",
     "vitest": "^4.0.18"
   }
