@@ -131,9 +131,14 @@ export async function executeAgent(
   userId: string
 ): Promise<AgentResponse> {
   const openai = getOpenAIClient();
+  console.log(`[agent:${agent.name}] START tools=[${agent.tools.join(', ')}] message="${message.slice(0, 80)}"`);
 
   // Get active tools for this agent (cached)
   const { tools, functions } = await getToolsForAgent(agent.tools);
+
+  if (functions.length !== agent.tools.length) {
+    console.warn(`[agent:${agent.name}] tool mismatch: expected ${agent.tools.length}, loaded ${functions.length}`);
+  }
 
   const messages = buildMessages(agent.instructions, history, message, images);
 
@@ -261,8 +266,11 @@ export async function executeAgent(
     console.warn(`Agent "${agent.name}" hit max tool iterations (${MAX_TOOL_ITERATIONS})`);
   }
 
+  const finalContent = response.choices[0]?.message?.content || '';
+  console.log(`[agent:${agent.name}] END iterations=${toolIterations} toolCalls=${allToolCalls.length} response="${finalContent.slice(0, 100)}"`);
+
   return {
-    content: response.choices[0]?.message?.content || '',
+    content: finalContent,
     agent: agent.name,
     toolCalls: allToolCalls.length > 0 ? allToolCalls : undefined,
   };

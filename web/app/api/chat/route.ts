@@ -25,6 +25,8 @@ export async function POST(request: NextRequest) {
       return Response.json({ error: 'Message is required' }, { status: 400 });
     }
 
+    console.log(`[chat] user=${session.user.id} session=${sessionId || 'NEW'} message="${message.slice(0, 80)}"`);
+
     // Ensure user has agents seeded
     await ensureUserSeeded(session.user.id);
     await seedGlobalDefaults();
@@ -82,6 +84,8 @@ export async function POST(request: NextRequest) {
       chatSession._id.toString(),
       assistantMessage
     );
+
+    console.log(`[chat] response agent=${aiResponse.agent} toolCalls=${aiResponse.toolCalls?.length || 0} content="${aiResponse.content.slice(0, 100)}"`);
 
     return Response.json({
       message: {

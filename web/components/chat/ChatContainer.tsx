@@ -75,7 +75,12 @@ export function ChatContainer({ sessionId: initialSessionId, initialMessages = [
 
       if (data.sessionId && !sessionId) {
         setSessionId(data.sessionId);
-        window.history.replaceState({}, '', `/chat?session=${data.sessionId}`);
+        // Update URL without triggering React re-render of useSearchParams
+        window.history.replaceState(
+          { sessionId: data.sessionId },
+          '',
+          `/chat?session=${data.sessionId}`
+        );
       }
 
       const assistantMessage: Message = {

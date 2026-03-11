@@ -23,17 +23,18 @@ function ChatPageContent() {
   const [initialMessages, setInitialMessages] = useState<Message[]>([]);
   const [loading, setLoading] = useState(!!sessionId);
   const [error, setError] = useState<string | null>(null);
+  const [loadedSessionId, setLoadedSessionId] = useState<string | null>(null);
 
   useEffect(() => {
-    if (sessionId) {
+    if (sessionId && sessionId !== loadedSessionId) {
       loadSession(sessionId);
-    } else {
-      // Reset state when sessionId is cleared (new chat)
+    } else if (!sessionId) {
       setInitialMessages([]);
       setLoading(false);
       setError(null);
+      setLoadedSessionId(null);
     }
-  }, [sessionId]);
+  }, [sessionId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const loadSession = async (id: string) => {
     try {
@@ -42,6 +43,7 @@ function ChatPageContent() {
         throw new Error('Failed to load session');
       }
       const data = await response.json();
+      setLoadedSessionId(id);
       // Filter out system messages and map to the expected format
       const messages = (data.session.messages || [])
         .filter((m: { role: string }) => m.role !== 'system')
