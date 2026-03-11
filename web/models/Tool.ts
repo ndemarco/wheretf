@@ -21,7 +21,7 @@ export interface IToolParameter {
 export interface ITool extends Document {
   name: string;
   description?: string;
-  category: 'agents' | 'items' | 'modules' | 'templates' | 'params' | 'units' | 'utility';
+  category: 'agents' | 'templates' | 'modules' | 'inserts' | 'items' | 'assignments';
   parameters: IToolParameter[];
   handler: string;
   isSystem: boolean;
@@ -56,7 +56,7 @@ const toolSchema = new Schema<ITool>(
     description: { type: String }, // For OpenAI function calling
     category: {
       type: String,
-      enum: ['agents', 'items', 'modules', 'templates', 'params', 'units', 'utility'],
+      enum: ['agents', 'templates', 'modules', 'inserts', 'items', 'assignments'],
     },
     parameters: [toolParameterSchema],
     handler: { type: String, required: true }, // Reference to handler function
