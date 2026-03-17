@@ -1,0 +1,34 @@
+import { NextRequest, NextResponse } from "next/server";
+import { locationRepository } from "@/repositories/locationRepository";
+
+export async function GET(request: NextRequest) {
+  try {
+    const moduleId = request.nextUrl.searchParams.get("moduleId");
+    if (!moduleId) {
+      return NextResponse.json(
+        { error: "moduleId query parameter is required" },
+        { status: 400 },
+      );
+    }
+    const locations = await locationRepository.findByModuleId({ moduleId });
+    return NextResponse.json({ locations });
+  } catch (err) {
+    return NextResponse.json(
+      { error: err instanceof Error ? err.message : "Unexpected error" },
+      { status: 500 },
+    );
+  }
+}
+
+export async function POST(request: NextRequest) {
+  try {
+    const body = await request.json();
+    const location = await locationRepository.create(body);
+    return NextResponse.json({ location }, { status: 201 });
+  } catch (err) {
+    return NextResponse.json(
+      { error: err instanceof Error ? err.message : "Unexpected error" },
+      { status: 400 },
+    );
+  }
+}
