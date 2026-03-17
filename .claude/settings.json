@@ -1,0 +1,7 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(DATABASE_URL=\"postgresql://wheretf:wheretf@localhost:5432/wheretf_test\" npx vitest run)"
+    ]
+  }
+}

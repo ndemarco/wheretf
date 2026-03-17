@@ -1,17 +1,10 @@
-import { drizzle } from "drizzle-orm/postgres-js";
-import postgres from "postgres";
 import { sql } from "drizzle-orm";
-
-const connectionString =
-  process.env.DATABASE_URL ??
-  "postgresql://wheretf:wheretf@localhost:5432/wheretf_test";
-
-const client = postgres(connectionString);
-export const testDb = drizzle(client);
+import { db } from "@/db/connection";
 
 // Clean all tables between tests
-export async function cleanDatabase() {
-  await testDb.execute(sql`
+async function cleanDatabase() {
+  await db.execute(sql`
+    SET client_min_messages TO WARNING;
     DO $$ DECLARE
       r RECORD;
     BEGIN
@@ -19,13 +12,10 @@ export async function cleanDatabase() {
         EXECUTE 'TRUNCATE TABLE ' || quote_ident(r.tablename) || ' CASCADE';
       END LOOP;
     END $$;
+    SET client_min_messages TO NOTICE;
   `);
 }
 
 afterEach(async () => {
   await cleanDatabase();
-});
-
-afterAll(async () => {
-  await client.end();
 });
