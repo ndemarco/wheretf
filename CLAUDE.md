@@ -9,7 +9,7 @@
 
 ## Stack
 
-Next.js (App Router) + React, PostgreSQL, Tailwind v4. Storage grid rendered as SVG within React components; DOM overlays for tooltips and detail panels. Multi-user, multi-tenant (users belong to orgs). AI integration (OpenAI) deferred — build core storage and item management first.
+Next.js (App Router) + React, PostgreSQL, Tailwind v4. Storage grid rendered as SVG within React components; DOM overlays for tooltips and detail panels. Single-user for initial implementation. Designed for future multi-user, multi-tenant (users belong to orgs). AI integration (OpenAI) deferred — build core storage and item management first.
 
 ## Dev Commands
 
@@ -40,7 +40,7 @@ Three-layer data access — no exceptions:
 ## Repository Conventions
 
 - All methods take a single destructured object: `create({ userId, name, location })`
-- Storage and assignment queries scope by `orgId` — no unscoped queries. Items are global.
+- All user-data queries must scope by `userId` — no unscoped queries. Future: `orgId` scoping when multi-tenant is implemented; items will be global (shared across orgs).
 - Repositories throw errors; API routes catch and return `{ error: "msg" }`
 
 ## API Response Shape
@@ -75,3 +75,4 @@ Tailwind v4 with custom `accent` color (#ff6600 orange). Dark mode supported. Gr
 - [specification/storage-model.md](specification/storage-model.md) — storage data model (modules, templates, inserts, overrides, paths)
 - [specification/deployment.md](specification/deployment.md) — CI/CD pipeline and deployment
 - [specification/storage-navigator-design.md](specification/storage-navigator-design.md) — grid visualization UI/UX spec
+- [specification/ai-agent-architecture.md](specification/ai-agent-architecture.md) — AI agent patterns (deferred, reference only)

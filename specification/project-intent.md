@@ -1,6 +1,6 @@
 # WhereTF — Project Intent
 
-R&D workshop item tracker. Users model their physical storage layout, catalog items, and get help storing, finding, and organizing their stuff. AI-assisted natural language cataloging is a feature layer, not the foundation — build core storage and item management first. Multi-user, multi-tenant (users belong to orgs). Not inventory management — no quantities, BOMs, or stock transfers.
+R&D workshop item tracker. Users model their physical storage layout, catalog items, and get help storing, finding, and organizing their stuff. AI-assisted natural language cataloging is a feature layer, not the foundation — build core storage and item management first. Single-user for initial implementation. Designed for future multi-user, multi-tenant (users belong to orgs); item data will be global (shared across orgs) in the multi-tenant version. Not inventory management — no quantities, BOMs, or stock transfers.
 
 ## Interaction Model
 
