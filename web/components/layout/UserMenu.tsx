@@ -36,7 +36,7 @@ export function UserMenu() {
             className="rounded-full"
           />
         ) : (
-          <div className="w-8 h-8 rounded-full bg-blue-600 flex items-center justify-center text-white font-medium">
+          <div className="w-8 h-8 rounded-full bg-accent-500 flex items-center justify-center text-white font-medium">
             {session.user.name?.charAt(0) || session.user.email?.charAt(0) || '?'}
           </div>
         )}

@@ -38,13 +38,13 @@ export function ModuleOverview({ module, onDimensionClick }: ModuleOverviewProps
                     onClick={() => onDimensionClick(dim.label, value)}
                     className={`px-3 py-1.5 text-sm rounded border transition-colors ${
                       hasSubdimensions
-                        ? 'bg-blue-50 dark:bg-blue-900/30 border-blue-200 dark:border-blue-800 text-blue-700 dark:text-blue-300 hover:bg-blue-100 dark:hover:bg-blue-900/50'
+                        ? 'bg-accent-50 dark:bg-accent-900/30 border-accent-200 dark:border-accent-800 text-accent-700 dark:text-accent-300 hover:bg-accent-100 dark:hover:bg-accent-900/50'
                         : 'bg-gray-50 dark:bg-gray-800 border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700'
                     }`}
                   >
                     {value}
                     {hasSubdimensions && (
-                      <span className="ml-1 text-blue-400 dark:text-blue-500">▸</span>
+                      <span className="ml-1 text-accent-400 dark:text-accent-500">▸</span>
                     )}
                   </button>
                 );

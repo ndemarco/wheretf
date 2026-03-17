@@ -1,8 +1,10 @@
 'use client';
 
+import { useState } from 'react';
+
 // Color palette for result markers (cycles through these)
 const RESULT_COLORS = [
-  'bg-blue-500',
+  'bg-accent-500',
   'bg-green-500',
   'bg-purple-500',
   'bg-orange-500',
@@ -18,6 +20,8 @@ interface StorageGridProps {
   occupiedCells: Set<string>; // Format: "row-A:col-3"
   resultMarkers: { resultIndex: number; row: string; col: string }[];
   selectedResultIndex: number | null;
+  onCellClick?: (row: string, col: string) => void;
+  cellTooltips?: Record<string, { itemName: string; itemDescription?: string }>;
 }
 
 export function StorageGrid({
@@ -26,7 +30,11 @@ export function StorageGrid({
   occupiedCells,
   resultMarkers,
   selectedResultIndex,
+  onCellClick,
+  cellTooltips,
 }: StorageGridProps) {
+  const [hoveredCell, setHoveredCell] = useState<string | null>(null);
+
   // Build a map of cell -> result for quick lookup
   const resultMap = new Map<string, number>();
   for (const marker of resultMarkers) {
@@ -34,8 +42,11 @@ export function StorageGrid({
     resultMap.set(key, marker.resultIndex);
   }
 
+  const getCellLabel = (row: string, col: string) => `${row}${col}`;
+
   const getCellContent = (row: string, col: string) => {
     const cellKey = `row-${row}:col-${col}`;
+    const label = getCellLabel(row, col);
     const resultIndex = resultMap.get(cellKey);
 
     if (resultIndex !== undefined) {
@@ -47,57 +58,58 @@ export function StorageGrid({
             isSelected ? 'ring-2 ring-offset-1 ring-black dark:ring-white' : ''
           }`}
         >
-          {resultIndex + 1}
+          {label}
         </div>
       );
     }
 
     if (occupiedCells.has(cellKey)) {
-      return <div className="w-full h-full bg-gray-300 dark:bg-gray-600 rounded" />;
+      return (
+        <div className="w-full h-full bg-gray-800 dark:bg-gray-200 rounded flex items-center justify-center text-white dark:text-gray-900 text-xs font-semibold">
+          {label}
+        </div>
+      );
     }
 
-    // Empty cell - no content
-    return null;
+    // Empty cell — show label subdued
+    return (
+      <div className="w-full h-full rounded flex items-center justify-center text-gray-300 dark:text-gray-600 text-xs">
+        {label}
+      </div>
+    );
   };
 
   return (
-    <div className="inline-block">
-      <table className="border-collapse">
-        <thead>
-          <tr>
-            {/* Empty corner cell */}
-            <th className="w-8 h-8" />
-            {/* Column headers */}
-            {cols.map((col) => (
-              <th
-                key={col}
-                className="w-8 h-6 text-xs text-gray-500 dark:text-gray-400 font-normal text-center"
+    <div className="inline-block relative">
+      <div className="grid gap-1" style={{ gridTemplateColumns: `repeat(${cols.length}, 2.5rem)` }}>
+        {rows.map((row) =>
+          cols.map((col) => {
+            const cellKey = `row-${row}:col-${col}`;
+            const tooltip = cellTooltips?.[cellKey];
+            const isHovered = hoveredCell === cellKey;
+
+            return (
+              <div
+                key={`${row}-${col}`}
+                className={`w-10 h-10 relative ${
+                  onCellClick ? 'cursor-pointer' : ''
+                }`}
+                onClick={() => onCellClick?.(row, col)}
+                onMouseEnter={() => setHoveredCell(cellKey)}
+                onMouseLeave={() => setHoveredCell(null)}
               >
-                {col}
-              </th>
-            ))}
-          </tr>
-        </thead>
-        <tbody>
-          {rows.map((row) => (
-            <tr key={row}>
-              {/* Row header */}
-              <td className="w-6 h-8 text-xs text-gray-500 dark:text-gray-400 text-right pr-2">
-                {row}
-              </td>
-              {/* Cells */}
-              {cols.map((col) => (
-                <td
-                  key={`${row}-${col}`}
-                  className="w-8 h-8 p-0.5 border border-gray-100 dark:border-gray-800"
-                >
-                  {getCellContent(row, col)}
-                </td>
-              ))}
-            </tr>
-          ))}
-        </tbody>
-      </table>
+                {getCellContent(row, col)}
+                {/* Tooltip */}
+                {isHovered && cellTooltips && (
+                  <div className="absolute z-10 bottom-full left-1/2 -translate-x-1/2 mb-1 px-2 py-1 bg-gray-900 dark:bg-gray-100 text-white dark:text-gray-900 text-xs rounded shadow-lg whitespace-nowrap pointer-events-none">
+                    {tooltip ? tooltip.itemName : 'Empty'}
+                  </div>
+                )}
+              </div>
+            );
+          })
+        )}
+      </div>
     </div>
   );
 }

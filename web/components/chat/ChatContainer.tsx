@@ -31,9 +31,12 @@ interface ContextStatus {
 interface ChatContainerProps {
   sessionId?: string;
   initialMessages?: Message[];
+  compact?: boolean;
+  onMessage?: () => void;
+  onResponse?: () => void;
 }
 
-export function ChatContainer({ sessionId: initialSessionId, initialMessages = [] }: ChatContainerProps) {
+export function ChatContainer({ sessionId: initialSessionId, initialMessages = [], compact, onMessage, onResponse }: ChatContainerProps) {
   const [messages, setMessages] = useState<Message[]>(initialMessages);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -49,12 +52,45 @@ export function ChatContainer({ sessionId: initialSessionId, initialMessages = [
     scrollToBottom();
   }, [messages]);
 
+  const handleFeedback = async (msgIndex: number, rating: 'up' | 'down', note?: string, screenshot?: string) => {
+    const assistantMsg = messages[msgIndex];
+    // Find the preceding user message
+    let userMsg: Message | undefined;
+    for (let i = msgIndex - 1; i >= 0; i--) {
+      if (messages[i].role === 'user') {
+        userMsg = messages[i];
+        break;
+      }
+    }
+    if (!userMsg || !assistantMsg) return;
+
+    try {
+      await fetch('/api/captures', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          rating,
+          userMessage: userMsg.content,
+          agentResponse: assistantMsg.content,
+          agent: assistantMsg.agent,
+          toolCalls: assistantMsg.toolCalls,
+          userNote: note,
+          screenshot,
+          sessionId,
+        }),
+      });
+    } catch {
+      // Silent fail — don't disrupt the user experience
+    }
+  };
+
   const sendMessage = async (content: string, images?: string[]) => {
     setError(null);
     setIsLoading(true);
 
     const userMessage: Message = { role: 'user', content };
     setMessages((prev) => [...prev, userMessage]);
+    onMessage?.();
 
     try {
       const response = await fetch('/api/chat', {
@@ -90,6 +126,7 @@ export function ChatContainer({ sessionId: initialSessionId, initialMessages = [
         toolCalls: data.message.toolCalls,
       };
       setMessages((prev) => [...prev, assistantMessage]);
+      onResponse?.();
 
       if (data.context) {
         setContext(data.context);
@@ -105,36 +142,44 @@ export function ChatContainer({ sessionId: initialSessionId, initialMessages = [
   return (
     <div className="flex h-full">
       <div className="flex-1 flex flex-col min-w-0">
-        <div className="flex-1 overflow-y-auto p-4 space-y-4">
+        <div className={`flex-1 overflow-y-auto ${compact ? 'p-3 space-y-3' : 'p-4 space-y-4'}`}>
           {messages.length === 0 ? (
-            <div className="flex flex-col items-center justify-center h-full text-center">
-              <div className="w-16 h-16 bg-blue-100 dark:bg-blue-900 rounded-full flex items-center justify-center mb-4">
-                <svg className="w-8 h-8 text-blue-600 dark:text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
-                </svg>
+            compact ? (
+              <div className="flex flex-col items-center justify-center h-full text-center px-4">
+                <p className="text-sm text-gray-400 dark:text-gray-500">
+                  Ask about your inventory or manage storage.
+                </p>
               </div>
-              <h2 className="text-xl font-semibold mb-2">Welcome to WhereTF</h2>
-              <p className="text-gray-600 dark:text-gray-400 mb-6 max-w-md">
-                Your AI-powered workshop inventory assistant. Describe items, take photos, or ask questions about your inventory.
-              </p>
-              <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-4 max-w-md">
-                <p className="text-sm text-gray-500 dark:text-gray-400 mb-3">Try saying:</p>
-                <ul className="text-sm space-y-2 text-left">
-                  <li className="flex items-start gap-2">
-                    <span className="text-blue-500">&bull;</span>
-                    <span>&quot;Create a storage module called MUSE with 11 levels&quot;</span>
-                  </li>
-                  <li className="flex items-start gap-2">
-                    <span className="text-blue-500">&bull;</span>
-                    <span>&quot;Add 10k resistors to MUSE level 3, row 2&quot;</span>
-                  </li>
-                  <li className="flex items-start gap-2">
-                    <span className="text-blue-500">&bull;</span>
-                    <span>&quot;Where are my M3 screws?&quot;</span>
-                  </li>
-                </ul>
+            ) : (
+              <div className="flex flex-col items-center justify-center h-full text-center">
+                <div className="w-16 h-16 bg-accent-100 dark:bg-accent-900 rounded-full flex items-center justify-center mb-4">
+                  <svg className="w-8 h-8 text-accent-500 dark:text-accent-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+                  </svg>
+                </div>
+                <h2 className="text-xl font-semibold mb-2">Welcome to WhereTF</h2>
+                <p className="text-gray-600 dark:text-gray-400 mb-6 max-w-md">
+                  Your AI-powered workshop inventory assistant. Describe items, take photos, or ask questions about your inventory.
+                </p>
+                <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-4 max-w-md">
+                  <p className="text-sm text-gray-500 dark:text-gray-400 mb-3">Try saying:</p>
+                  <ul className="text-sm space-y-2 text-left">
+                    <li className="flex items-start gap-2">
+                      <span className="text-accent-500">&bull;</span>
+                      <span>&quot;Create a storage module called MUSE with 11 levels&quot;</span>
+                    </li>
+                    <li className="flex items-start gap-2">
+                      <span className="text-accent-500">&bull;</span>
+                      <span>&quot;Add 10k resistors to MUSE level 3, row 2&quot;</span>
+                    </li>
+                    <li className="flex items-start gap-2">
+                      <span className="text-accent-500">&bull;</span>
+                      <span>&quot;Where are my M3 screws?&quot;</span>
+                    </li>
+                  </ul>
+                </div>
               </div>
-            </div>
+            )
           ) : (
             <>
               {messages.map((msg, idx) => (
@@ -144,6 +189,10 @@ export function ChatContainer({ sessionId: initialSessionId, initialMessages = [
                   content={msg.content}
                   agent={msg.agent}
                   toolCalls={msg.toolCalls}
+                  onFeedback={msg.role === 'assistant'
+                    ? (rating, note, screenshot) => handleFeedback(idx, rating, note, screenshot)
+                    : undefined
+                  }
                 />
               ))}
               {isLoading && (

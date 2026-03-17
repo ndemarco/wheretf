@@ -103,7 +103,7 @@ export default function SessionsPage() {
             <h2 className="text-xl font-semibold">Your Sessions</h2>
             <Link
               href="/chat"
-              className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm"
+              className="px-4 py-2 bg-accent-500 text-white rounded-lg hover:bg-accent-600 transition-colors text-sm"
             >
               New Chat
             </Link>
@@ -111,7 +111,7 @@ export default function SessionsPage() {
 
           {loading && (
             <div className="flex justify-center py-12">
-              <div className="w-8 h-8 border-4 border-blue-600 border-t-transparent rounded-full animate-spin" />
+              <div className="w-8 h-8 border-4 border-accent-500 border-t-transparent rounded-full animate-spin" />
             </div>
           )}
 

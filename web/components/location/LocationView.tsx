@@ -111,7 +111,7 @@ export function LocationView({
 
   // Color palette for result items (matches StorageGrid)
   const RESULT_COLORS = [
-    'bg-blue-500',
+    'bg-accent-500',
     'bg-green-500',
     'bg-purple-500',
     'bg-orange-500',
