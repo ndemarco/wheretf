@@ -1,6 +1,6 @@
 # WhereTF — Project Intent
 
-R&D workshop item tracker. Users model their physical storage layout, catalog items via AI-assisted natural language, and get help storing, finding, and organizing their stuff. Not inventory management — no quantities, BOMs, or stock transfers.
+R&D workshop item tracker. Users model their physical storage layout, catalog items, and get help storing, finding, and organizing their stuff. AI-assisted natural language cataloging is a feature layer, not the foundation — build core storage and item management first. Multi-user, multi-tenant (users belong to orgs). Not inventory management — no quantities, BOMs, or stock transfers.
 
 ## Interaction Model
 
@@ -15,11 +15,13 @@ GUI and AI each own different concerns:
 
 ## Domain Concepts
 
-- **Item** — what a thing *is*, independent of where it is. A type/category, not an instance or count. Described by name, description, and unlimited key/value/unit parameter tuples. Equivalent to a product in ERP. Parameters can repeat keys (e.g. a pipe reducer with two thread_size values).
-- **Assignment** — connects an item to a location. Own entity, not a field on item or location. One assignment per location (strict), many assignments per item. Unassigned items and empty locations are both valid states.
-- **Module** — a physical storage unit (cabinet, shelf, drawer unit). Defines valid location path structures.
-- **Template** — reusable grid/dimension definition (e.g. Plano Stowaway 3600 = 4×6 grid). Applied to module levels.
-- **Location path** — hierarchical address within a module. Module names uppercase, dimension values lowercase.
+- **Item** — what a thing *is*, independent of where it is. A type/category, not an instance or count. Described by name, description, and unlimited key/value/unit parameter tuples. Equivalent to a product in ERP. Parameters can repeat keys (e.g. a pipe reducer with two thread_size values). Items belong to WhereTF globally — as items are refined and improved, they benefit all users. Storage and assignments are per-org; items are shared. Future: private items as a paid feature.
+- **Assignment** — connects an item to a location. Own entity, not a field on item or location. Either *placed* (specific leaf location, one per location unless co-storable) or *provisional* (at a location, position undetermined). Many assignments per item. Unassigned items and empty locations are both valid states.
+- **Module** — a top-level, independent physical storage unit (cabinet, shelf, drawer unit). Never nested. Defines valid location path structures.
+- **Template** — versioned blueprint for a storage product's layout (e.g. Plano Stowaway 3600 = 4×6 grid). Applied via inserts (receptacle locations) or directly (fixed locations). Instances pin to an applied version.
+- **Insert** — a distinct physical object that occupies a receptacle and provides its own internal locations. Relocatable as a unit.
+- **Interface type** — named physical contract governing insert/receptacle compatibility. Strictly validated on placement.
+- **Location path** — hierarchical address within a module. Module names are short identifiers, not descriptions. Descriptions belong in metadata.
 
 ## AI Agent Model
 

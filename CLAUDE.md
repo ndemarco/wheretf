@@ -2,7 +2,7 @@
 
 ## Stack
 
-Next.js (App Router) + React, MongoDB/Mongoose, OpenAI GPT-4o agents, Tailwind v4. Single-user for now.
+Next.js (App Router) + React, PostgreSQL, Tailwind v4. Storage grid rendered as SVG within React components; DOM overlays for tooltips and detail panels. Multi-user, multi-tenant (users belong to orgs). AI integration (OpenAI) deferred — build core storage and item management first.
 
 ## Dev Commands
 
@@ -44,7 +44,7 @@ Error:   { error: "Error message" }
 | Utilities, functions, variables | camelCase | `agentRunner.ts`, `userId` |
 | Constants | UPPER_SNAKE | `MAX_TOKENS` |
 | Database fields | camelCase | `createdAt` |
-| Module names (domain) | UPPERCASE | `MUSE`, `FLUX`, `PRUSA` |
+| Module names (domain) | Short, not descriptive | `MUSE`, `FLUX`, `NEON` |
 | Parameter keys (domain) | lowercase_underscore | `thread_size`, `voltage_rating` |
 
 ## Styling
