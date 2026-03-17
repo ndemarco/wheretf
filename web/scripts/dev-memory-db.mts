@@ -1,17 +1,24 @@
 /**
- * Dev server with in-memory MongoDB.
+ * Dev server with file-backed MongoDB.
  * Usage: npx tsx scripts/dev-memory-db.mts
  *
- * Starts a MongoMemoryServer instance, sets MONGODB_URI, then runs `next dev`.
- * Data does not persist across restarts — this is for testing tool behavior only.
+ * Starts a MongoMemoryServer instance with persistent storage, sets MONGODB_URI,
+ * then runs `next dev`. Data persists across restarts in .data/mongodb.
  */
 
 import { MongoMemoryServer } from 'mongodb-memory-server';
 import { spawn } from 'child_process';
+import { mkdirSync } from 'fs';
+import { resolve } from 'path';
 
 async function main() {
-  console.log('Starting in-memory MongoDB...');
-  const mongod = await MongoMemoryServer.create();
+  const dbPath = resolve(import.meta.dirname, '..', '.data', 'mongodb');
+  mkdirSync(dbPath, { recursive: true });
+
+  console.log(`Starting MongoDB (data: ${dbPath})...`);
+  const mongod = await MongoMemoryServer.create({
+    instance: { dbPath, storageEngine: 'wiredTiger' },
+  });
   const uri = mongod.getUri();
   console.log(`MongoDB ready at ${uri}`);
 

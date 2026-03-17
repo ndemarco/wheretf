@@ -9,7 +9,11 @@
     "start": "next start",
     "lint": "eslint",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "exercise": "tsx exercise/cli.ts",
+    "exercise:agent": "tsx exercise/cli.ts --agent",
+    "exercise:verbose": "tsx exercise/cli.ts --verbose",
+    "exercise:captures": "tsx exercise/cli.ts --captures"
   },
   "dependencies": {
     "@auth/mongodb-adapter": "^3.11.1",
@@ -18,7 +22,7 @@
     "date-fns": "^4.1.0",
     "lucide-react": "^0.562.0",
     "mongoose": "^9.0.1",
-    "next": "16.0.10",
+    "next": "^16.1.6",
     "next-auth": "^5.0.0-beta.30",
     "openai": "^6.13.0",
     "react": "19.2.1",

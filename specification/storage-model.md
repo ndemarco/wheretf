@@ -155,25 +155,26 @@ Paths have two display formats:
 
 **Brief** — compact, optimized for scanning and speech:
 ```
-MUSE 3 / 2, 5
-ALEX 4 / 3, 2 / Front
+MUSE 3 / B4
+ALEX 4 / B2 / Front
 ```
 
 **Verbose** — explicit dimension labels for clarity:
 ```
-MUSE 3 / Row 2, Col 5
-ALEX Drawer 4 / Row 3, Col 2 / Front
+MUSE 3 / Row B, Col 4
+ALEX Drawer 4 / Row B, Col 2 / Front
 ```
 
 Display formatting rules:
 - Module name + primary dimension value are space-separated: `MUSE 3`
 - Sub-dimension boundaries use slash: `/`
-- Same-depth coordinates use comma: `2, 5`
+- Grid cells use row-letter + column-number notation: `B4` (row B, column 4)
 - Dimension labels (Row, Col, Drawer) come from the template's labeling scheme
 - The number immediately following a module name always indicates the primary dimension value
+- Default labeling convention: rows are alpha (A, B, C, ...) top-to-back, columns are numeric (1, 2, 3, ...) left-to-right. Origin is top/back, left side.
 
 ### Spoken Form
-Paths are designed to be naturally speakable: "Muse 3, two-five" or "Alex 4, three-two, front." No delimiters are verbalized.
+Paths are designed to be naturally speakable: "Muse 3, B-4" or "Alex 4, B-2, front." No delimiters are verbalized.
 
 ### Path Behavior Under Overrides
 
@@ -216,18 +217,18 @@ Module: MUSE
 
   Location: level 1          ← receptacle (accepts: plano-shelf-slot)
     Insert: plano-box-001    ← a specific Plano 3600 instance
-      Location: 1, 1         ← leaf, can hold an assignment
-      Location: 1, 2
+      Location: A1           ← leaf, can hold an assignment
+      Location: A2
       ...
-      Location: 4, 6
+      Location: D6
 
   Location: level 4          ← receptacle
     Insert: plano-box-004    ← a Plano 3600 with overrides
-      Location: 1, 1
-      Location: 1, 2
-      Location: 1, 3+4       ← merged (override on this insert)
-      Location: 1, 5
-      Location: 1, 6
+      Location: A1
+      Location: A2
+      Location: A3+A4        ← merged (override on this insert)
+      Location: A5
+      Location: A6
       ...
 
   Location: level 10         ← receptacle, currently no insert
@@ -246,12 +247,12 @@ Module: ALEX
   Primary dimension: drawer (1-9)
 
   Location: drawer 3                  ← fixed (module-defined)
-    Location: row 1, col 1            ← fixed (GF baseplate grid, parametric 6×4)
+    Location: A1                      ← fixed (GF baseplate grid, parametric 6×4)
       Insert: gf-2x1-3comp-017       ← a specific GF 2×1 bin with 3 compartments
         Location: comp 1              ← leaf
         Location: comp 2              ← leaf
         Location: comp 3              ← leaf
-    Location: row 1, col 3            ← next baseplate position (bin spans 2 cols)
+    Location: A3                      ← next baseplate position (bin spans 2 cols)
       Insert: gf-1x1-bin-042         ← a specific GF 1×1 bin, single compartment
         Location: (single cell)       ← leaf
     ...

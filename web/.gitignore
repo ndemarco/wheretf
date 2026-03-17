@@ -30,6 +30,12 @@ yarn-debug.log*
 yarn-error.log*
 .pnpm-debug.log*
 
+# local dev database
+.data/
+
+# agent interaction logs
+logs/
+
 # env files (can opt-in for committing if needed)
 .env*
 
