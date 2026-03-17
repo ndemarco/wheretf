@@ -4,6 +4,9 @@
 - Keep this file under 150 lines.
 - Prefer higher level CLAUDE.md files for generalized instructions
 
+## Folder structure
+- Specifications belong in `specification/`
+
 ## Stack
 
 Next.js (App Router) + React, PostgreSQL, Tailwind v4. Storage grid rendered as SVG within React components; DOM overlays for tooltips and detail panels. Multi-user, multi-tenant (users belong to orgs). AI integration (OpenAI) deferred — build core storage and item management first.
@@ -71,4 +74,4 @@ Tailwind v4 with custom `accent` color (#ff6600 orange). Dark mode supported. Gr
 - [specification/project-intent.md](specification/project-intent.md) — what WhereTF is, interaction model, domain concepts
 - [specification/storage-model.md](specification/storage-model.md) — storage data model (modules, templates, inserts, overrides, paths)
 - [specification/deployment.md](specification/deployment.md) — CI/CD pipeline and deployment
-- [web/docs/storage-navigator-design.md](web/docs/storage-navigator-design.md) — grid visualization UI/UX spec
+- [specification/storage-navigator-design.md](specification/storage-navigator-design.md) — grid visualization UI/UX spec
