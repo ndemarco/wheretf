@@ -6,6 +6,7 @@ import { IAgent } from '@/models/Agent';
 import { IMessage } from '@/models/Session';
 import { ITool } from '@/models/Tool';
 import { formatForOpenAI } from '@/repositories/toolRepository';
+import { agentLog } from './logger';
 
 // Cache for tools and formatted functions (tools rarely change during runtime)
 const toolCache = new Map<string, ITool>();
@@ -15,6 +16,34 @@ let toolCachePopulated = false;
 // Cache for agents per user (key: `${userId}:${agentName}`)
 const agentCache = new Map<string, IAgent>();
 const routerCache = new Map<string, IAgent>();
+
+/**
+ * Strip filler closing phrases that GPT-4o adds despite instructions.
+ * Runs as post-processing so we don't rely on the model following instructions.
+ */
+const FILLER_PATTERNS = [
+  /\s*If you (?:need|have|want|require|would like)[\s\S]{0,80}(?:let me know|feel free|don't hesitate|reach out)[.!]?\s*$/i,
+  /\s*(?:Let me know|Feel free|Don't hesitate)[\s\S]{0,60}[.!]?\s*$/i,
+  /\s*(?:Would you like|Do you (?:need|want)|Is there anything)[\s\S]{0,80}[?]?\s*$/i,
+  /\s*(?:I'm here to help|Happy to help|Hope this helps)[.!]?\s*$/i,
+];
+
+function stripFillerClosing(text: string): string {
+  let result = text;
+  for (const pattern of FILLER_PATTERNS) {
+    result = result.replace(pattern, '');
+  }
+  return result.trimEnd();
+}
+
+/** Clear all caches — used by exercise harness between scenarios */
+export function clearAgentCaches(): void {
+  toolCache.clear();
+  formattedToolCache.clear();
+  toolCachePopulated = false;
+  agentCache.clear();
+  routerCache.clear();
+}
 
 async function getToolsForAgent(toolNames: string[]): Promise<{
   tools: ITool[];
@@ -131,7 +160,7 @@ export async function executeAgent(
   userId: string
 ): Promise<AgentResponse> {
   const openai = getOpenAIClient();
-  console.log(`[agent:${agent.name}] START tools=[${agent.tools.join(', ')}] message="${message.slice(0, 80)}"`);
+  agentLog.start(agent.name, message, agent.tools);
 
   // Get active tools for this agent (cached)
   const { tools, functions } = await getToolsForAgent(agent.tools);
@@ -142,16 +171,21 @@ export async function executeAgent(
 
   const messages = buildMessages(agent.instructions, history, message, images);
 
+  // Force specialists to use tools on first call (prevents hallucinated responses)
+  const isSpecialist = !agent.isRouter && functions.length > 0;
+
   // Call OpenAI
   let response = await openai.chat.completions.create({
     model: agent.aiModel,
     messages,
     tools: functions.length > 0 ? functions : undefined,
+    tool_choice: isSpecialist ? 'required' : undefined,
     temperature: agent.temperature,
   });
 
   const allToolCalls: AgentResponse['toolCalls'] = [];
-  const MAX_TOOL_ITERATIONS = 5;
+  let lastSpecialistAgent: string | undefined;
+  const MAX_TOOL_ITERATIONS = 10;
   let toolIterations = 0;
 
   // Process tool calls (with iteration limit to prevent runaway loops)
@@ -186,8 +220,8 @@ export async function executeAgent(
       try {
         let result: unknown;
 
-        // Log tool calls for debugging
-        console.log(`[${agent.name}] Tool call: ${call.function.name}`, JSON.stringify(args, null, 2));
+        agentLog.toolCall(agent.name, call.function.name, args);
+        const toolStartTime = Date.now();
 
         if (tool.handler.startsWith('agents.')) {
           // Invoke specialist agent
@@ -197,6 +231,7 @@ export async function executeAgent(
           if (!specialist) {
             result = { error: `Specialist agent "${specialistName}" not found` };
           } else {
+            agentLog.delegation(agent.name, specialistName, args.task);
             const specialistResponse = await executeAgent(
               specialist,
               args.task,
@@ -209,6 +244,7 @@ export async function executeAgent(
               agent: specialistResponse.agent,
               toolCalls: specialistResponse.toolCalls,
             };
+            lastSpecialistAgent = specialistResponse.agent;
             // Also add specialist's tool calls to the top-level response
             // so they're visible for location extraction
             if (specialistResponse.toolCalls) {
@@ -220,8 +256,7 @@ export async function executeAgent(
           result = await executeHandler(tool.handler, args, userId);
         }
 
-        // Log tool results for debugging
-        console.log(`[${agent.name}] Tool result: ${call.function.name}`, JSON.stringify(result, null, 2));
+        agentLog.toolResult(agent.name, call.function.name, result, Date.now() - toolStartTime);
 
         allToolCalls.push({
           id: call.id,
@@ -237,6 +272,7 @@ export async function executeAgent(
         });
       } catch (error) {
         const errorMessage = error instanceof Error ? error.message : 'Tool execution failed';
+        agentLog.toolError(agent.name, call.function.name, errorMessage);
         allToolCalls.push({
           id: call.id,
           name: call.function.name,
@@ -266,12 +302,13 @@ export async function executeAgent(
     console.warn(`Agent "${agent.name}" hit max tool iterations (${MAX_TOOL_ITERATIONS})`);
   }
 
-  const finalContent = response.choices[0]?.message?.content || '';
-  console.log(`[agent:${agent.name}] END iterations=${toolIterations} toolCalls=${allToolCalls.length} response="${finalContent.slice(0, 100)}"`);
+  const rawContent = response.choices[0]?.message?.content || '';
+  const finalContent = stripFillerClosing(rawContent);
+  agentLog.end(agent.name, toolIterations, allToolCalls.length, finalContent);
 
   return {
     content: finalContent,
-    agent: agent.name,
+    agent: lastSpecialistAgent || agent.name,
     toolCalls: allToolCalls.length > 0 ? allToolCalls : undefined,
   };
 }

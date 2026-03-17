@@ -15,7 +15,7 @@ export const defaultTools: DefaultTool[] = [
   {
     name: 'runStorageAgent',
     description:
-      'Delegate to the storage specialist. Use when the user wants to create or modify templates, modules, inserts, or storage layout.',
+      'Delegate to the storage specialist. Use for: creating/modifying/inspecting templates, modules, inserts, storage layout, AND for placing items into storage or moving items between locations.',
     category: 'agents',
     parameters: [
       {
@@ -30,7 +30,7 @@ export const defaultTools: DefaultTool[] = [
   {
     name: 'runInventoryAgent',
     description:
-      'Delegate to the inventory specialist. Use when the user wants to add, find, move, or manage items and their assignments to locations.',
+      'Delegate to the inventory specialist. Use when the user wants to add, find, move, or manage items, OR when asking what is stored at a location (e.g., "what\'s in level 1 of MUSE").',
     category: 'agents',
     parameters: [
       {
@@ -51,16 +51,16 @@ export const defaultTools: DefaultTool[] = [
       'Create a new storage template (fixed or parametric). Templates define the blueprint for a grid of locations — row/col counts, labeling schemes, subdivision options, and interface types.',
     category: 'templates',
     parameters: [
-      { name: 'name', type: 'string', description: 'Template name (e.g., "plano-3700", "gridfinity-42mm")', required: true },
+      { name: 'name', type: 'string', description: 'Template name (e.g., "Plano Stowaway 3600", "gridfinity-42mm")', required: true },
       { name: 'kind', type: 'string', description: 'Template kind', required: true, enum: ['fixed', 'parametric'] },
       { name: 'description', type: 'string', description: 'Human-readable description', required: false },
       { name: 'rows', type: 'number', description: 'Number of rows (or default rows for parametric)', required: true },
       { name: 'cols', type: 'number', description: 'Number of columns (or default cols for parametric)', required: true },
       {
-        name: 'rowLabeling', type: 'object', description: 'Row labeling scheme: { type: "numeric"|"alpha"|"custom", prefix?, startAt?, labels? }', required: true,
+        name: 'rowLabeling', type: 'object', description: 'Row labeling scheme: { type: "numeric"|"alpha"|"custom", prefix?, startAt?, labels? }. Defaults to alpha (A, B, C, ...)', required: false,
       },
       {
-        name: 'colLabeling', type: 'object', description: 'Column labeling scheme: { type: "numeric"|"alpha"|"custom", prefix?, startAt?, labels? }', required: true,
+        name: 'colLabeling', type: 'object', description: 'Column labeling scheme: { type: "numeric"|"alpha"|"custom", prefix?, startAt?, labels? }. Defaults to numeric (1, 2, 3, ...)', required: false,
       },
       {
         name: 'rowConstraints', type: 'object', description: 'Row dimension constraints: { min?, max?, softMin?, softMax? }', required: false,
@@ -295,6 +295,18 @@ export const defaultTools: DefaultTool[] = [
     handler: 'inserts.list',
   },
   {
+    name: 'updateInsert',
+    description:
+      'Update an insert\'s name or metadata. Use this to rename an insert.',
+    category: 'inserts',
+    parameters: [
+      { name: 'insertId', type: 'string', description: 'Insert ID or name', required: true },
+      { name: 'name', type: 'string', description: 'New name for the insert', required: false },
+      { name: 'metadata', type: 'object', description: 'New metadata', required: false },
+    ],
+    handler: 'inserts.update',
+  },
+  {
     name: 'placeInsert',
     description:
       'Place an insert into a receptacle location within a module. The location must accept the insert\'s interface type.',
@@ -410,6 +422,21 @@ export const defaultTools: DefaultTool[] = [
     handler: 'items.delete',
   },
 
+  {
+    name: 'mergeItems',
+    description:
+      'Merge duplicate items into one. Keeps the specified item, reassigns all assignments from duplicates to the keeper, then deletes the duplicates. Use this instead of manually deleting and reassigning.',
+    category: 'items',
+    parameters: [
+      { name: 'keeperId', type: 'string', description: 'ID of the item to keep', required: true },
+      { name: 'duplicateIds', type: 'array', description: 'IDs of duplicate items to merge into the keeper', required: true, items: { type: 'string' } },
+      { name: 'keeperName', type: 'string', description: 'Optional: update the keeper item name', required: false },
+      { name: 'keeperDescription', type: 'string', description: 'Optional: update the keeper item description', required: false },
+      { name: 'keeperParameters', type: 'array', description: 'Optional: replace the keeper item parameters', required: false, items: { type: 'object' } },
+    ],
+    handler: 'items.merge',
+  },
+
   // ── Assignment tools ─────────────────────────────────────────────────
 
   {
@@ -462,12 +489,15 @@ export const defaultTools: DefaultTool[] = [
   {
     name: 'inspectLocation',
     description:
-      'Inspect a location: structure, overrides, inserts, and assignments. Answers "what\'s in MUSE level 3?" This is the combined view tool.',
+      'Inspect a location: structure, overrides, inserts, and assignments. Answers "what\'s in MUSE level 3?" or "what\'s in wire connectors A1?". For insert-internal queries, provide insertName/insertId and insertPath.',
     category: 'assignments',
     parameters: [
       { name: 'moduleId', type: 'string', description: 'Module ID (or use moduleName)', required: false },
       { name: 'moduleName', type: 'string', description: 'Module name (alternative to moduleId)', required: false },
-      { name: 'path', type: 'array', description: 'Path to the location', required: true, items: { type: 'string' } },
+      { name: 'path', type: 'array', description: 'Path to the module location (e.g., ["2"] for level 2)', required: true, items: { type: 'string' } },
+      { name: 'insertName', type: 'string', description: 'Insert name to inspect inside (e.g., "wire connectors")', required: false },
+      { name: 'insertId', type: 'string', description: 'Insert ID to inspect inside', required: false },
+      { name: 'insertPath', type: 'array', description: 'Path within the insert (e.g., ["A,1"] for row A col 1)', required: false, items: { type: 'string' } },
     ],
     handler: 'assignments.inspectLocation',
   },
