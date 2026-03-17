@@ -1,48 +1,39 @@
 {
   "name": "web",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "dev:mem": "tsx scripts/dev-memory-db.mts",
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
     "test": "vitest run",
     "test:watch": "vitest",
-    "exercise": "tsx exercise/cli.ts",
-    "exercise:agent": "tsx exercise/cli.ts --agent",
-    "exercise:verbose": "tsx exercise/cli.ts --verbose",
-    "exercise:captures": "tsx exercise/cli.ts --captures"
+    "db:generate": "drizzle-kit generate",
+    "db:migrate": "drizzle-kit migrate",
+    "db:studio": "drizzle-kit studio"
   },
   "dependencies": {
-    "@auth/mongodb-adapter": "^3.11.1",
-    "@tanstack/react-query": "^5.90.12",
-    "bcryptjs": "^3.0.3",
     "date-fns": "^4.1.0",
+    "drizzle-orm": "^0.44.0",
     "lucide-react": "^0.562.0",
-    "mongoose": "^9.0.1",
     "next": "^16.1.6",
-    "next-auth": "^5.0.0-beta.30",
-    "openai": "^6.13.0",
+    "postgres": "^3.4.7",
     "react": "19.2.1",
-    "react-dom": "19.2.1",
-    "react-markdown": "^10.1.0"
+    "react-dom": "19.2.1"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
-    "@types/bcryptjs": "^2.4.6",
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "@vitest/coverage-v8": "^4.0.18",
     "babel-plugin-react-compiler": "1.0.0",
     "baseline-browser-mapping": "^2.10.0",
+    "drizzle-kit": "^0.31.0",
     "eslint": "^9",
     "eslint-config-next": "16.0.10",
-    "mongodb-memory-server": "^11.0.1",
     "tailwindcss": "^4",
-    "tsx": "^4.21.0",
     "typescript": "^5",
     "vitest": "^4.0.18"
   }

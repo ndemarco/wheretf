@@ -1,0 +1,68 @@
+import {
+  pgTable,
+  uuid,
+  text,
+  timestamp,
+  jsonb,
+  boolean,
+  integer,
+  type AnyPgColumn,
+} from "drizzle-orm/pg-core";
+import { modules } from "./modules";
+import { templates, templateVersions } from "./templates";
+
+export const locations = pgTable("locations", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  moduleId: uuid("module_id")
+    .notNull()
+    .references(() => modules.id),
+  parentId: uuid("parent_id").references((): AnyPgColumn => locations.id),
+  label: text("label").notNull(), // position label within parent (e.g., "3", "B4", "Front")
+  path: text("path").notNull(), // colon-delimited serialized path (e.g., "MUSE:3:B4")
+  pathSegments: jsonb("path_segments").notNull(), // ordered array source of truth
+
+  // Location type
+  locationType: text("location_type").notNull(), // "receptacle" | "fixed" | "leaf"
+  interfaceTypeAccepted: text("interface_type_accepted"), // for receptacles
+
+  // Structure source
+  templateVersionId: uuid("template_version_id").references(
+    () => templateVersions.id
+  ),
+
+  // Grid position (if this location is within a grid)
+  gridRow: integer("grid_row"),
+  gridColumn: integer("grid_column"),
+
+  // Override state
+  isDisabled: boolean("is_disabled").notNull().default(false),
+  disableReason: text("disable_reason"),
+  mergedIntoId: uuid("merged_into_id").references(
+    (): AnyPgColumn => locations.id
+  ), // alias target for merged positions
+
+  metadata: jsonb("metadata"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export const inserts = pgTable("inserts", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  name: text("name"), // optional user-given name for this specific insert
+  templateId: uuid("template_id").references(() => templates.id),
+  templateVersionId: uuid("template_version_id").references(
+    () => templateVersions.id
+  ),
+  locationId: uuid("location_id").references(() => locations.id), // receptacle it's placed in (null if unplaced)
+  interfaceTypeProvided: text("interface_type_provided"), // what interface this insert provides
+
+  // Parametric instantiation
+  rows: integer("rows"), // actual dimensions if parametric
+  columns: integer("columns"),
+
+  overrides: jsonb("overrides"), // structural modifications on this specific insert
+
+  metadata: jsonb("metadata"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
