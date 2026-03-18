@@ -51,7 +51,7 @@
     min-width: 0;
   }
 
-  /* Module selector bar (browse mode) */
+  /* Module selector bar (always visible) */
   .module-bar {
     display: flex;
     align-items: center;
@@ -103,52 +103,6 @@
   .module-tab.selected { border-color: #ff6600; background: #1a0f00; color: #ff6600; }
   .module-tab .tab-name { font-weight: 600; }
 
-  /* Search bar (search mode) */
-  .search-bar {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    padding: 10px 16px;
-    background: #1e293b;
-    border-bottom: 1px solid #334155;
-    flex-shrink: 0;
-  }
-  .search-input-wrap {
-    flex: 1;
-    display: flex;
-    align-items: center;
-    background: #0f172a;
-    border: 1px solid #334155;
-    border-radius: 8px;
-    padding: 0 12px;
-    transition: border-color 0.15s;
-  }
-  .search-input-wrap:focus-within { border-color: #ff6600; }
-  .search-input-wrap svg { width: 16px; height: 16px; color: #64748b; flex-shrink: 0; }
-  .search-input {
-    flex: 1;
-    background: transparent;
-    border: none;
-    outline: none;
-    color: #e2e8f0;
-    font-size: 14px;
-    padding: 8px;
-    font-family: inherit;
-  }
-  .search-input::placeholder { color: #475569; }
-  .search-count { font-size: 11px; color: #64748b; flex-shrink: 0; padding: 0 8px; }
-  .search-clear {
-    background: none;
-    border: none;
-    color: #475569;
-    cursor: pointer;
-    font-size: 16px;
-    padding: 4px;
-    line-height: 1;
-    transition: color 0.15s;
-  }
-  .search-clear:hover { color: #ef4444; }
-
   /* Content row */
   .content-row {
     flex: 1;
@@ -156,15 +110,110 @@
     min-height: 0;
   }
 
-  /* Level list panel (browse mode) */
-  .level-panel {
-    width: 200px;
+  /* Left panel (unified: search + level list) */
+  .left-panel {
+    width: 280px;
     background: #1e293b;
     border-right: 1px solid #334155;
     overflow-y: auto;
     padding: 12px;
     flex-shrink: 0;
+    display: flex;
+    flex-direction: column;
   }
+
+  /* Search input in left panel */
+  .left-search {
+    display: flex;
+    align-items: center;
+    background: #0f172a;
+    border: 1px solid #334155;
+    border-radius: 8px;
+    padding: 0 10px;
+    margin-bottom: 12px;
+    transition: border-color 0.15s;
+    flex-shrink: 0;
+  }
+  .left-search:focus-within { border-color: #ff6600; }
+  .left-search svg { width: 14px; height: 14px; color: #64748b; flex-shrink: 0; }
+  .left-search .search-input {
+    flex: 1;
+    background: transparent;
+    border: none;
+    outline: none;
+    color: #e2e8f0;
+    font-size: 13px;
+    padding: 7px 8px;
+    font-family: inherit;
+  }
+  .left-search .search-input::placeholder { color: #475569; }
+  .left-search .search-count { font-size: 10px; color: #64748b; flex-shrink: 0; padding: 0 4px; }
+  .left-search .search-clear {
+    background: none;
+    border: none;
+    color: #475569;
+    cursor: pointer;
+    font-size: 15px;
+    padding: 2px;
+    line-height: 1;
+    transition: color 0.15s;
+  }
+  .left-search .search-clear:hover { color: #ef4444; }
+
+  /* Search results section */
+  .results-section { flex-shrink: 0; }
+  .results-divider {
+    height: 1px;
+    background: #334155;
+    margin: 8px 0;
+  }
+  .results-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 6px;
+    padding: 0 4px;
+  }
+  .results-header-label {
+    font-size: 11px; text-transform: uppercase;
+    letter-spacing: 0.05em; color: #64748b; font-weight: 600;
+  }
+  .result-group { margin-bottom: 10px; }
+  .result-group-header {
+    font-size: 11px; font-weight: 600; color: #ff6600;
+    padding: 4px 6px; margin-bottom: 2px;
+  }
+  .result-row {
+    display: flex; align-items: center; gap: 8px;
+    padding: 8px 8px; border-radius: 6px;
+    cursor: pointer; transition: background 0.1s; font-size: 12px;
+  }
+  .result-row:hover { background: #334155; }
+  .result-row.focused { background: #334155; border-left: 2px solid #ff6600; }
+  .result-row .result-info { flex: 1; min-width: 0; }
+  .result-row .result-name {
+    font-size: 13px; font-weight: 500; color: #e2e8f0;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  .result-row .result-name mark {
+    background: #7c2d12; color: #fb923c; border-radius: 2px; padding: 0 1px;
+  }
+  .result-row .result-location { font-size: 11px; color: #64748b; margin-top: 1px; }
+  .result-row .result-cat {
+    width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0;
+  }
+  .result-row .pick-btn {
+    width: 22px; height: 22px; border-radius: 4px;
+    border: 1px solid #475569; background: transparent;
+    color: #64748b; cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 14px; line-height: 1; transition: all 0.15s; flex-shrink: 0;
+  }
+  .result-row .pick-btn:hover { border-color: #ff6600; color: #ff6600; }
+  .result-row .pick-btn.picked { background: #ff6600; border-color: #ff6600; color: #fff; }
+
+  /* Level list section */
+  .level-list-section { flex: 1; min-height: 0; overflow-y: auto; }
   .level-panel-header {
     font-size: 11px;
     text-transform: uppercase;
@@ -217,73 +266,6 @@
   .level-row .badge.receptacle { background: #1e3a5f; color: #60a5fa; }
   .level-row .badge.provisional { background: #422006; color: #fb923c; cursor: pointer; }
   .level-row .badge.provisional:hover { background: #b45309; color: #fff; }
-
-  /* Results panel (search mode) */
-  .results-panel {
-    width: 280px;
-    background: #1e293b;
-    border-right: 1px solid #334155;
-    overflow-y: auto;
-    padding: 12px;
-    flex-shrink: 0;
-    display: flex;
-    flex-direction: column;
-  }
-  .results-header {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    margin-bottom: 8px;
-    padding: 0 4px;
-  }
-  .results-header-label {
-    font-size: 11px; text-transform: uppercase;
-    letter-spacing: 0.05em; color: #64748b; font-weight: 600;
-  }
-  .results-header-action {
-    font-size: 11px; color: #ff6600; cursor: pointer;
-    background: none; border: none; font-family: inherit;
-  }
-  .results-header-action:hover { opacity: 0.8; }
-  .result-group { margin-bottom: 12px; }
-  .result-group-header {
-    font-size: 11px; font-weight: 600; color: #ff6600;
-    padding: 4px 6px; margin-bottom: 2px;
-  }
-  .result-row {
-    display: flex; align-items: center; gap: 8px;
-    padding: 8px 8px; border-radius: 6px;
-    cursor: pointer; transition: background 0.1s; font-size: 12px;
-  }
-  .result-row:hover { background: #334155; }
-  .result-row.focused { background: #334155; border-left: 2px solid #ff6600; }
-  .result-row .result-info { flex: 1; min-width: 0; }
-  .result-row .result-name {
-    font-size: 13px; font-weight: 500; color: #e2e8f0;
-    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-  }
-  .result-row .result-name mark {
-    background: #7c2d12; color: #fb923c; border-radius: 2px; padding: 0 1px;
-  }
-  .result-row .result-location { font-size: 11px; color: #64748b; margin-top: 1px; }
-  .result-row .result-cat {
-    width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0;
-  }
-  .result-row .pick-btn {
-    width: 22px; height: 22px; border-radius: 4px;
-    border: 1px solid #475569; background: transparent;
-    color: #64748b; cursor: pointer;
-    display: flex; align-items: center; justify-content: center;
-    font-size: 14px; line-height: 1; transition: all 0.15s; flex-shrink: 0;
-  }
-  .result-row .pick-btn:hover { border-color: #ff6600; color: #ff6600; }
-  .result-row .pick-btn.picked { background: #ff6600; border-color: #ff6600; color: #fff; }
-  .results-empty {
-    flex: 1; display: flex; align-items: center; justify-content: center;
-    flex-direction: column; gap: 8px; color: #475569; font-size: 13px;
-    text-align: center; padding: 24px;
-  }
-  .results-empty svg { width: 32px; height: 32px; color: #334155; }
 
   /* Grid pane */
   .grid-pane {
@@ -397,6 +379,7 @@
     gap: 8px;
     flex-wrap: wrap;
   }
+  .detail-actions:empty { border-top: none; margin-top: 0; padding-top: 0; }
   .detail-actions .action-btn {
     background: #334155; color: #e2e8f0;
     border: 1px solid #475569; padding: 6px 12px;
@@ -415,7 +398,7 @@
 
   .panel-divider { height: 1px; background: #334155; margin: 12px 0; }
 
-  /* Pick list section (search mode, in detail panel below divider) */
+  /* Pick list section (in detail panel below divider, always visible) */
   .pick-list-section { display: flex; flex-direction: column; min-height: 0; }
   .pick-list-header {
     display: flex; align-items: center; justify-content: space-between;
@@ -490,6 +473,7 @@
   /* Legend */
   .legend {
     display: flex; gap: 16px; margin-top: 16px; font-size: 11px; color: #64748b;
+    flex-wrap: wrap;
   }
   .legend-item { display: flex; align-items: center; gap: 6px; }
   .legend-swatch {
@@ -501,14 +485,11 @@
 
 <!-- Sidebar -->
 <div class="sidebar">
-  <div class="sidebar-icon active" id="sidebarBrowse" title="Modules" onclick="setMode('browse')">
+  <div class="sidebar-icon active" id="sidebarModules" title="Modules">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
   </div>
   <div class="sidebar-icon" id="sidebarItems" title="Items">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"/></svg>
-  </div>
-  <div class="sidebar-icon" id="sidebarSearch" title="Search" onclick="setMode('search')">
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
   </div>
   <div class="sidebar-icon" title="Templates">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9"/></svg>
@@ -521,7 +502,7 @@
 <!-- Main area -->
 <div class="main-area">
 
-  <!-- Module selector bar (browse mode) -->
+  <!-- Module selector bar (always visible) -->
   <div class="module-bar" id="moduleBar">
     <span class="module-bar-label" onclick="toggleAllModules()" title="Select all / deselect all">Modules</span>
     <div class="module-pills">
@@ -532,31 +513,33 @@
     </div>
   </div>
 
-  <!-- Search bar (search mode, hidden by default) -->
-  <div class="search-bar" id="searchBar" style="display:none">
-    <div class="search-input-wrap">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
-      <input class="search-input" id="searchInput" type="text" placeholder="Search items, parameters, locations...">
-      <span class="search-count" id="searchCount"></span>
-      <button class="search-clear" onclick="clearSearch()">×</button>
-    </div>
-  </div>
-
   <!-- Content row -->
   <div class="content-row">
 
-    <!-- Level list (browse mode) -->
-    <div class="level-panel" id="levelPanel">
-      <div class="level-panel-header">Levels</div>
-      <div id="levelList"></div>
-    </div>
-
-    <!-- Results panel (search mode, hidden by default) -->
-    <div class="results-panel" id="resultsPanel" style="display:none">
-      <div class="results-header">
-        <span class="results-header-label">Results</span>
+    <!-- Left panel: search + results + level list -->
+    <div class="left-panel" id="leftPanel">
+      <!-- Search input (always visible) -->
+      <div class="left-search">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+        <input class="search-input" id="searchInput" type="text" placeholder="Search items...">
+        <span class="search-count" id="searchCount"></span>
+        <button class="search-clear" onclick="clearSearch()" style="display:none" id="searchClearBtn">&times;</button>
       </div>
-      <div id="resultsList"></div>
+
+      <!-- Search results (shown when search has results) -->
+      <div class="results-section" id="resultsSection" style="display:none">
+        <div class="results-header">
+          <span class="results-header-label">Results</span>
+        </div>
+        <div id="resultsList"></div>
+        <div class="results-divider"></div>
+      </div>
+
+      <!-- Level list (always visible) -->
+      <div class="level-list-section">
+        <div class="level-panel-header">Levels</div>
+        <div id="levelList"></div>
+      </div>
     </div>
 
     <!-- Grid Pane -->
@@ -574,7 +557,7 @@
         </div>
       </div>
 
-      <!-- Provisional banner (browse mode) -->
+      <!-- Provisional banner -->
       <div class="provisional-banner" style="display:none" id="provisionalBanner">
         <div class="title">Unplaced items at this level</div>
         <div id="provisionalItems"></div>
@@ -591,7 +574,7 @@
         <div class="legend-item"><div class="legend-swatch" style="background: repeating-linear-gradient(45deg, #7f1d1d, #7f1d1d 2px, #1e293b 2px, #1e293b 6px);"></div> Disabled</div>
         <div class="legend-item"><div class="legend-swatch" style="background: #1e3a5f; border-color: #fbbf24; border-width: 2px;"></div> Co-stored</div>
         <div class="legend-item" id="legendSelected"><div class="legend-swatch" style="background: transparent; border-color: #ff6600; border-width: 2px;"></div> Selected</div>
-        <div class="legend-item" id="legendSearchHit" style="display:none"><div class="legend-swatch" style="background: #1a0f00; border-color: #ff6600; border-width: 2px;"></div> Search hit</div>
+        <div class="legend-item" id="legendSearchHit" style="display:none"><div class="legend-swatch" style="background: #1a0f00; border: 2px dashed #ff6600;"></div> Search hit</div>
         <div class="legend-item" id="legendPicked" style="display:none"><div class="legend-swatch" style="background: #ff6600;"></div> In pick list</div>
       </div>
     </div>
@@ -604,18 +587,19 @@
           <div class="detail-field"><div class="label">Status</div><div class="value">Select a cell to view details</div></div>
         </div>
         <div class="detail-actions" id="detailActions"></div>
-      </div>
-      <!-- Pick list section (search mode only) -->
-      <div id="pickListWrapper" style="display:none; padding: 0 20px 20px 20px;">
-        <div class="panel-divider"></div>
-        <div class="pick-list-section" id="pickListSection">
-          <div class="pick-list-header">
-            <span class="pick-list-title">Pick List</span>
-            <span class="pick-list-count" id="pickListCount">0 items</span>
-          </div>
-          <div class="pick-list-body" id="pickListBody"></div>
-          <div class="pick-actions" id="pickActions" style="display:none">
-            <button class="btn-secondary" onclick="clearPickList()">Clear</button>
+
+        <!-- Pick list section (always visible below detail) -->
+        <div id="pickListWrapper" style="padding-top: 12px;">
+          <div class="panel-divider"></div>
+          <div class="pick-list-section" id="pickListSection">
+            <div class="pick-list-header">
+              <span class="pick-list-title">Pick List</span>
+              <span class="pick-list-count" id="pickListCount">0 items</span>
+            </div>
+            <div class="pick-list-body" id="pickListBody"></div>
+            <div class="pick-actions" id="pickActions" style="display:none">
+              <button class="btn-secondary" onclick="clearPickList()">Clear</button>
+            </div>
           </div>
         </div>
       </div>
@@ -668,7 +652,7 @@ const categoryColors = {
   'dev-board': '#06b6d4', 'wire': '#f59e0b', 'consumable': '#ec4899',
 };
 
-// Grid cells — keyed by "MODULE:level", enriched data for both modes
+// Grid cells — keyed by "MODULE:level", enriched data
 const gridData = {
   'MUSE:3': {
     'A1': { state: 'occupied', item: '10kΩ 0805 Resistor', category: 'passive', params: 'R=10kΩ, Size=0805, Tol=±5%', otherLocations: ['NEON 2 / A3', 'ALEX 5 / C1'] },
@@ -722,7 +706,7 @@ const gridData = {
   },
 };
 
-// Module metadata (for browse mode level list)
+// Module metadata
 const moduleData = {
   muse: {
     name: 'MUSE', dimLabel: 'Level',
@@ -793,89 +777,34 @@ const moduleData = {
 };
 
 // === STATE ===
-let currentMode = 'browse'; // 'browse' or 'search'
-let currentGrid = { module: 'MUSE', level: 3 };
 let selectedModules = new Set(['muse']);
 let selectedLevel = { module: 'muse', level: 3 };
 let selectedCells = new Set();
 let hoverMode = 'delay';
 let hoverDelay = 400;
 let hoverTimer = null;
-
-// Search state
 let searchResults = [];
-let focusedItemId = null;
-let hoveredResultId = null;
-
-// Pick list state
 let pickList = [];
+let focusedItemId = null;
 let lastRemoved = null;
 let undoTimer = null;
 let lastClearedList = null;
+let hoveredResultId = null;
 
 // Grid constants
 const ROWS = 4, COLS = 6, CELL_W = 110, CELL_H = 100;
 const MARGIN_LEFT = 40, MARGIN_TOP = 40, GAP = 4, RADIUS = 4;
 const rowLabels = ['A','B','C','D'], colLabels = ['1','2','3','4','5','6'];
 
-// === MODE SWITCHING ===
-function setMode(mode) {
-  currentMode = mode;
-  selectedCells.clear();
-  focusedItemId = null;
+// Derived: current grid from selectedLevel
+function currentGrid() {
+  const mod = moduleData[selectedLevel.module];
+  return { module: mod ? mod.name : selectedLevel.module.toUpperCase(), level: selectedLevel.level };
+}
 
-  // Sidebar active state
-  document.getElementById('sidebarBrowse').classList.toggle('active', mode === 'browse');
-  document.getElementById('sidebarSearch').classList.toggle('active', mode === 'search');
-
-  // Top bar visibility
-  document.getElementById('moduleBar').style.display = mode === 'browse' ? 'flex' : 'none';
-  document.getElementById('searchBar').style.display = mode === 'search' ? 'flex' : 'none';
-
-  // Left panel visibility
-  document.getElementById('levelPanel').style.display = mode === 'browse' ? 'block' : 'none';
-  document.getElementById('resultsPanel').style.display = mode === 'search' ? 'flex' : 'none';
-
-  // Provisional banner only in browse
-  if (mode === 'search') {
-    document.getElementById('provisionalBanner').style.display = 'none';
-  }
-
-  // Pick list section only in search mode
-  document.getElementById('pickListWrapper').style.display = mode === 'search' ? 'block' : 'none';
-
-  // Legend items
-  document.getElementById('legendSearchHit').style.display = mode === 'search' ? 'flex' : 'none';
-  document.getElementById('legendPicked').style.display = mode === 'search' ? 'flex' : 'none';
-  document.getElementById('legendSelected').style.display = mode === 'browse' ? 'flex' : 'none';
-
-  // Browse toolbar items
-  const toolbar = document.getElementById('gridToolbar');
-  if (mode === 'browse') {
-    toolbar.innerHTML = `
-      <button>Filter</button>
-      <button>Add Insert</button>
-      <select id="hoverSelect" onchange="setHoverMode(this.value)" style="background:#334155;color:#e2e8f0;border:1px solid #475569;padding:4px 8px;border-radius:6px;font-size:12px;cursor:pointer">
-        <option value="off" ${hoverMode==='off'?'selected':''}>Hover: off</option>
-        <option value="on" ${hoverMode==='on'?'selected':''}>Hover: instant</option>
-        <option value="delay" ${hoverMode==='delay'?'selected':''}>Hover: delayed</option>
-      </select>
-    `;
-  } else {
-    toolbar.innerHTML = '';
-  }
-
-  // Re-render
-  if (mode === 'search') {
-    document.getElementById('searchInput').focus();
-    renderResults();
-    renderPickList();
-    showSearchDefaultDetail();
-  } else {
-    showLevelDetail();
-    renderLevelList();
-  }
-  drawGrid();
+// Whether search is active (has results)
+function searchActive() {
+  return searchResults.length > 0;
 }
 
 // === GRID DRAWING (unified) ===
@@ -903,31 +832,30 @@ function drawGrid() {
   provPattern.appendChild(provDot); defs.appendChild(provPattern);
   svg.appendChild(defs);
 
-  const gridKey = currentGrid.module + ':' + currentGrid.level;
+  const cg = currentGrid();
+  const gridKey = cg.module + ':' + cg.level;
   const cells = gridData[gridKey] || {};
 
-  // Search/pick overlays (only active in search mode)
+  // Search/pick overlays
   const searchHits = new Set();
   const pickedMap = new Map();
-  if (currentMode === 'search') {
-    for (const r of searchResults) {
-      if (r.module === currentGrid.module && r.level === currentGrid.level) searchHits.add(r.pos);
-    }
-    for (let i = 0; i < pickList.length; i++) {
-      const p = pickList[i];
-      if (p.module === currentGrid.module && p.level === currentGrid.level) {
-        pickedMap.set(p.pos, i + 1);
-      }
+  const hasSearch = searchActive();
+
+  for (const r of searchResults) {
+    if (r.module === cg.module && r.level === cg.level) searchHits.add(r.pos);
+  }
+  for (let i = 0; i < pickList.length; i++) {
+    const p = pickList[i];
+    if (p.module === cg.module && p.level === cg.level) {
+      pickedMap.set(p.pos, i + 1);
     }
   }
 
-  // Focused/hovered items (search mode)
+  // Focused/hovered items
   const focusedItem = focusedItemId ? allItems.find(i => i.id === focusedItemId) : null;
-  const focusedPos = (focusedItem && focusedItem.module === currentGrid.module && focusedItem.level === currentGrid.level) ? focusedItem.pos : null;
+  const focusedPos = (focusedItem && focusedItem.module === cg.module && focusedItem.level === cg.level) ? focusedItem.pos : null;
   const hoveredItem = hoveredResultId ? allItems.find(i => i.id === hoveredResultId) : null;
-  const hoveredPos = (hoveredItem && hoveredItem.module === currentGrid.module && hoveredItem.level === currentGrid.level) ? hoveredItem.pos : null;
-
-  const hasSearch = currentMode === 'search' && searchResults.length > 0;
+  const hoveredPos = (hoveredItem && hoveredItem.module === cg.module && hoveredItem.level === cg.level) ? hoveredItem.pos : null;
 
   // Column labels
   for (let c = 0; c < COLS; c++) {
@@ -973,9 +901,9 @@ function drawGrid() {
       const isHit = searchHits.has(key);
       const pickNum = pickedMap.get(key);
       const isPicked = pickNum !== undefined;
-      const isFocused = currentMode === 'search' && focusedPos === key;
-      const isHovered = currentMode === 'search' && hoveredPos === key;
-      const isSelected = currentMode === 'browse' && selectedCells.has(key);
+      const isFocused = focusedPos === key;
+      const isHovered = hoveredPos === key;
+      const isSelected = selectedCells.has(key);
 
       // Background rect
       const bg = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
@@ -986,8 +914,8 @@ function drawGrid() {
       if (cell.state === 'disabled') {
         bg.setAttribute('fill', 'url(#disabled-hatch)');
         bg.setAttribute('stroke', '#7f1d1d'); bg.setAttribute('stroke-width', '1.5');
-      } else if (currentMode === 'search') {
-        // Search mode styling
+      } else if (hasSearch) {
+        // Search active: apply search styling
         if (isPicked && isFocused) {
           bg.setAttribute('fill', '#2a1500');
           bg.setAttribute('stroke', '#ff6600'); bg.setAttribute('stroke-width', '3');
@@ -1005,15 +933,15 @@ function drawGrid() {
           bg.setAttribute('stroke', '#ff6600'); bg.setAttribute('stroke-width', '2');
           bg.setAttribute('stroke-dasharray', '4,2');
         } else if (cell.state === 'occupied' || cell.state === 'merged_origin' || cell.state === 'costored') {
-          bg.setAttribute('fill', hasSearch ? '#0a1628' : '#0f2847');
-          bg.setAttribute('stroke', hasSearch ? '#1e293b' : (categoryColors[cell.category] || '#475569'));
-          bg.setAttribute('stroke-width', hasSearch ? '1' : '2');
+          // Dim non-matching occupied cells
+          bg.setAttribute('fill', '#0a1628');
+          bg.setAttribute('stroke', '#1e293b'); bg.setAttribute('stroke-width', '1');
         } else {
           bg.setAttribute('fill', 'transparent');
           bg.setAttribute('stroke', '#334155'); bg.setAttribute('stroke-width', '1');
         }
       } else {
-        // Browse mode styling
+        // No search: normal browse styling
         switch (cell.state) {
           case 'empty':
             bg.setAttribute('fill', 'transparent');
@@ -1036,7 +964,7 @@ function drawGrid() {
       // Position label
       const pos = document.createElementNS('http://www.w3.org/2000/svg', 'text');
       pos.setAttribute('x', x + 8); pos.setAttribute('y', y + 16);
-      if (currentMode === 'search') {
+      if (hasSearch) {
         pos.setAttribute('fill', (isHit || isPicked || isFocused || isHovered) ? '#ff6600' : '#475569');
       } else {
         pos.setAttribute('fill', '#475569');
@@ -1049,8 +977,8 @@ function drawGrid() {
         const it = document.createElementNS('http://www.w3.org/2000/svg', 'text');
         it.setAttribute('x', x + 8); it.setAttribute('y', y + 38);
         const maxC = cell.state === 'merged_origin' ? 28 : 12;
-        if (currentMode === 'search') {
-          const dim = hasSearch && !isHit && !isPicked && !isFocused && !isHovered;
+        if (hasSearch) {
+          const dim = !isHit && !isPicked && !isFocused && !isHovered;
           it.setAttribute('fill', dim ? '#475569' : '#e2e8f0');
         } else {
           it.setAttribute('fill', '#e2e8f0');
@@ -1061,7 +989,7 @@ function drawGrid() {
         g.appendChild(it);
       }
 
-      // Co-stored indicator (both modes)
+      // Co-stored indicator
       if (cell.state === 'costored' && cell.items) {
         const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
         line.setAttribute('x1', x + 14); line.setAttribute('y1', y + 55);
@@ -1092,8 +1020,8 @@ function drawGrid() {
         g.appendChild(badgeText);
       }
 
-      // Pick number badge (search mode)
-      if (currentMode === 'search' && isPicked) {
+      // Pick number badge
+      if (isPicked) {
         const bs = 24;
         const bx = x + cellW - bs - 4, by = y + 4;
         const badge = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
@@ -1110,7 +1038,7 @@ function drawGrid() {
       }
 
       // Search hit dot (not picked)
-      if (currentMode === 'search' && isHit && !isPicked) {
+      if (hasSearch && isHit && !isPicked) {
         const dot = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
         dot.setAttribute('cx', x + cellW - 12); dot.setAttribute('cy', y + 12);
         dot.setAttribute('r', 5); dot.setAttribute('fill', '#ff6600'); dot.setAttribute('opacity', '0.8');
@@ -1136,7 +1064,7 @@ function drawGrid() {
         g.appendChild(mergeLabel);
       }
 
-      // Selection highlight (browse mode)
+      // Selection highlight
       if (isSelected) {
         const sel = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
         sel.setAttribute('x', x - 2); sel.setAttribute('y', y - 2);
@@ -1149,13 +1077,8 @@ function drawGrid() {
 
       // Hover events
       g.addEventListener('mouseenter', (e) => {
-        if (currentMode === 'browse') {
-          if (hoverMode === 'on') showTooltip(e, key, cell);
-          else if (hoverMode === 'delay') hoverTimer = setTimeout(() => showTooltip(e, key, cell), hoverDelay);
-        } else {
-          // Search mode: simple tooltip
-          showSearchTooltip(e, key, cell, isPicked, pickNum, isHit);
-        }
+        if (hoverMode === 'on') showTooltip(e, key, cell);
+        else if (hoverMode === 'delay') hoverTimer = setTimeout(() => showTooltip(e, key, cell), hoverDelay);
       });
       g.addEventListener('mousemove', (e) => {
         moveTooltip(e);
@@ -1165,35 +1088,40 @@ function drawGrid() {
         hideTooltip();
       });
 
-      // Click handling
+      // Click handling — always cell selection
       g.addEventListener('click', (e) => {
-        if (currentMode === 'browse') {
-          // Browse mode: select/deselect cells
-          if (e.ctrlKey || e.metaKey) {
-            if (selectedCells.has(key)) selectedCells.delete(key);
-            else selectedCells.add(key);
-          } else {
-            if (selectedCells.has(key) && selectedCells.size === 1) selectedCells.clear();
-            else { selectedCells.clear(); selectedCells.add(key); }
-          }
-          drawGrid();
-          updateDetailForSelection();
+        if (e.ctrlKey || e.metaKey) {
+          if (selectedCells.has(key)) selectedCells.delete(key);
+          else selectedCells.add(key);
         } else {
-          // Search mode: find matching item and focus it
-          const match = allItems.find(i => i.pos === key && i.module === currentGrid.module && i.level === currentGrid.level);
-          if (match) focusResult(match.id);
+          if (selectedCells.has(key) && selectedCells.size === 1) selectedCells.clear();
+          else { selectedCells.clear(); selectedCells.add(key); }
         }
+
+        // If search active and cell has a matching item, also set focusedItemId
+        if (hasSearch) {
+          const match = allItems.find(i => i.pos === key && i.module === cg.module && i.level === cg.level);
+          if (match) focusedItemId = match.id;
+        }
+
+        drawGrid();
+        updateDetailForSelection();
       });
 
       svg.appendChild(g);
     }
   }
+
+  // Update legend visibility
+  document.getElementById('legendSearchHit').style.display = hasSearch ? 'flex' : 'none';
+  document.getElementById('legendPicked').style.display = pickList.length > 0 ? 'flex' : 'none';
 }
 
-// === TOOLTIP (browse mode) ===
+// === TOOLTIP ===
 function showTooltip(e, key, cell) {
   const tt = document.getElementById('tooltip');
-  document.getElementById('ttLabel').textContent = currentGrid.module + ' ' + currentGrid.level + ' / ' + key;
+  const cg = currentGrid();
+  document.getElementById('ttLabel').textContent = cg.module + ' ' + cg.level + ' / ' + key;
 
   if (cell.state === 'empty') {
     document.getElementById('ttItem').textContent = 'Empty';
@@ -1221,17 +1149,6 @@ function showTooltip(e, key, cell) {
   moveTooltip(e);
 }
 
-function showSearchTooltip(e, key, cell, isPicked, pickNum, isHit) {
-  const tt = document.getElementById('tooltip');
-  document.getElementById('ttLabel').textContent = currentGrid.module + ' ' + currentGrid.level + ' / ' + key;
-  document.getElementById('ttItem').textContent = cell.item || (cell.state === 'disabled' ? 'Disabled' : 'Empty');
-  document.getElementById('ttType').textContent = isPicked ? 'Pick #' + pickNum : (isHit ? 'Search result' : '');
-  document.getElementById('ttParams').textContent = '';
-  document.getElementById('ttCostored').textContent = '';
-  tt.style.display = 'block';
-  moveTooltip(e);
-}
-
 function moveTooltip(e) {
   const tt = document.getElementById('tooltip');
   const pad = 12;
@@ -1254,9 +1171,10 @@ function setHoverMode(mode) {
   hideTooltip();
 }
 
-// === BROWSE MODE: Detail panel ===
+// === DETAIL PANEL ===
 function showDetail(key, cell) {
-  document.getElementById('detailTitle').textContent = currentGrid.module + ' ' + currentGrid.level + ' / ' + key;
+  const cg = currentGrid();
+  document.getElementById('detailTitle').textContent = cg.module + ' ' + cg.level + ' / ' + key;
 
   let html = '';
   let actions = '';
@@ -1303,6 +1221,15 @@ function showDetail(key, cell) {
     }
   }
 
+  // If search is active and cell has an item, show "Add to Pick List" button
+  if (searchActive() && (cell.item || (cell.state === 'costored' && cell.items))) {
+    const matchItem = allItems.find(i => i.pos === key && i.module === cg.module && i.level === cg.level);
+    if (matchItem) {
+      const isPicked = pickList.some(p => p.id === matchItem.id);
+      actions += `<button class="action-btn primary" onclick="addToPick('${matchItem.id}')">${isPicked ? 'Add Another' : 'Add to Pick List'}</button>`;
+    }
+  }
+
   if (cell.otherLocations && cell.otherLocations.length > 0) {
     html += `
       <div class="detail-field">
@@ -1334,7 +1261,8 @@ function updateDetailForSelection() {
     return;
   }
 
-  const gridKey = currentGrid.module + ':' + currentGrid.level;
+  const cg = currentGrid();
+  const gridKey = cg.module + ':' + cg.level;
   const cells = gridData[gridKey] || {};
 
   if (selectedCells.size === 1) {
@@ -1373,7 +1301,7 @@ function updateDetailForSelection() {
   document.getElementById('detailActions').innerHTML = actions;
 }
 
-// === BROWSE MODE: Module bar & Level list ===
+// === MODULE BAR & LEVEL LIST ===
 function toggleModule(el, name) {
   if (selectedModules.has(name)) {
     if (selectedModules.size > 1) {
@@ -1460,8 +1388,8 @@ function renderLevelList() {
       `;
       row.addEventListener('click', () => {
         selectedLevel = { module: modKey, level: level.n };
-        currentGrid = { module: mod.name, level: level.n };
         selectedCells.clear();
+        focusedItemId = null;
         document.querySelectorAll('.level-row').forEach(r => r.classList.remove('selected'));
         row.classList.add('selected');
         document.getElementById('gridTitle').textContent = `${mod.name} / ${mod.dimLabel} ${level.n}`;
@@ -1541,15 +1469,21 @@ function highlightUnplacedLevels(modKey) {
   });
 }
 
-// === SEARCH MODE ===
+// === SEARCH ===
 function doSearch(query) {
+  const clearBtn = document.getElementById('searchClearBtn');
+
   if (!query || query.length < 2) {
     searchResults = [];
+    focusedItemId = null;
     document.getElementById('searchCount').textContent = '';
+    clearBtn.style.display = query ? 'block' : 'none';
     renderResults();
     drawGrid();
     return;
   }
+
+  clearBtn.style.display = 'block';
   const q = query.toLowerCase();
   searchResults = allItems.filter(it =>
     it.item.toLowerCase().includes(q) ||
@@ -1565,9 +1499,10 @@ function clearSearch() {
   document.getElementById('searchInput').value = '';
   searchResults = [];
   focusedItemId = null;
+  hoveredResultId = null;
   document.getElementById('searchCount').textContent = '';
+  document.getElementById('searchClearBtn').style.display = 'none';
   renderResults();
-  showSearchDefaultDetail();
   drawGrid();
   document.getElementById('searchInput').focus();
 }
@@ -1580,14 +1515,16 @@ function highlightMatch(text, query) {
 }
 
 function renderResults() {
+  const section = document.getElementById('resultsSection');
   const container = document.getElementById('resultsList');
   const query = document.getElementById('searchInput').value;
+
   if (searchResults.length === 0) {
-    container.innerHTML = query.length >= 2
-      ? '<div class="results-empty">No results for "' + query + '"</div>'
-      : '<div class="results-empty"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>Type to search across all modules</div>';
+    section.style.display = 'none';
     return;
   }
+
+  section.style.display = 'block';
 
   const groups = {};
   for (const r of searchResults) {
@@ -1620,28 +1557,29 @@ function renderResults() {
   container.innerHTML = html;
 }
 
-function showSearchDefaultDetail() {
-  document.getElementById('detailTitle').textContent = 'Search';
-  document.getElementById('detailContent').innerHTML = `
-    <div class="detail-field">
-      <div class="label">Tip</div>
-      <div class="value">Click a result or grid cell to inspect. Use + to add items to your pick list.</div>
-    </div>
-  `;
-  document.getElementById('detailActions').innerHTML = '';
-}
-
 function focusResult(id) {
   focusedItemId = id;
   const item = allItems.find(i => i.id === id);
   if (!item) return;
 
-  if (currentGrid.module !== item.module || currentGrid.level !== item.level) {
-    currentGrid = { module: item.module, level: item.level };
-    document.getElementById('gridTitle').textContent = `${item.module} / Level ${item.level}`;
+  // Navigate grid to that module/level if needed
+  const mod = Object.entries(moduleData).find(([k, v]) => v.name === item.module);
+  if (mod) {
+    const modKey = mod[0];
+    const level = mod[1].levels.find(l => l.n === item.level);
+    if (selectedLevel.module !== modKey || selectedLevel.level !== item.level) {
+      selectedLevel = { module: modKey, level: item.level };
+      document.getElementById('gridTitle').textContent = `${item.module} / ${mod[1].dimLabel} ${item.level}`;
+      if (level) showProvisionalBanner(level);
+      renderLevelList();
+    }
   }
 
-  // Update detail panel with search-specific actions
+  // Select the cell
+  selectedCells.clear();
+  selectedCells.add(item.pos);
+
+  // Update detail panel
   document.getElementById('detailTitle').textContent = item.item;
   const isPicked = pickList.some(p => p.id === id);
   document.getElementById('detailContent').innerHTML = `
@@ -1675,7 +1613,7 @@ function addToPick(id) {
     if (item) pickList.push({ ...item, qty: 1 });
     sortPickList();
   }
-  refreshSearchAll();
+  refreshAll();
 }
 
 function removeFromPick(id) {
@@ -1684,7 +1622,7 @@ function removeFromPick(id) {
   lastRemoved = { ...pickList[idx], insertIdx: idx };
   pickList.splice(idx, 1);
   showUndoToast(lastRemoved.item);
-  refreshSearchAll();
+  refreshAll();
 }
 
 function showUndoToast(itemName) {
@@ -1706,7 +1644,7 @@ function undoRemove() {
   lastRemoved = null;
   document.getElementById('undoToast').classList.remove('visible');
   if (undoTimer) clearTimeout(undoTimer);
-  refreshSearchAll();
+  refreshAll();
 }
 
 function clearPickList() {
@@ -1714,14 +1652,14 @@ function clearPickList() {
     lastClearedList = pickList.map(p => ({ ...p }));
     pickList = [];
   }
-  refreshSearchAll();
+  refreshAll();
 }
 
 function restorePickList() {
   if (!lastClearedList) return;
   pickList = lastClearedList;
   lastClearedList = null;
-  refreshSearchAll();
+  refreshAll();
 }
 
 function sortPickList() {
@@ -1741,7 +1679,7 @@ function renderPickList() {
   countEl.textContent = pickList.length + ' item' + (pickList.length !== 1 ? 's' : '') + (totalQty > pickList.length ? ' (' + totalQty + ' total)' : '');
 
   if (pickList.length === 0) {
-    container.innerHTML = '<div style="font-size:12px;color:#475569;padding:8px 0">No items yet — use + on search results</div>';
+    container.innerHTML = '<div style="font-size:12px;color:#475569;padding:8px 0">No items yet</div>';
     if (lastClearedList) {
       actionsEl.style.display = 'flex';
       actionsEl.innerHTML = '<button class="btn-secondary" onclick="restorePickList()">Restore</button>';
@@ -1793,10 +1731,22 @@ function pickItemClick(id) {
 
   focusedItemId = id;
 
-  if (currentGrid.module !== item.module || currentGrid.level !== item.level) {
-    currentGrid = { module: item.module, level: item.level };
-    document.getElementById('gridTitle').textContent = `${item.module} / Level ${item.level}`;
+  // Navigate grid to that module/level if needed
+  const mod = Object.entries(moduleData).find(([k, v]) => v.name === item.module);
+  if (mod) {
+    const modKey = mod[0];
+    if (selectedLevel.module !== modKey || selectedLevel.level !== item.level) {
+      selectedLevel = { module: modKey, level: item.level };
+      document.getElementById('gridTitle').textContent = `${item.module} / ${mod[1].dimLabel} ${item.level}`;
+      const level = mod[1].levels.find(l => l.n === item.level);
+      if (level) showProvisionalBanner(level);
+      renderLevelList();
+    }
   }
+
+  // Select the cell
+  selectedCells.clear();
+  selectedCells.add(item.pos);
 
   document.getElementById('detailTitle').textContent = item.item;
   document.getElementById('detailContent').innerHTML = `
@@ -1811,7 +1761,7 @@ function pickItemClick(id) {
   drawGrid();
 }
 
-function refreshSearchAll() {
+function refreshAll() {
   renderPickList();
   renderResults();
   drawGrid();
@@ -1835,10 +1785,9 @@ function refreshSearchAll() {
 
 // === INIT ===
 document.getElementById('searchInput').addEventListener('input', (e) => doSearch(e.target.value));
-
-// Start in browse mode
-drawGrid();
 renderLevelList();
+renderPickList();
+drawGrid();
 </script>
 </body>
 </html>
