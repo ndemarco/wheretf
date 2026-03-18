@@ -1,0 +1,1844 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>WhereTF — Navigator Prototype v1</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    background: #0f172a;
+    color: #e2e8f0;
+    display: flex;
+    height: 100vh;
+  }
+
+  /* Sidebar — icon rail */
+  .sidebar {
+    width: 56px;
+    background: #1e293b;
+    border-right: 1px solid #334155;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 12px 0;
+    gap: 16px;
+    flex-shrink: 0;
+  }
+  .sidebar-icon {
+    width: 32px;
+    height: 32px;
+    border-radius: 6px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    color: #94a3b8;
+    transition: all 0.15s;
+  }
+  .sidebar-icon:hover, .sidebar-icon.active {
+    background: #334155;
+    color: #ff6600;
+  }
+  .sidebar-icon svg { width: 20px; height: 20px; }
+
+  /* Main area */
+  .main-area {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+  }
+
+  /* Module selector bar (browse mode) */
+  .module-bar {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 16px;
+    background: #1e293b;
+    border-bottom: 1px solid #334155;
+    flex-shrink: 0;
+    overflow-x: auto;
+  }
+  .module-bar-label {
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: #64748b;
+    margin-right: 4px;
+    flex-shrink: 0;
+    cursor: pointer;
+    padding: 4px 6px;
+    border-radius: 4px;
+    transition: color 0.15s;
+  }
+  .module-bar-label:hover { color: #ff6600; }
+  .module-bar-label.all-selected { color: #ff6600; }
+  .module-pills {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+  }
+  .module-tab {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 14px;
+    border-radius: 6px;
+    border: 1px solid #334155;
+    background: transparent;
+    color: #94a3b8;
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.15s;
+    flex-shrink: 0;
+    font-family: inherit;
+  }
+  .module-tab:hover { border-color: #ff6600; color: #e2e8f0; }
+  .module-tab.selected { border-color: #ff6600; background: #1a0f00; color: #ff6600; }
+  .module-tab .tab-name { font-weight: 600; }
+
+  /* Search bar (search mode) */
+  .search-bar {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 16px;
+    background: #1e293b;
+    border-bottom: 1px solid #334155;
+    flex-shrink: 0;
+  }
+  .search-input-wrap {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    background: #0f172a;
+    border: 1px solid #334155;
+    border-radius: 8px;
+    padding: 0 12px;
+    transition: border-color 0.15s;
+  }
+  .search-input-wrap:focus-within { border-color: #ff6600; }
+  .search-input-wrap svg { width: 16px; height: 16px; color: #64748b; flex-shrink: 0; }
+  .search-input {
+    flex: 1;
+    background: transparent;
+    border: none;
+    outline: none;
+    color: #e2e8f0;
+    font-size: 14px;
+    padding: 8px;
+    font-family: inherit;
+  }
+  .search-input::placeholder { color: #475569; }
+  .search-count { font-size: 11px; color: #64748b; flex-shrink: 0; padding: 0 8px; }
+  .search-clear {
+    background: none;
+    border: none;
+    color: #475569;
+    cursor: pointer;
+    font-size: 16px;
+    padding: 4px;
+    line-height: 1;
+    transition: color 0.15s;
+  }
+  .search-clear:hover { color: #ef4444; }
+
+  /* Content row */
+  .content-row {
+    flex: 1;
+    display: flex;
+    min-height: 0;
+  }
+
+  /* Level list panel (browse mode) */
+  .level-panel {
+    width: 200px;
+    background: #1e293b;
+    border-right: 1px solid #334155;
+    overflow-y: auto;
+    padding: 12px;
+    flex-shrink: 0;
+  }
+  .level-panel-header {
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: #64748b;
+    font-weight: 600;
+    margin-bottom: 12px;
+    padding: 0 4px;
+  }
+  .module-section { margin-bottom: 16px; }
+  .module-section:last-child { margin-bottom: 0; }
+  .module-section-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    font-size: 12px;
+    font-weight: 600;
+    color: #ff6600;
+    padding: 4px 6px;
+    margin-bottom: 4px;
+    border-radius: 4px;
+    cursor: pointer;
+  }
+  .module-section-header:hover { background: #1a0f00; }
+  .module-section-header .info-icon {
+    width: 16px; height: 16px; color: #64748b; transition: color 0.15s;
+  }
+  .module-section-header:hover .info-icon { color: #ff6600; }
+  .module-section-header .remove-icon {
+    width: 14px; height: 14px; color: #475569; transition: color 0.15s; margin-left: 4px;
+  }
+  .module-section-header:hover .remove-icon { color: #ef4444; }
+  .module-section-header .header-actions { display: flex; align-items: center; gap: 2px; }
+  .level-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 8px 10px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 13px;
+    transition: background 0.1s;
+  }
+  .level-row:hover { background: #334155; }
+  .level-row.selected { background: #334155; color: #ff6600; }
+  .level-row .badge {
+    font-size: 10px; padding: 2px 6px; border-radius: 4px;
+    background: #334155; color: #94a3b8;
+  }
+  .level-row .badge.receptacle { background: #1e3a5f; color: #60a5fa; }
+  .level-row .badge.provisional { background: #422006; color: #fb923c; cursor: pointer; }
+  .level-row .badge.provisional:hover { background: #b45309; color: #fff; }
+
+  /* Results panel (search mode) */
+  .results-panel {
+    width: 280px;
+    background: #1e293b;
+    border-right: 1px solid #334155;
+    overflow-y: auto;
+    padding: 12px;
+    flex-shrink: 0;
+    display: flex;
+    flex-direction: column;
+  }
+  .results-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 8px;
+    padding: 0 4px;
+  }
+  .results-header-label {
+    font-size: 11px; text-transform: uppercase;
+    letter-spacing: 0.05em; color: #64748b; font-weight: 600;
+  }
+  .results-header-action {
+    font-size: 11px; color: #ff6600; cursor: pointer;
+    background: none; border: none; font-family: inherit;
+  }
+  .results-header-action:hover { opacity: 0.8; }
+  .result-group { margin-bottom: 12px; }
+  .result-group-header {
+    font-size: 11px; font-weight: 600; color: #ff6600;
+    padding: 4px 6px; margin-bottom: 2px;
+  }
+  .result-row {
+    display: flex; align-items: center; gap: 8px;
+    padding: 8px 8px; border-radius: 6px;
+    cursor: pointer; transition: background 0.1s; font-size: 12px;
+  }
+  .result-row:hover { background: #334155; }
+  .result-row.focused { background: #334155; border-left: 2px solid #ff6600; }
+  .result-row .result-info { flex: 1; min-width: 0; }
+  .result-row .result-name {
+    font-size: 13px; font-weight: 500; color: #e2e8f0;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  .result-row .result-name mark {
+    background: #7c2d12; color: #fb923c; border-radius: 2px; padding: 0 1px;
+  }
+  .result-row .result-location { font-size: 11px; color: #64748b; margin-top: 1px; }
+  .result-row .result-cat {
+    width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0;
+  }
+  .result-row .pick-btn {
+    width: 22px; height: 22px; border-radius: 4px;
+    border: 1px solid #475569; background: transparent;
+    color: #64748b; cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 14px; line-height: 1; transition: all 0.15s; flex-shrink: 0;
+  }
+  .result-row .pick-btn:hover { border-color: #ff6600; color: #ff6600; }
+  .result-row .pick-btn.picked { background: #ff6600; border-color: #ff6600; color: #fff; }
+  .results-empty {
+    flex: 1; display: flex; align-items: center; justify-content: center;
+    flex-direction: column; gap: 8px; color: #475569; font-size: 13px;
+    text-align: center; padding: 24px;
+  }
+  .results-empty svg { width: 32px; height: 32px; color: #334155; }
+
+  /* Grid pane */
+  .grid-pane {
+    flex: 1;
+    padding: 24px;
+    overflow: auto;
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+  }
+  .grid-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 16px;
+  }
+  .grid-header h1 { font-size: 18px; font-weight: 600; }
+  .grid-toolbar { display: flex; gap: 8px; }
+  .grid-toolbar button {
+    background: #334155;
+    border: 1px solid #475569;
+    color: #e2e8f0;
+    padding: 6px 12px;
+    border-radius: 6px;
+    font-size: 12px;
+    cursor: pointer;
+    transition: all 0.15s;
+    font-family: inherit;
+  }
+  .grid-toolbar button:hover { border-color: #ff6600; color: #ff6600; }
+  .grid-container {
+    flex: 1;
+    display: flex;
+    align-items: flex-start;
+    justify-content: center;
+  }
+
+  /* Provisional banner */
+  .provisional-banner {
+    background: #422006;
+    border: 1px solid #92400e;
+    border-radius: 8px;
+    padding: 10px 14px;
+    margin-bottom: 16px;
+    font-size: 12px;
+  }
+  .provisional-banner .title { font-weight: 600; color: #fb923c; margin-bottom: 4px; }
+  .provisional-banner .prov-item {
+    color: #fde68a; padding: 4px 0;
+    display: flex; align-items: center; justify-content: space-between;
+  }
+  .provisional-banner .prov-item .place-btn {
+    background: #92400e; color: #fde68a; border: 1px solid #b45309;
+    padding: 2px 10px; border-radius: 4px; cursor: pointer; font-size: 11px; white-space: nowrap;
+  }
+  .provisional-banner .prov-item .place-btn:hover { background: #b45309; color: #fff; }
+
+  /* Tooltip */
+  .tooltip {
+    position: fixed;
+    background: #1e293b;
+    border: 1px solid #475569;
+    border-radius: 8px;
+    padding: 10px 14px;
+    font-size: 12px;
+    pointer-events: none;
+    z-index: 100;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.4);
+    max-width: 240px;
+    display: none;
+  }
+  .tooltip .tt-label { font-weight: 600; color: #ff6600; margin-bottom: 4px; }
+  .tooltip .tt-item { color: #e2e8f0; margin-bottom: 2px; }
+  .tooltip .tt-type { color: #94a3b8; font-size: 11px; }
+  .tooltip .tt-params { color: #64748b; font-size: 11px; margin-top: 4px; }
+  .tooltip .tt-costored {
+    margin-top: 4px; padding-top: 4px;
+    border-top: 1px solid #334155; color: #fbbf24; font-size: 11px;
+  }
+
+  /* Detail panel — always visible */
+  .detail-panel {
+    width: 320px;
+    min-width: 320px;
+    background: #1e293b;
+    border-left: 1px solid #334155;
+    flex-shrink: 0;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+  .detail-panel h3 { font-size: 15px; font-weight: 600; margin-bottom: 12px; white-space: nowrap; }
+  .detail-body {
+    flex: 1;
+    overflow-y: auto;
+    padding: 20px;
+    display: flex;
+    flex-direction: column;
+  }
+  .detail-field { margin-bottom: 10px; }
+  .detail-field .label {
+    font-size: 11px; color: #64748b; text-transform: uppercase;
+    letter-spacing: 0.05em; white-space: nowrap;
+  }
+  .detail-field .value { font-size: 13px; color: #e2e8f0; margin-top: 2px; }
+  .detail-actions {
+    border-top: 1px solid #334155;
+    margin-top: 12px;
+    padding-top: 12px;
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+  .detail-actions .action-btn {
+    background: #334155; color: #e2e8f0;
+    border: 1px solid #475569; padding: 6px 12px;
+    border-radius: 6px; cursor: pointer; font-size: 12px;
+  }
+  .detail-actions .action-btn:hover { border-color: #ff6600; color: #ff6600; }
+  .detail-actions .action-btn.primary { background: #ff6600; color: #fff; border-color: #ff6600; }
+  .detail-actions .action-btn.primary:hover { background: #e55a00; }
+  .detail-actions .action-btn.danger { background: #7f1d1d; color: #fca5a5; border-color: #991b1b; }
+  .detail-actions .action-btn.danger:hover { background: #991b1b; }
+  .detail-actions .selection-count { font-size: 11px; color: #64748b; width: 100%; margin-bottom: 4px; }
+  .also-at-link { color: #ff6600; text-decoration: none; font-size: 12px; }
+  .also-at-link:hover { text-decoration: underline; color: #fbbf24; }
+  .unplaced-link { color: #fb923c; cursor: pointer; text-decoration: underline; }
+  .unplaced-link:hover { color: #fbbf24; }
+
+  .panel-divider { height: 1px; background: #334155; margin: 12px 0; }
+
+  /* Pick list section (search mode, in detail panel below divider) */
+  .pick-list-section { display: flex; flex-direction: column; min-height: 0; }
+  .pick-list-header {
+    display: flex; align-items: center; justify-content: space-between;
+    margin-bottom: 8px;
+  }
+  .pick-list-title { font-size: 13px; font-weight: 600; color: #ff6600; }
+  .pick-list-count { font-size: 11px; color: #64748b; }
+  .pick-list-body { flex: 1; overflow-y: auto; }
+  .pick-group { margin-bottom: 10px; }
+  .pick-group-header {
+    font-size: 10px; font-weight: 600; color: #94a3b8;
+    text-transform: uppercase; letter-spacing: 0.05em;
+    padding: 4px 6px; margin-bottom: 2px;
+    background: #0f172a; border-radius: 4px;
+  }
+  .pick-item {
+    display: flex; align-items: center; gap: 8px;
+    padding: 6px 8px; border-radius: 4px;
+    font-size: 12px; margin-bottom: 2px;
+    cursor: pointer; transition: background 0.1s;
+  }
+  .pick-item:hover { background: #334155; }
+  .pick-item.active { background: #334155; border-left: 2px solid #ff6600; }
+  .pick-item .pick-num {
+    width: 20px; height: 20px; border-radius: 50%;
+    background: #ff6600; color: #fff;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 10px; font-weight: 700; flex-shrink: 0;
+  }
+  .pick-item .pick-item-info { flex: 1; min-width: 0; }
+  .pick-item .pick-item-name {
+    font-size: 12px; color: #e2e8f0;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  .pick-item .pick-item-loc { font-size: 10px; color: #64748b; }
+  .pick-item .pick-remove {
+    background: none; border: none; color: #475569; cursor: pointer;
+    font-size: 14px; padding: 2px; transition: color 0.15s;
+  }
+  .pick-item .pick-remove:hover { color: #ef4444; }
+  .pick-item .pick-qty {
+    font-size: 11px; color: #ff6600; font-weight: 600;
+    flex-shrink: 0; min-width: 20px; text-align: center;
+  }
+  .pick-actions { margin-top: 10px; display: flex; gap: 8px; }
+  .pick-actions button {
+    flex: 1; padding: 8px 12px; border-radius: 6px;
+    font-size: 12px; cursor: pointer; font-family: inherit; transition: all 0.15s;
+  }
+  .btn-primary { background: #ff6600; border: none; color: #fff; }
+  .btn-primary:hover { background: #e55b00; }
+  .btn-secondary { background: #334155; border: 1px solid #475569; color: #e2e8f0; }
+  .btn-secondary:hover { border-color: #ff6600; color: #ff6600; }
+
+  /* Undo toast */
+  .undo-toast {
+    position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%);
+    background: #1e293b; border: 1px solid #475569; border-radius: 8px;
+    padding: 10px 16px; font-size: 13px; color: #e2e8f0;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.5);
+    display: flex; align-items: center; gap: 12px;
+    z-index: 200; opacity: 0; pointer-events: none;
+    transition: opacity 0.2s;
+  }
+  .undo-toast.visible { opacity: 1; pointer-events: auto; }
+  .undo-toast .undo-btn {
+    background: none; border: none; color: #ff6600; cursor: pointer;
+    font-size: 13px; font-weight: 600; font-family: inherit;
+  }
+  .undo-toast .undo-btn:hover { text-decoration: underline; }
+
+  /* Legend */
+  .legend {
+    display: flex; gap: 16px; margin-top: 16px; font-size: 11px; color: #64748b;
+  }
+  .legend-item { display: flex; align-items: center; gap: 6px; }
+  .legend-swatch {
+    width: 16px; height: 16px; border-radius: 3px; border: 1px solid #475569;
+  }
+</style>
+</head>
+<body>
+
+<!-- Sidebar -->
+<div class="sidebar">
+  <div class="sidebar-icon active" id="sidebarBrowse" title="Modules" onclick="setMode('browse')">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
+  </div>
+  <div class="sidebar-icon" id="sidebarItems" title="Items">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"/></svg>
+  </div>
+  <div class="sidebar-icon" id="sidebarSearch" title="Search" onclick="setMode('search')">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+  </div>
+  <div class="sidebar-icon" title="Templates">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9"/></svg>
+  </div>
+  <div class="sidebar-icon" title="Activity">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 8v4l3 3"/><circle cx="12" cy="12" r="9"/></svg>
+  </div>
+</div>
+
+<!-- Main area -->
+<div class="main-area">
+
+  <!-- Module selector bar (browse mode) -->
+  <div class="module-bar" id="moduleBar">
+    <span class="module-bar-label" onclick="toggleAllModules()" title="Select all / deselect all">Modules</span>
+    <div class="module-pills">
+      <button class="module-tab selected" onclick="toggleModule(this, 'muse')">MUSE</button>
+      <button class="module-tab" onclick="toggleModule(this, 'alex')">ALEX</button>
+      <button class="module-tab" onclick="toggleModule(this, 'neon')">NEON</button>
+      <button class="module-tab" onclick="toggleModule(this, 'akro')">AKRO</button>
+    </div>
+  </div>
+
+  <!-- Search bar (search mode, hidden by default) -->
+  <div class="search-bar" id="searchBar" style="display:none">
+    <div class="search-input-wrap">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+      <input class="search-input" id="searchInput" type="text" placeholder="Search items, parameters, locations...">
+      <span class="search-count" id="searchCount"></span>
+      <button class="search-clear" onclick="clearSearch()">×</button>
+    </div>
+  </div>
+
+  <!-- Content row -->
+  <div class="content-row">
+
+    <!-- Level list (browse mode) -->
+    <div class="level-panel" id="levelPanel">
+      <div class="level-panel-header">Levels</div>
+      <div id="levelList"></div>
+    </div>
+
+    <!-- Results panel (search mode, hidden by default) -->
+    <div class="results-panel" id="resultsPanel" style="display:none">
+      <div class="results-header">
+        <span class="results-header-label">Results</span>
+      </div>
+      <div id="resultsList"></div>
+    </div>
+
+    <!-- Grid Pane -->
+    <div class="grid-pane">
+      <div class="grid-header">
+        <h1 id="gridTitle">MUSE / Level 3</h1>
+        <div class="grid-toolbar" id="gridToolbar">
+          <button>Filter</button>
+          <button>Add Insert</button>
+          <select id="hoverSelect" onchange="setHoverMode(this.value)" style="background:#334155;color:#e2e8f0;border:1px solid #475569;padding:4px 8px;border-radius:6px;font-size:12px;cursor:pointer">
+            <option value="off">Hover: off</option>
+            <option value="on">Hover: instant</option>
+            <option value="delay" selected>Hover: delayed</option>
+          </select>
+        </div>
+      </div>
+
+      <!-- Provisional banner (browse mode) -->
+      <div class="provisional-banner" style="display:none" id="provisionalBanner">
+        <div class="title">Unplaced items at this level</div>
+        <div id="provisionalItems"></div>
+      </div>
+
+      <div class="grid-container">
+        <svg id="grid" width="780" height="520" viewBox="0 0 780 520"></svg>
+      </div>
+
+      <div class="legend" id="legendArea">
+        <div class="legend-item"><div class="legend-swatch" style="background: transparent; border-color: #475569;"></div> Empty</div>
+        <div class="legend-item"><div class="legend-swatch" style="background: #1e3a5f;"></div> Occupied</div>
+        <div class="legend-item"><div class="legend-swatch" style="background: repeating-linear-gradient(45deg, #422006, #422006 2px, transparent 2px, transparent 6px);"></div> Provisional</div>
+        <div class="legend-item"><div class="legend-swatch" style="background: repeating-linear-gradient(45deg, #7f1d1d, #7f1d1d 2px, #1e293b 2px, #1e293b 6px);"></div> Disabled</div>
+        <div class="legend-item"><div class="legend-swatch" style="background: #1e3a5f; border-color: #fbbf24; border-width: 2px;"></div> Co-stored</div>
+        <div class="legend-item" id="legendSelected"><div class="legend-swatch" style="background: transparent; border-color: #ff6600; border-width: 2px;"></div> Selected</div>
+        <div class="legend-item" id="legendSearchHit" style="display:none"><div class="legend-swatch" style="background: #1a0f00; border-color: #ff6600; border-width: 2px;"></div> Search hit</div>
+        <div class="legend-item" id="legendPicked" style="display:none"><div class="legend-swatch" style="background: #ff6600;"></div> In pick list</div>
+      </div>
+    </div>
+
+    <!-- Detail Panel — always visible -->
+    <div class="detail-panel" id="detailPanel">
+      <div class="detail-body">
+        <h3 id="detailTitle">MUSE / Level 3</h3>
+        <div id="detailContent">
+          <div class="detail-field"><div class="label">Status</div><div class="value">Select a cell to view details</div></div>
+        </div>
+        <div class="detail-actions" id="detailActions"></div>
+      </div>
+      <!-- Pick list section (search mode only) -->
+      <div id="pickListWrapper" style="display:none; padding: 0 20px 20px 20px;">
+        <div class="panel-divider"></div>
+        <div class="pick-list-section" id="pickListSection">
+          <div class="pick-list-header">
+            <span class="pick-list-title">Pick List</span>
+            <span class="pick-list-count" id="pickListCount">0 items</span>
+          </div>
+          <div class="pick-list-body" id="pickListBody"></div>
+          <div class="pick-actions" id="pickActions" style="display:none">
+            <button class="btn-secondary" onclick="clearPickList()">Clear</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div><!-- /content-row -->
+</div><!-- /main-area -->
+
+<!-- Undo toast -->
+<div class="undo-toast" id="undoToast">
+  <span id="undoMsg"></span>
+  <button class="undo-btn" onclick="undoRemove()">Undo</button>
+</div>
+
+<!-- Tooltip -->
+<div class="tooltip" id="tooltip">
+  <div class="tt-label" id="ttLabel"></div>
+  <div class="tt-item" id="ttItem"></div>
+  <div class="tt-type" id="ttType"></div>
+  <div class="tt-params" id="ttParams"></div>
+  <div class="tt-costored" id="ttCostored"></div>
+</div>
+
+<script>
+// === DATA ===
+
+// Searchable items list (flat, across all modules/levels)
+const allItems = [
+  { id: 'muse-3-A1', item: '10kΩ 0805 Resistor', category: 'passive', params: 'R=10kΩ, Size=0805, Tol=±5%', module: 'MUSE', level: 3, pos: 'A1' },
+  { id: 'muse-3-A2', item: '4.7kΩ 0805 Resistor', category: 'passive', params: 'R=4.7kΩ, Size=0805, Tol=±1%', module: 'MUSE', level: 3, pos: 'A2' },
+  { id: 'muse-3-A3', item: '100nF 0805 Capacitor', category: 'passive', params: 'C=100nF, Size=0805, V=50V', module: 'MUSE', level: 3, pos: 'A3' },
+  { id: 'muse-3-B1', item: '0805 Red LED', category: 'active', params: 'Color=Red, Vf=2.0V, If=20mA', module: 'MUSE', level: 3, pos: 'B1' },
+  { id: 'muse-3-B2', item: '0805 Green LED', category: 'active', params: 'Color=Green, Vf=3.2V, If=20mA', module: 'MUSE', level: 3, pos: 'B2' },
+  { id: 'muse-3-B4', item: 'M3x10 SHCS Black Oxide', category: 'fastener', params: 'Thread=M3, L=10mm, Drive=Hex', module: 'MUSE', level: 3, pos: 'B4' },
+  { id: 'muse-3-B5', item: 'M3x16 SHCS', category: 'fastener', params: 'Thread=M3, L=16mm, Drive=Hex', module: 'MUSE', level: 3, pos: 'B5' },
+  { id: 'muse-3-C1', item: 'M4x12 BHCS', category: 'fastener', params: 'Thread=M4, L=12mm, Drive=Hex', module: 'MUSE', level: 3, pos: 'C1' },
+  { id: 'muse-3-C3', item: 'Arduino Nano clones (bulk)', category: 'dev-board', params: 'MCU=ATmega328P', module: 'MUSE', level: 3, pos: 'C3' },
+  { id: 'muse-3-C5', item: 'USB-C Breakout Board', category: 'dev-board', params: 'Connector=USB-C, Pins=24', module: 'MUSE', level: 3, pos: 'C5' },
+  { id: 'muse-3-C6', item: 'M4x20 BHCS', category: 'fastener', params: 'Thread=M4, L=20mm, Drive=Hex', module: 'MUSE', level: 3, pos: 'C6' },
+  { id: 'muse-3-D3', item: 'Dupont Jumper Wires', category: 'wire', params: 'Type=M-F, L=200mm', module: 'MUSE', level: 3, pos: 'D3' },
+  { id: 'muse-3-D5', item: 'Heat Shrink Assortment', category: 'consumable', params: 'Sizes=1.5-10mm, Colors=Mixed', module: 'MUSE', level: 3, pos: 'D5' },
+  { id: 'muse-7-A2', item: 'M4x16 BHCS', category: 'fastener', params: 'Thread=M4, L=16mm, Drive=Hex', module: 'MUSE', level: 7, pos: 'A2' },
+  { id: 'muse-7-B3', item: 'M4 Hex Nut', category: 'fastener', params: 'Thread=M4, Style=Hex', module: 'MUSE', level: 7, pos: 'B3' },
+  { id: 'alex-2-A1', item: 'M4x25 SHCS', category: 'fastener', params: 'Thread=M4, L=25mm, Drive=Hex', module: 'ALEX', level: 2, pos: 'A1' },
+  { id: 'alex-2-B1', item: 'M4 Flat Washer', category: 'fastener', params: 'Thread=M4, Type=Flat, Material=Steel', module: 'ALEX', level: 2, pos: 'B1' },
+];
+
+const categoryColors = {
+  'passive': '#3b82f6', 'active': '#22c55e', 'fastener': '#a855f7',
+  'dev-board': '#06b6d4', 'wire': '#f59e0b', 'consumable': '#ec4899',
+};
+
+// Grid cells — keyed by "MODULE:level", enriched data for both modes
+const gridData = {
+  'MUSE:3': {
+    'A1': { state: 'occupied', item: '10kΩ 0805 Resistor', category: 'passive', params: 'R=10kΩ, Size=0805, Tol=±5%', otherLocations: ['NEON 2 / A3', 'ALEX 5 / C1'] },
+    'A2': { state: 'occupied', item: '4.7kΩ 0805 Resistor', category: 'passive', params: 'R=4.7kΩ, Size=0805, Tol=±1%' },
+    'A3': { state: 'occupied', item: '100nF 0805 Capacitor', category: 'passive', params: 'C=100nF, Size=0805, V=50V' },
+    'A4': { state: 'empty' },
+    'A5': { state: 'disabled', reason: 'Cracked divider wall' },
+    'A6': { state: 'empty' },
+    'B1': { state: 'occupied', item: '0805 Red LED', category: 'active', params: 'Color=Red, Vf=2.0V, If=20mA' },
+    'B2': { state: 'occupied', item: '0805 Green LED', category: 'active', params: 'Color=Green, Vf=3.2V, If=20mA' },
+    'B3': { state: 'empty' },
+    'B4': { state: 'costored', items: ['M3x10 SHCS Black Oxide', 'M3x10 SHCS Bright Zinc'], category: 'fastener', params: 'Thread=M3, L=10mm, Drive=Hex', reason: 'Finish obvious at a glance' },
+    'B5': { state: 'occupied', item: 'M3x16 SHCS', category: 'fastener', params: 'Thread=M3, L=16mm, Drive=Hex' },
+    'B6': { state: 'empty' },
+    'C1': { state: 'occupied', item: 'M4x12 BHCS', category: 'fastener', params: 'Thread=M4, L=12mm, Drive=Hex' },
+    'C2': { state: 'empty' },
+    'C3': { state: 'merged_origin', item: 'Arduino Nano clones (bulk)', category: 'dev-board', params: 'MCU=ATmega328P', mergedWith: ['C4'] },
+    'C5': { state: 'occupied', item: 'USB-C Breakout Board', category: 'dev-board', params: 'Connector=USB-C, Pins=24' },
+    'C6': { state: 'occupied', item: 'M4x20 BHCS', category: 'fastener', params: 'Thread=M4, L=20mm, Drive=Hex' },
+    'D1': { state: 'empty' }, 'D2': { state: 'empty' },
+    'D3': { state: 'occupied', item: 'Dupont Jumper Wires', category: 'wire', params: 'Type=M-F, L=200mm', otherLocations: ['ALEX 1 / B2'] },
+    'D4': { state: 'empty' },
+    'D5': { state: 'occupied', item: 'Heat Shrink Assortment', category: 'consumable', params: 'Sizes=1.5-10mm, Colors=Mixed' },
+    'D6': { state: 'empty' },
+  },
+  'MUSE:7': {
+    'A1': { state: 'empty' },
+    'A2': { state: 'occupied', item: 'M4x16 BHCS', category: 'fastener' },
+    'A3': { state: 'occupied', item: 'M5x20 SHCS', category: 'fastener' },
+    'A4': { state: 'empty' }, 'A5': { state: 'empty' }, 'A6': { state: 'empty' },
+    'B1': { state: 'occupied', item: 'M3 Nyloc Nut', category: 'fastener' },
+    'B2': { state: 'empty' },
+    'B3': { state: 'occupied', item: 'M4 Hex Nut', category: 'fastener' },
+    'B4': { state: 'empty' }, 'B5': { state: 'empty' }, 'B6': { state: 'empty' },
+    'C1': { state: 'empty' }, 'C2': { state: 'empty' }, 'C3': { state: 'empty' },
+    'C4': { state: 'empty' }, 'C5': { state: 'empty' }, 'C6': { state: 'empty' },
+    'D1': { state: 'empty' }, 'D2': { state: 'empty' }, 'D3': { state: 'empty' },
+    'D4': { state: 'empty' }, 'D5': { state: 'empty' }, 'D6': { state: 'empty' },
+  },
+  'ALEX:2': {
+    'A1': { state: 'occupied', item: 'M4x25 SHCS', category: 'fastener' },
+    'A2': { state: 'occupied', item: 'M5x12 SHCS', category: 'fastener' },
+    'A3': { state: 'empty' }, 'A4': { state: 'empty' }, 'A5': { state: 'empty' }, 'A6': { state: 'empty' },
+    'B1': { state: 'occupied', item: 'M4 Flat Washer', category: 'fastener' },
+    'B2': { state: 'occupied', item: 'M5 Flat Washer', category: 'fastener' },
+    'B3': { state: 'empty' }, 'B4': { state: 'empty' }, 'B5': { state: 'empty' }, 'B6': { state: 'empty' },
+    'C1': { state: 'empty' }, 'C2': { state: 'empty' }, 'C3': { state: 'empty' },
+    'C4': { state: 'empty' }, 'C5': { state: 'empty' }, 'C6': { state: 'empty' },
+    'D1': { state: 'empty' }, 'D2': { state: 'empty' }, 'D3': { state: 'empty' },
+    'D4': { state: 'empty' }, 'D5': { state: 'empty' }, 'D6': { state: 'empty' },
+  },
+};
+
+// Module metadata (for browse mode level list)
+const moduleData = {
+  muse: {
+    name: 'MUSE', dimLabel: 'Level',
+    levels: [
+      { n: 1, badge: 'plano-3600', badgeClass: 'receptacle' },
+      { n: 2, badge: 'plano-3600', badgeClass: 'receptacle' },
+      { n: 3, badge: 'plano-3600', badgeClass: 'receptacle' },
+      { n: 4, badge: 'plano-3600', badgeClass: 'receptacle' },
+      { n: 5, badge: 'plano-3600', badgeClass: 'receptacle' },
+      { n: 6, badge: 'empty', badgeClass: '' },
+      { n: 7, badge: 'plano-3600', badgeClass: 'receptacle' },
+      { n: 8, badge: '2 unplaced', badgeClass: 'provisional', unplaced: ['100Ω 0805 Resistors', 'Assorted heat shrink'] },
+      { n: 9, badge: 'plano-3600', badgeClass: 'receptacle' },
+      { n: 10, badge: 'plano-3600', badgeClass: 'receptacle' },
+      { n: 11, badge: 'empty', badgeClass: '' },
+    ]
+  },
+  alex: {
+    name: 'ALEX', dimLabel: 'Drawer',
+    levels: [
+      { n: 1, badge: 'plano-3600', badgeClass: 'receptacle' },
+      { n: 2, badge: 'plano-3600', badgeClass: 'receptacle' },
+      { n: 3, badge: 'empty', badgeClass: '' },
+      { n: 4, badge: 'plano-3600', badgeClass: 'receptacle' },
+      { n: 5, badge: 'plano-3600', badgeClass: 'receptacle' },
+      { n: 6, badge: '1 unplaced', badgeClass: 'provisional', unplaced: ['Dupont jumper wire assortment'] },
+      { n: 7, badge: 'plano-3600', badgeClass: 'receptacle' },
+      { n: 8, badge: 'plano-3600', badgeClass: 'receptacle' },
+      { n: 9, badge: 'plano-3600', badgeClass: 'receptacle' },
+    ]
+  },
+  neon: {
+    name: 'NEON', dimLabel: 'Drawer',
+    levels: [
+      { n: 1, badge: 'small-parts', badgeClass: 'receptacle' },
+      { n: 2, badge: 'small-parts', badgeClass: 'receptacle' },
+      { n: 3, badge: 'small-parts', badgeClass: 'receptacle' },
+      { n: 4, badge: 'empty', badgeClass: '' },
+      { n: 5, badge: 'small-parts', badgeClass: 'receptacle' },
+      { n: 6, badge: 'small-parts', badgeClass: 'receptacle' },
+      { n: 7, badge: 'empty', badgeClass: '' },
+      { n: 8, badge: 'small-parts', badgeClass: 'receptacle' },
+      { n: 9, badge: 'small-parts', badgeClass: 'receptacle' },
+      { n: 10, badge: 'small-parts', badgeClass: 'receptacle' },
+    ]
+  },
+  akro: {
+    name: 'AKRO', dimLabel: 'Drawer',
+    levels: [
+      { n: 1, badge: 'akro-bin', badgeClass: 'receptacle' },
+      { n: 2, badge: 'akro-bin', badgeClass: 'receptacle' },
+      { n: 3, badge: 'akro-bin', badgeClass: 'receptacle' },
+      { n: 4, badge: 'akro-bin', badgeClass: 'receptacle' },
+      { n: 5, badge: 'akro-bin', badgeClass: 'receptacle' },
+      { n: 6, badge: 'akro-bin', badgeClass: 'receptacle' },
+      { n: 7, badge: 'akro-bin', badgeClass: 'receptacle' },
+      { n: 8, badge: 'akro-bin', badgeClass: 'receptacle' },
+      { n: 9, badge: 'empty', badgeClass: '' },
+      { n: 10, badge: 'akro-bin', badgeClass: 'receptacle' },
+      { n: 11, badge: 'akro-bin', badgeClass: 'receptacle' },
+      { n: 12, badge: 'akro-bin', badgeClass: 'receptacle' },
+      { n: 13, badge: 'akro-bin', badgeClass: 'receptacle' },
+      { n: 14, badge: 'akro-bin', badgeClass: 'receptacle' },
+      { n: 15, badge: 'akro-bin', badgeClass: 'receptacle' },
+      { n: 16, badge: 'akro-bin', badgeClass: 'receptacle' },
+    ]
+  }
+};
+
+// === STATE ===
+let currentMode = 'browse'; // 'browse' or 'search'
+let currentGrid = { module: 'MUSE', level: 3 };
+let selectedModules = new Set(['muse']);
+let selectedLevel = { module: 'muse', level: 3 };
+let selectedCells = new Set();
+let hoverMode = 'delay';
+let hoverDelay = 400;
+let hoverTimer = null;
+
+// Search state
+let searchResults = [];
+let focusedItemId = null;
+let hoveredResultId = null;
+
+// Pick list state
+let pickList = [];
+let lastRemoved = null;
+let undoTimer = null;
+let lastClearedList = null;
+
+// Grid constants
+const ROWS = 4, COLS = 6, CELL_W = 110, CELL_H = 100;
+const MARGIN_LEFT = 40, MARGIN_TOP = 40, GAP = 4, RADIUS = 4;
+const rowLabels = ['A','B','C','D'], colLabels = ['1','2','3','4','5','6'];
+
+// === MODE SWITCHING ===
+function setMode(mode) {
+  currentMode = mode;
+  selectedCells.clear();
+  focusedItemId = null;
+
+  // Sidebar active state
+  document.getElementById('sidebarBrowse').classList.toggle('active', mode === 'browse');
+  document.getElementById('sidebarSearch').classList.toggle('active', mode === 'search');
+
+  // Top bar visibility
+  document.getElementById('moduleBar').style.display = mode === 'browse' ? 'flex' : 'none';
+  document.getElementById('searchBar').style.display = mode === 'search' ? 'flex' : 'none';
+
+  // Left panel visibility
+  document.getElementById('levelPanel').style.display = mode === 'browse' ? 'block' : 'none';
+  document.getElementById('resultsPanel').style.display = mode === 'search' ? 'flex' : 'none';
+
+  // Provisional banner only in browse
+  if (mode === 'search') {
+    document.getElementById('provisionalBanner').style.display = 'none';
+  }
+
+  // Pick list section only in search mode
+  document.getElementById('pickListWrapper').style.display = mode === 'search' ? 'block' : 'none';
+
+  // Legend items
+  document.getElementById('legendSearchHit').style.display = mode === 'search' ? 'flex' : 'none';
+  document.getElementById('legendPicked').style.display = mode === 'search' ? 'flex' : 'none';
+  document.getElementById('legendSelected').style.display = mode === 'browse' ? 'flex' : 'none';
+
+  // Browse toolbar items
+  const toolbar = document.getElementById('gridToolbar');
+  if (mode === 'browse') {
+    toolbar.innerHTML = `
+      <button>Filter</button>
+      <button>Add Insert</button>
+      <select id="hoverSelect" onchange="setHoverMode(this.value)" style="background:#334155;color:#e2e8f0;border:1px solid #475569;padding:4px 8px;border-radius:6px;font-size:12px;cursor:pointer">
+        <option value="off" ${hoverMode==='off'?'selected':''}>Hover: off</option>
+        <option value="on" ${hoverMode==='on'?'selected':''}>Hover: instant</option>
+        <option value="delay" ${hoverMode==='delay'?'selected':''}>Hover: delayed</option>
+      </select>
+    `;
+  } else {
+    toolbar.innerHTML = '';
+  }
+
+  // Re-render
+  if (mode === 'search') {
+    document.getElementById('searchInput').focus();
+    renderResults();
+    renderPickList();
+    showSearchDefaultDetail();
+  } else {
+    showLevelDetail();
+    renderLevelList();
+  }
+  drawGrid();
+}
+
+// === GRID DRAWING (unified) ===
+function drawGrid() {
+  const svg = document.getElementById('grid');
+  svg.innerHTML = '';
+
+  // Defs: hatch patterns
+  const defs = document.createElementNS('http://www.w3.org/2000/svg', 'defs');
+  const dp = document.createElementNS('http://www.w3.org/2000/svg', 'pattern');
+  dp.setAttribute('id','disabled-hatch'); dp.setAttribute('patternUnits','userSpaceOnUse');
+  dp.setAttribute('width','8'); dp.setAttribute('height','8'); dp.setAttribute('patternTransform','rotate(45)');
+  const dl = document.createElementNS('http://www.w3.org/2000/svg','line');
+  dl.setAttribute('x1','0'); dl.setAttribute('y1','0'); dl.setAttribute('x2','0'); dl.setAttribute('y2','8');
+  dl.setAttribute('stroke','#7f1d1d'); dl.setAttribute('stroke-width','3');
+  dp.appendChild(dl); defs.appendChild(dp);
+
+  const provPattern = document.createElementNS('http://www.w3.org/2000/svg', 'pattern');
+  provPattern.setAttribute('id', 'provisional-dots');
+  provPattern.setAttribute('patternUnits', 'userSpaceOnUse');
+  provPattern.setAttribute('width', '10'); provPattern.setAttribute('height', '10');
+  const provDot = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+  provDot.setAttribute('cx', '5'); provDot.setAttribute('cy', '5'); provDot.setAttribute('r', '1.5');
+  provDot.setAttribute('fill', '#92400e');
+  provPattern.appendChild(provDot); defs.appendChild(provPattern);
+  svg.appendChild(defs);
+
+  const gridKey = currentGrid.module + ':' + currentGrid.level;
+  const cells = gridData[gridKey] || {};
+
+  // Search/pick overlays (only active in search mode)
+  const searchHits = new Set();
+  const pickedMap = new Map();
+  if (currentMode === 'search') {
+    for (const r of searchResults) {
+      if (r.module === currentGrid.module && r.level === currentGrid.level) searchHits.add(r.pos);
+    }
+    for (let i = 0; i < pickList.length; i++) {
+      const p = pickList[i];
+      if (p.module === currentGrid.module && p.level === currentGrid.level) {
+        pickedMap.set(p.pos, i + 1);
+      }
+    }
+  }
+
+  // Focused/hovered items (search mode)
+  const focusedItem = focusedItemId ? allItems.find(i => i.id === focusedItemId) : null;
+  const focusedPos = (focusedItem && focusedItem.module === currentGrid.module && focusedItem.level === currentGrid.level) ? focusedItem.pos : null;
+  const hoveredItem = hoveredResultId ? allItems.find(i => i.id === hoveredResultId) : null;
+  const hoveredPos = (hoveredItem && hoveredItem.module === currentGrid.module && hoveredItem.level === currentGrid.level) ? hoveredItem.pos : null;
+
+  const hasSearch = currentMode === 'search' && searchResults.length > 0;
+
+  // Column labels
+  for (let c = 0; c < COLS; c++) {
+    const x = MARGIN_LEFT + c * (CELL_W + GAP) + CELL_W / 2;
+    const t = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+    t.setAttribute('x', x); t.setAttribute('y', 24);
+    t.setAttribute('text-anchor', 'middle'); t.setAttribute('fill', '#64748b');
+    t.setAttribute('font-size', '13'); t.setAttribute('font-family', 'inherit');
+    t.textContent = colLabels[c]; svg.appendChild(t);
+  }
+  // Row labels
+  for (let r = 0; r < ROWS; r++) {
+    const y = MARGIN_TOP + r * (CELL_H + GAP) + CELL_H / 2 + 5;
+    const t = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+    t.setAttribute('x', 16); t.setAttribute('y', y);
+    t.setAttribute('text-anchor', 'middle'); t.setAttribute('fill', '#64748b');
+    t.setAttribute('font-size', '13'); t.setAttribute('font-family', 'inherit');
+    t.textContent = rowLabels[r]; svg.appendChild(t);
+  }
+
+  // Cells
+  for (let r = 0; r < ROWS; r++) {
+    for (let c = 0; c < COLS; c++) {
+      const key = rowLabels[r] + colLabels[c];
+      const cell = cells[key];
+      if (!cell) continue;
+
+      // Skip merged child cells
+      if (key === 'C4' && cells['C3'] && cells['C3'].state === 'merged_origin') continue;
+
+      const x = MARGIN_LEFT + c * (CELL_W + GAP);
+      const y = MARGIN_TOP + r * (CELL_H + GAP);
+
+      let cellW = CELL_W;
+      if (cell.state === 'merged_origin') {
+        cellW = CELL_W * 2 + GAP;
+      }
+
+      const g = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+      g.setAttribute('data-key', key);
+      g.style.cursor = 'pointer';
+
+      const isHit = searchHits.has(key);
+      const pickNum = pickedMap.get(key);
+      const isPicked = pickNum !== undefined;
+      const isFocused = currentMode === 'search' && focusedPos === key;
+      const isHovered = currentMode === 'search' && hoveredPos === key;
+      const isSelected = currentMode === 'browse' && selectedCells.has(key);
+
+      // Background rect
+      const bg = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+      bg.setAttribute('x', x); bg.setAttribute('y', y);
+      bg.setAttribute('width', cellW); bg.setAttribute('height', CELL_H);
+      bg.setAttribute('rx', RADIUS);
+
+      if (cell.state === 'disabled') {
+        bg.setAttribute('fill', 'url(#disabled-hatch)');
+        bg.setAttribute('stroke', '#7f1d1d'); bg.setAttribute('stroke-width', '1.5');
+      } else if (currentMode === 'search') {
+        // Search mode styling
+        if (isPicked && isFocused) {
+          bg.setAttribute('fill', '#2a1500');
+          bg.setAttribute('stroke', '#ff6600'); bg.setAttribute('stroke-width', '3');
+        } else if (isPicked) {
+          bg.setAttribute('fill', '#1a0f00');
+          bg.setAttribute('stroke', '#ff6600'); bg.setAttribute('stroke-width', '3');
+        } else if (isFocused) {
+          bg.setAttribute('fill', '#0f2847');
+          bg.setAttribute('stroke', '#60a5fa'); bg.setAttribute('stroke-width', '2.5');
+        } else if (isHovered) {
+          bg.setAttribute('fill', '#1a0f00');
+          bg.setAttribute('stroke', '#fb923c'); bg.setAttribute('stroke-width', '2.5');
+        } else if (isHit) {
+          bg.setAttribute('fill', '#1a0f00');
+          bg.setAttribute('stroke', '#ff6600'); bg.setAttribute('stroke-width', '2');
+          bg.setAttribute('stroke-dasharray', '4,2');
+        } else if (cell.state === 'occupied' || cell.state === 'merged_origin' || cell.state === 'costored') {
+          bg.setAttribute('fill', hasSearch ? '#0a1628' : '#0f2847');
+          bg.setAttribute('stroke', hasSearch ? '#1e293b' : (categoryColors[cell.category] || '#475569'));
+          bg.setAttribute('stroke-width', hasSearch ? '1' : '2');
+        } else {
+          bg.setAttribute('fill', 'transparent');
+          bg.setAttribute('stroke', '#334155'); bg.setAttribute('stroke-width', '1');
+        }
+      } else {
+        // Browse mode styling
+        switch (cell.state) {
+          case 'empty':
+            bg.setAttribute('fill', 'transparent');
+            bg.setAttribute('stroke', '#334155'); bg.setAttribute('stroke-width', '1');
+            break;
+          case 'occupied':
+          case 'merged_origin':
+            bg.setAttribute('fill', '#0f2847');
+            bg.setAttribute('stroke', categoryColors[cell.category] || '#475569');
+            bg.setAttribute('stroke-width', '2');
+            break;
+          case 'costored':
+            bg.setAttribute('fill', '#0f2847');
+            bg.setAttribute('stroke', '#fbbf24'); bg.setAttribute('stroke-width', '2');
+            break;
+        }
+      }
+      g.appendChild(bg);
+
+      // Position label
+      const pos = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+      pos.setAttribute('x', x + 8); pos.setAttribute('y', y + 16);
+      if (currentMode === 'search') {
+        pos.setAttribute('fill', (isHit || isPicked || isFocused || isHovered) ? '#ff6600' : '#475569');
+      } else {
+        pos.setAttribute('fill', '#475569');
+      }
+      pos.setAttribute('font-size', '10'); pos.setAttribute('font-family', 'inherit');
+      pos.textContent = key; g.appendChild(pos);
+
+      // Item name
+      if (cell.item) {
+        const it = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+        it.setAttribute('x', x + 8); it.setAttribute('y', y + 38);
+        const maxC = cell.state === 'merged_origin' ? 28 : 12;
+        if (currentMode === 'search') {
+          const dim = hasSearch && !isHit && !isPicked && !isFocused && !isHovered;
+          it.setAttribute('fill', dim ? '#475569' : '#e2e8f0');
+        } else {
+          it.setAttribute('fill', '#e2e8f0');
+        }
+        it.setAttribute('font-size', '11'); it.setAttribute('font-weight', '500');
+        it.setAttribute('font-family', 'inherit');
+        it.textContent = cell.item.length > maxC ? cell.item.slice(0, maxC) + '...' : cell.item;
+        g.appendChild(it);
+      }
+
+      // Co-stored indicator (both modes)
+      if (cell.state === 'costored' && cell.items) {
+        const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+        line.setAttribute('x1', x + 14); line.setAttribute('y1', y + 55);
+        line.setAttribute('x2', x + cellW - 10); line.setAttribute('y2', y + 55);
+        line.setAttribute('stroke', '#fbbf24'); line.setAttribute('stroke-width', '0.5');
+        line.setAttribute('stroke-dasharray', '3,2');
+        g.appendChild(line);
+
+        const item2 = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+        item2.setAttribute('x', x + 14); item2.setAttribute('y', y + 70);
+        item2.setAttribute('fill', '#fbbf24'); item2.setAttribute('font-size', '10');
+        item2.setAttribute('font-family', 'inherit');
+        const name2 = cell.items[1];
+        item2.textContent = name2.length > 14 ? name2.slice(0, 14) + '...' : name2;
+        g.appendChild(item2);
+
+        const badge = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+        badge.setAttribute('x', x + cellW - 24); badge.setAttribute('y', y + 6);
+        badge.setAttribute('width', 18); badge.setAttribute('height', 16);
+        badge.setAttribute('rx', 4); badge.setAttribute('fill', '#422006');
+        g.appendChild(badge);
+        const badgeText = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+        badgeText.setAttribute('x', x + cellW - 15); badgeText.setAttribute('y', y + 18);
+        badgeText.setAttribute('text-anchor', 'middle'); badgeText.setAttribute('fill', '#fbbf24');
+        badgeText.setAttribute('font-size', '10'); badgeText.setAttribute('font-weight', '600');
+        badgeText.setAttribute('font-family', 'inherit');
+        badgeText.textContent = '2';
+        g.appendChild(badgeText);
+      }
+
+      // Pick number badge (search mode)
+      if (currentMode === 'search' && isPicked) {
+        const bs = 24;
+        const bx = x + cellW - bs - 4, by = y + 4;
+        const badge = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+        badge.setAttribute('x', bx); badge.setAttribute('y', by);
+        badge.setAttribute('width', bs); badge.setAttribute('height', bs);
+        badge.setAttribute('rx', bs / 2); badge.setAttribute('fill', '#ff6600');
+        g.appendChild(badge);
+        const bt = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+        bt.setAttribute('x', bx + bs / 2); bt.setAttribute('y', by + bs / 2 + 5);
+        bt.setAttribute('text-anchor', 'middle'); bt.setAttribute('fill', '#fff');
+        bt.setAttribute('font-size', '12'); bt.setAttribute('font-weight', '700');
+        bt.setAttribute('font-family', 'inherit');
+        bt.textContent = pickNum; g.appendChild(bt);
+      }
+
+      // Search hit dot (not picked)
+      if (currentMode === 'search' && isHit && !isPicked) {
+        const dot = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+        dot.setAttribute('cx', x + cellW - 12); dot.setAttribute('cy', y + 12);
+        dot.setAttribute('r', 5); dot.setAttribute('fill', '#ff6600'); dot.setAttribute('opacity', '0.8');
+        g.appendChild(dot);
+      }
+
+      // Disabled text
+      if (cell.state === 'disabled') {
+        const dt = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+        dt.setAttribute('x', x + cellW / 2); dt.setAttribute('y', y + CELL_H / 2 + 4);
+        dt.setAttribute('text-anchor', 'middle'); dt.setAttribute('fill', '#991b1b');
+        dt.setAttribute('font-size', '11'); dt.setAttribute('font-family', 'inherit');
+        dt.textContent = 'DISABLED'; g.appendChild(dt);
+      }
+
+      // Merged indicator
+      if (cell.state === 'merged_origin') {
+        const mergeLabel = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+        mergeLabel.setAttribute('x', x + cellW - 10); mergeLabel.setAttribute('y', y + 16);
+        mergeLabel.setAttribute('text-anchor', 'end'); mergeLabel.setAttribute('fill', '#475569');
+        mergeLabel.setAttribute('font-size', '9'); mergeLabel.setAttribute('font-family', 'inherit');
+        mergeLabel.textContent = key + '+' + cell.mergedWith[0];
+        g.appendChild(mergeLabel);
+      }
+
+      // Selection highlight (browse mode)
+      if (isSelected) {
+        const sel = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+        sel.setAttribute('x', x - 2); sel.setAttribute('y', y - 2);
+        sel.setAttribute('width', cellW + 4); sel.setAttribute('height', CELL_H + 4);
+        sel.setAttribute('rx', RADIUS + 2);
+        sel.setAttribute('fill', 'none');
+        sel.setAttribute('stroke', '#ff6600'); sel.setAttribute('stroke-width', '3');
+        g.appendChild(sel);
+      }
+
+      // Hover events
+      g.addEventListener('mouseenter', (e) => {
+        if (currentMode === 'browse') {
+          if (hoverMode === 'on') showTooltip(e, key, cell);
+          else if (hoverMode === 'delay') hoverTimer = setTimeout(() => showTooltip(e, key, cell), hoverDelay);
+        } else {
+          // Search mode: simple tooltip
+          showSearchTooltip(e, key, cell, isPicked, pickNum, isHit);
+        }
+      });
+      g.addEventListener('mousemove', (e) => {
+        moveTooltip(e);
+      });
+      g.addEventListener('mouseleave', () => {
+        if (hoverTimer) { clearTimeout(hoverTimer); hoverTimer = null; }
+        hideTooltip();
+      });
+
+      // Click handling
+      g.addEventListener('click', (e) => {
+        if (currentMode === 'browse') {
+          // Browse mode: select/deselect cells
+          if (e.ctrlKey || e.metaKey) {
+            if (selectedCells.has(key)) selectedCells.delete(key);
+            else selectedCells.add(key);
+          } else {
+            if (selectedCells.has(key) && selectedCells.size === 1) selectedCells.clear();
+            else { selectedCells.clear(); selectedCells.add(key); }
+          }
+          drawGrid();
+          updateDetailForSelection();
+        } else {
+          // Search mode: find matching item and focus it
+          const match = allItems.find(i => i.pos === key && i.module === currentGrid.module && i.level === currentGrid.level);
+          if (match) focusResult(match.id);
+        }
+      });
+
+      svg.appendChild(g);
+    }
+  }
+}
+
+// === TOOLTIP (browse mode) ===
+function showTooltip(e, key, cell) {
+  const tt = document.getElementById('tooltip');
+  document.getElementById('ttLabel').textContent = currentGrid.module + ' ' + currentGrid.level + ' / ' + key;
+
+  if (cell.state === 'empty') {
+    document.getElementById('ttItem').textContent = 'Empty';
+    document.getElementById('ttType').textContent = '';
+    document.getElementById('ttParams').textContent = '';
+    document.getElementById('ttCostored').textContent = '';
+  } else if (cell.state === 'disabled') {
+    document.getElementById('ttItem').textContent = 'Disabled';
+    document.getElementById('ttType').textContent = cell.reason || '';
+    document.getElementById('ttParams').textContent = '';
+    document.getElementById('ttCostored').textContent = '';
+  } else if (cell.state === 'costored') {
+    document.getElementById('ttItem').textContent = cell.items[0];
+    document.getElementById('ttType').textContent = 'Placed · Co-stored';
+    document.getElementById('ttParams').textContent = cell.params;
+    document.getElementById('ttCostored').textContent = '+ ' + cell.items[1] + '\n' + cell.reason;
+  } else {
+    document.getElementById('ttItem').textContent = cell.item;
+    document.getElementById('ttType').textContent = 'Placed';
+    document.getElementById('ttParams').textContent = cell.params || '';
+    document.getElementById('ttCostored').textContent = '';
+  }
+
+  tt.style.display = 'block';
+  moveTooltip(e);
+}
+
+function showSearchTooltip(e, key, cell, isPicked, pickNum, isHit) {
+  const tt = document.getElementById('tooltip');
+  document.getElementById('ttLabel').textContent = currentGrid.module + ' ' + currentGrid.level + ' / ' + key;
+  document.getElementById('ttItem').textContent = cell.item || (cell.state === 'disabled' ? 'Disabled' : 'Empty');
+  document.getElementById('ttType').textContent = isPicked ? 'Pick #' + pickNum : (isHit ? 'Search result' : '');
+  document.getElementById('ttParams').textContent = '';
+  document.getElementById('ttCostored').textContent = '';
+  tt.style.display = 'block';
+  moveTooltip(e);
+}
+
+function moveTooltip(e) {
+  const tt = document.getElementById('tooltip');
+  const pad = 12;
+  let x = e.clientX + pad;
+  let y = e.clientY + pad;
+  const rect = tt.getBoundingClientRect();
+  if (x + rect.width > window.innerWidth) x = e.clientX - rect.width - pad;
+  if (y + rect.height > window.innerHeight) y = e.clientY - rect.height - pad;
+  tt.style.left = x + 'px';
+  tt.style.top = y + 'px';
+}
+
+function hideTooltip() {
+  document.getElementById('tooltip').style.display = 'none';
+}
+
+function setHoverMode(mode) {
+  hoverMode = mode;
+  if (hoverTimer) { clearTimeout(hoverTimer); hoverTimer = null; }
+  hideTooltip();
+}
+
+// === BROWSE MODE: Detail panel ===
+function showDetail(key, cell) {
+  document.getElementById('detailTitle').textContent = currentGrid.module + ' ' + currentGrid.level + ' / ' + key;
+
+  let html = '';
+  let actions = '';
+
+  if (cell.state === 'empty') {
+    html = `<div class="detail-field"><div class="label">Status</div><div class="value">Empty — available for assignment</div></div>`;
+    actions = `
+      <button class="action-btn primary">Assign Item</button>
+      <button class="action-btn">Split</button>
+      <button class="action-btn">Disable</button>
+    `;
+  } else if (cell.state === 'disabled') {
+    html = `
+      <div class="detail-field"><div class="label">Status</div><div class="value" style="color:#ef4444">Disabled</div></div>
+      <div class="detail-field"><div class="label">Reason</div><div class="value">${cell.reason}</div></div>
+    `;
+    actions = `<button class="action-btn">Enable</button>`;
+  } else if (cell.state === 'costored') {
+    html = `
+      <div class="detail-field"><div class="label">Status</div><div class="value" style="color:#fbbf24">Co-stored (${cell.items.length} items)</div></div>
+      ${cell.items.map((item, i) => `<div class="detail-field"><div class="label">Item ${i+1}</div><div class="value">${item}</div></div>`).join('')}
+      <div class="detail-field"><div class="label">Parameters</div><div class="value">${cell.params}</div></div>
+      <div class="detail-field"><div class="label">Co-storability Reason</div><div class="value">${cell.reason}</div></div>
+    `;
+    actions = `
+      <button class="action-btn">Move</button>
+      <button class="action-btn">Unassign</button>
+    `;
+  } else {
+    html = `
+      <div class="detail-field"><div class="label">Item</div><div class="value">${cell.item}</div></div>
+      <div class="detail-field"><div class="label">Category</div><div class="value" style="color:${categoryColors[cell.category]}">${cell.category}</div></div>
+      <div class="detail-field"><div class="label">Parameters</div><div class="value">${cell.params}</div></div>
+      <div class="detail-field"><div class="label">Assignment</div><div class="value">Placed</div></div>
+      ${cell.state === 'merged_origin' ? `<div class="detail-field"><div class="label">Merged</div><div class="value">${key} + ${cell.mergedWith.join(', ')}</div></div>` : ''}
+    `;
+    actions = `
+      <button class="action-btn">Move</button>
+      <button class="action-btn">Split</button>
+      <button class="action-btn">Unassign</button>
+    `;
+    if (cell.state === 'merged_origin') {
+      actions += `<button class="action-btn">Unmerge</button>`;
+    }
+  }
+
+  if (cell.otherLocations && cell.otherLocations.length > 0) {
+    html += `
+      <div class="detail-field">
+        <div class="label">Also at</div>
+        <div class="value">
+          ${cell.otherLocations.map(loc => `<div style="margin-top:4px"><a href="#" class="also-at-link" onclick="event.preventDefault(); alert('Navigate to ${loc}')">${loc}</a></div>`).join('')}
+        </div>
+      </div>
+    `;
+  }
+
+  document.getElementById('detailContent').innerHTML = html;
+  document.getElementById('detailActions').innerHTML = actions;
+}
+
+function showLevelDetail() {
+  const mod = moduleData[selectedLevel.module];
+  if (!mod) return;
+  document.getElementById('detailTitle').textContent = `${mod.name} / ${mod.dimLabel} ${selectedLevel.level}`;
+  document.getElementById('detailContent').innerHTML = `
+    <div class="detail-field"><div class="label">Status</div><div class="value">Select a cell to view details</div></div>
+  `;
+  document.getElementById('detailActions').innerHTML = '';
+}
+
+function updateDetailForSelection() {
+  if (selectedCells.size === 0) {
+    showLevelDetail();
+    return;
+  }
+
+  const gridKey = currentGrid.module + ':' + currentGrid.level;
+  const cells = gridData[gridKey] || {};
+
+  if (selectedCells.size === 1) {
+    const key = [...selectedCells][0];
+    const cell = cells[key];
+    if (cell) showDetail(key, cell);
+    return;
+  }
+
+  // Multi-select
+  const keys = [...selectedCells].sort();
+  document.getElementById('detailTitle').textContent = `${keys.length} cells selected`;
+
+  const items = keys.map(k => {
+    const c = cells[k];
+    const label = c && c.item ? c.item : (c && c.state === 'empty' ? 'empty' : (c ? c.state : 'unknown'));
+    return `<div style="margin-top:2px">${k} — ${label}</div>`;
+  }).join('');
+
+  document.getElementById('detailContent').innerHTML = `
+    <div class="detail-field">
+      <div class="label">Selected</div>
+      <div class="value">${items}</div>
+    </div>
+  `;
+
+  const hasOccupied = keys.some(k => cells[k] && cells[k].state !== 'empty' && cells[k].state !== 'disabled');
+
+  let actions = '<div class="selection-count">' + keys.length + ' cells selected</div>';
+  actions += `<button class="action-btn" onclick="alert('Merge ${keys.join(' + ')}')">Merge</button>`;
+  if (hasOccupied) {
+    actions += `<button class="action-btn">Move All</button>`;
+    actions += `<button class="action-btn">Unassign All</button>`;
+  }
+
+  document.getElementById('detailActions').innerHTML = actions;
+}
+
+// === BROWSE MODE: Module bar & Level list ===
+function toggleModule(el, name) {
+  if (selectedModules.has(name)) {
+    if (selectedModules.size > 1) {
+      selectedModules.delete(name);
+      el.classList.remove('selected');
+    }
+  } else {
+    selectedModules.add(name);
+    el.classList.add('selected');
+  }
+  updateModulesLabel();
+  renderLevelList();
+}
+
+function toggleAllModules() {
+  const allKeys = Object.keys(moduleData);
+  const allSelected = allKeys.every(k => selectedModules.has(k));
+
+  if (allSelected) {
+    selectedModules.clear();
+    selectedModules.add(allKeys[0]);
+  } else {
+    allKeys.forEach(k => selectedModules.add(k));
+  }
+
+  document.querySelectorAll('.module-tab').forEach(tab => {
+    const name = tab.textContent;
+    const key = Object.keys(moduleData).find(k => moduleData[k].name === name);
+    tab.classList.toggle('selected', selectedModules.has(key));
+  });
+  updateModulesLabel();
+  renderLevelList();
+}
+
+function updateModulesLabel() {
+  const label = document.querySelector('.module-bar-label');
+  const allSelected = Object.keys(moduleData).every(k => selectedModules.has(k));
+  label.classList.toggle('all-selected', allSelected);
+}
+
+function renderLevelList() {
+  const container = document.getElementById('levelList');
+  container.innerHTML = '';
+
+  for (const modKey of selectedModules) {
+    const mod = moduleData[modKey];
+    if (!mod) continue;
+
+    const section = document.createElement('div');
+    section.className = 'module-section';
+
+    const header = document.createElement('div');
+    header.className = 'module-section-header';
+    header.innerHTML = `
+      <span>${mod.name} — ${mod.dimLabel}s</span>
+      <span class="header-actions">
+        <svg class="info-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/>
+        </svg>
+        <svg class="remove-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M18 6L6 18"/><path d="M6 6l12 12"/>
+        </svg>
+      </span>
+    `;
+    header.querySelector('.info-icon').addEventListener('click', (e) => {
+      e.stopPropagation();
+      showModuleDetail(modKey);
+    });
+    header.querySelector('.remove-icon').addEventListener('click', (e) => {
+      e.stopPropagation();
+      removeModuleFromList(modKey);
+    });
+    section.appendChild(header);
+
+    for (const level of mod.levels) {
+      const row = document.createElement('div');
+      row.className = 'level-row';
+      if (selectedLevel.module === modKey && selectedLevel.level === level.n) {
+        row.classList.add('selected');
+      }
+      row.innerHTML = `
+        <span>${mod.dimLabel} ${level.n}</span>
+        <span class="badge ${level.badgeClass}">${level.badge}</span>
+      `;
+      row.addEventListener('click', () => {
+        selectedLevel = { module: modKey, level: level.n };
+        currentGrid = { module: mod.name, level: level.n };
+        selectedCells.clear();
+        document.querySelectorAll('.level-row').forEach(r => r.classList.remove('selected'));
+        row.classList.add('selected');
+        document.getElementById('gridTitle').textContent = `${mod.name} / ${mod.dimLabel} ${level.n}`;
+        showProvisionalBanner(level);
+        showLevelDetail();
+        drawGrid();
+      });
+      section.appendChild(row);
+    }
+
+    container.appendChild(section);
+  }
+}
+
+function removeModuleFromList(modKey) {
+  if (selectedModules.size <= 1) return;
+  selectedModules.delete(modKey);
+  document.querySelectorAll('.module-tab').forEach(tab => {
+    if (tab.textContent === moduleData[modKey].name) tab.classList.remove('selected');
+  });
+  updateModulesLabel();
+  renderLevelList();
+}
+
+function showModuleDetail(modKey) {
+  const mod = moduleData[modKey];
+  document.getElementById('detailTitle').textContent = mod.name;
+
+  const totalLevels = mod.levels.length;
+  const emptyLevels = mod.levels.filter(l => l.badgeClass === '').length;
+  const provisionalLevels = mod.levels.filter(l => l.badgeClass === 'provisional').length;
+
+  document.getElementById('detailContent').innerHTML = `
+    <div class="detail-field"><div class="label">Module</div><div class="value">${mod.name}</div></div>
+    <div class="detail-field"><div class="label">Dimension</div><div class="value">${totalLevels} ${mod.dimLabel.toLowerCase()}s</div></div>
+    <div class="detail-field"><div class="label">Empty</div><div class="value">${emptyLevels} ${mod.dimLabel.toLowerCase()}s</div></div>
+    ${provisionalLevels ? `<div class="detail-field"><div class="label">Unplaced</div><div class="value"><span class="unplaced-link" onclick="highlightUnplacedLevels('${modKey}')">${provisionalLevels} ${mod.dimLabel.toLowerCase()}s with unplaced items</span></div></div>` : ''}
+  `;
+  document.getElementById('detailActions').innerHTML = `
+    <button class="action-btn">Rename</button>
+    <button class="action-btn">Add ${mod.dimLabel}</button>
+    <button class="action-btn">Edit</button>
+    <button class="action-btn danger">Delete</button>
+  `;
+}
+
+function showProvisionalBanner(level) {
+  const banner = document.getElementById('provisionalBanner');
+  const container = document.getElementById('provisionalItems');
+  if (level.unplaced && level.unplaced.length > 0) {
+    container.innerHTML = level.unplaced.map(item => `
+      <div class="prov-item">
+        <span>· ${item}</span>
+        <button class="place-btn" onclick="alert('Place mode: ${item}')">Place</button>
+      </div>
+    `).join('');
+    banner.style.display = 'block';
+  } else {
+    banner.style.display = 'none';
+  }
+}
+
+function highlightUnplacedLevels(modKey) {
+  const mod = moduleData[modKey];
+  if (!selectedModules.has(modKey)) {
+    selectedModules.add(modKey);
+    document.querySelectorAll('.module-tab').forEach(tab => {
+      if (tab.textContent === mod.name) tab.classList.add('selected');
+    });
+    updateModulesLabel();
+    renderLevelList();
+  }
+  document.querySelectorAll('.level-row .badge.provisional').forEach(badge => {
+    badge.style.transition = 'background 0.3s';
+    badge.style.background = '#b45309';
+    setTimeout(() => { badge.style.background = ''; }, 1200);
+  });
+}
+
+// === SEARCH MODE ===
+function doSearch(query) {
+  if (!query || query.length < 2) {
+    searchResults = [];
+    document.getElementById('searchCount').textContent = '';
+    renderResults();
+    drawGrid();
+    return;
+  }
+  const q = query.toLowerCase();
+  searchResults = allItems.filter(it =>
+    it.item.toLowerCase().includes(q) ||
+    it.params.toLowerCase().includes(q) ||
+    it.category.toLowerCase().includes(q)
+  );
+  document.getElementById('searchCount').textContent = searchResults.length + ' result' + (searchResults.length !== 1 ? 's' : '');
+  renderResults();
+  drawGrid();
+}
+
+function clearSearch() {
+  document.getElementById('searchInput').value = '';
+  searchResults = [];
+  focusedItemId = null;
+  document.getElementById('searchCount').textContent = '';
+  renderResults();
+  showSearchDefaultDetail();
+  drawGrid();
+  document.getElementById('searchInput').focus();
+}
+
+function highlightMatch(text, query) {
+  if (!query || query.length < 2) return text;
+  const idx = text.toLowerCase().indexOf(query.toLowerCase());
+  if (idx === -1) return text;
+  return text.slice(0, idx) + '<mark>' + text.slice(idx, idx + query.length) + '</mark>' + text.slice(idx + query.length);
+}
+
+function renderResults() {
+  const container = document.getElementById('resultsList');
+  const query = document.getElementById('searchInput').value;
+  if (searchResults.length === 0) {
+    container.innerHTML = query.length >= 2
+      ? '<div class="results-empty">No results for "' + query + '"</div>'
+      : '<div class="results-empty"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>Type to search across all modules</div>';
+    return;
+  }
+
+  const groups = {};
+  for (const r of searchResults) {
+    const key = r.module + ' / Level ' + r.level;
+    if (!groups[key]) groups[key] = [];
+    groups[key].push(r);
+  }
+
+  let html = '';
+  for (const [label, items] of Object.entries(groups)) {
+    html += `<div class="result-group"><div class="result-group-header">${label} (${items.length})</div>`;
+    for (const item of items) {
+      const picked = pickList.find(p => p.id === item.id);
+      const isFocused = focusedItemId === item.id;
+      html += `
+        <div class="result-row ${isFocused ? 'focused' : ''}" onclick="focusResult('${item.id}')" data-id="${item.id}"
+             onmouseenter="hoverResult('${item.id}')" onmouseleave="hoverResult(null)">
+          <div class="result-cat" style="background: ${categoryColors[item.category] || '#475569'}"></div>
+          <div class="result-info">
+            <div class="result-name">${highlightMatch(item.item, query)}</div>
+            <div class="result-location">${item.module}:${item.level}:${item.pos}</div>
+          </div>
+          <button class="pick-btn ${picked ? 'picked' : ''}" onclick="event.stopPropagation(); addToPick('${item.id}')" title="Add to pick list${picked ? ' (qty: ' + picked.qty + ')' : ''}">
+            ${picked ? picked.qty : '+'}
+          </button>
+        </div>`;
+    }
+    html += '</div>';
+  }
+  container.innerHTML = html;
+}
+
+function showSearchDefaultDetail() {
+  document.getElementById('detailTitle').textContent = 'Search';
+  document.getElementById('detailContent').innerHTML = `
+    <div class="detail-field">
+      <div class="label">Tip</div>
+      <div class="value">Click a result or grid cell to inspect. Use + to add items to your pick list.</div>
+    </div>
+  `;
+  document.getElementById('detailActions').innerHTML = '';
+}
+
+function focusResult(id) {
+  focusedItemId = id;
+  const item = allItems.find(i => i.id === id);
+  if (!item) return;
+
+  if (currentGrid.module !== item.module || currentGrid.level !== item.level) {
+    currentGrid = { module: item.module, level: item.level };
+    document.getElementById('gridTitle').textContent = `${item.module} / Level ${item.level}`;
+  }
+
+  // Update detail panel with search-specific actions
+  document.getElementById('detailTitle').textContent = item.item;
+  const isPicked = pickList.some(p => p.id === id);
+  document.getElementById('detailContent').innerHTML = `
+    <div class="detail-field"><div class="label">Location</div><div class="value">${item.module}:${item.level}:${item.pos}</div></div>
+    <div class="detail-field"><div class="label">Category</div><div class="value" style="color:${categoryColors[item.category]}">${item.category}</div></div>
+    <div class="detail-field"><div class="label">Parameters</div><div class="value">${item.params}</div></div>
+  `;
+  document.getElementById('detailActions').innerHTML = `
+    <button class="action-btn primary" onclick="addToPick('${item.id}')">
+      ${isPicked ? 'Add Another' : 'Add to Pick List'}
+    </button>
+  `;
+
+  renderResults();
+  renderPickList();
+  drawGrid();
+}
+
+function hoverResult(id) {
+  hoveredResultId = id;
+  drawGrid();
+}
+
+// === PICK LIST ===
+function addToPick(id) {
+  const existing = pickList.find(p => p.id === id);
+  if (existing) {
+    existing.qty++;
+  } else {
+    const item = allItems.find(i => i.id === id);
+    if (item) pickList.push({ ...item, qty: 1 });
+    sortPickList();
+  }
+  refreshSearchAll();
+}
+
+function removeFromPick(id) {
+  const idx = pickList.findIndex(p => p.id === id);
+  if (idx < 0) return;
+  lastRemoved = { ...pickList[idx], insertIdx: idx };
+  pickList.splice(idx, 1);
+  showUndoToast(lastRemoved.item);
+  refreshSearchAll();
+}
+
+function showUndoToast(itemName) {
+  const toast = document.getElementById('undoToast');
+  document.getElementById('undoMsg').textContent = 'Removed ' + (itemName.length > 24 ? itemName.slice(0, 24) + '...' : itemName);
+  toast.classList.add('visible');
+  if (undoTimer) clearTimeout(undoTimer);
+  undoTimer = setTimeout(() => {
+    toast.classList.remove('visible');
+    lastRemoved = null;
+  }, 4000);
+}
+
+function undoRemove() {
+  if (!lastRemoved) return;
+  const idx = Math.min(lastRemoved.insertIdx, pickList.length);
+  const { insertIdx, ...item } = lastRemoved;
+  pickList.splice(idx, 0, item);
+  lastRemoved = null;
+  document.getElementById('undoToast').classList.remove('visible');
+  if (undoTimer) clearTimeout(undoTimer);
+  refreshSearchAll();
+}
+
+function clearPickList() {
+  if (pickList.length > 0) {
+    lastClearedList = pickList.map(p => ({ ...p }));
+    pickList = [];
+  }
+  refreshSearchAll();
+}
+
+function restorePickList() {
+  if (!lastClearedList) return;
+  pickList = lastClearedList;
+  lastClearedList = null;
+  refreshSearchAll();
+}
+
+function sortPickList() {
+  pickList.sort((a, b) => {
+    if (a.module !== b.module) return a.module.localeCompare(b.module);
+    if (a.level !== b.level) return a.level - b.level;
+    return a.pos.localeCompare(b.pos);
+  });
+}
+
+function renderPickList() {
+  const container = document.getElementById('pickListBody');
+  const countEl = document.getElementById('pickListCount');
+  const actionsEl = document.getElementById('pickActions');
+
+  const totalQty = pickList.reduce((sum, p) => sum + p.qty, 0);
+  countEl.textContent = pickList.length + ' item' + (pickList.length !== 1 ? 's' : '') + (totalQty > pickList.length ? ' (' + totalQty + ' total)' : '');
+
+  if (pickList.length === 0) {
+    container.innerHTML = '<div style="font-size:12px;color:#475569;padding:8px 0">No items yet — use + on search results</div>';
+    if (lastClearedList) {
+      actionsEl.style.display = 'flex';
+      actionsEl.innerHTML = '<button class="btn-secondary" onclick="restorePickList()">Restore</button>';
+    } else {
+      actionsEl.style.display = 'none';
+    }
+    return;
+  }
+  actionsEl.style.display = 'flex';
+  actionsEl.innerHTML = '<button class="btn-secondary" onclick="clearPickList()">Clear</button>';
+
+  const groups = [];
+  let lastKey = '';
+  for (let i = 0; i < pickList.length; i++) {
+    const p = pickList[i];
+    const key = p.module + ':' + p.level;
+    if (key !== lastKey) {
+      groups.push({ label: p.module + ' / Level ' + p.level, module: p.module, level: p.level, items: [] });
+      lastKey = key;
+    }
+    groups[groups.length - 1].items.push({ ...p, globalIndex: i + 1 });
+  }
+
+  let html = '';
+  for (const group of groups) {
+    html += `<div class="pick-group">`;
+    html += `<div class="pick-group-header">${group.label}</div>`;
+    for (const item of group.items) {
+      const isActive = focusedItemId === item.id;
+      html += `
+        <div class="pick-item ${isActive ? 'active' : ''}" onclick="pickItemClick('${item.id}')">
+          <div class="pick-num">${item.globalIndex}</div>
+          <div class="pick-item-info">
+            <div class="pick-item-name">${item.item}</div>
+            <div class="pick-item-loc">${item.pos}</div>
+          </div>
+          ${item.qty > 1 ? `<span class="pick-qty">x${item.qty}</span>` : ''}
+          <button class="pick-remove" onclick="event.stopPropagation(); removeFromPick('${item.id}')">x</button>
+        </div>`;
+    }
+    html += '</div>';
+  }
+  container.innerHTML = html;
+}
+
+function pickItemClick(id) {
+  const item = pickList.find(p => p.id === id);
+  if (!item) return;
+
+  focusedItemId = id;
+
+  if (currentGrid.module !== item.module || currentGrid.level !== item.level) {
+    currentGrid = { module: item.module, level: item.level };
+    document.getElementById('gridTitle').textContent = `${item.module} / Level ${item.level}`;
+  }
+
+  document.getElementById('detailTitle').textContent = item.item;
+  document.getElementById('detailContent').innerHTML = `
+    <div class="detail-field"><div class="label">Location</div><div class="value">${item.module}:${item.level}:${item.pos}</div></div>
+    <div class="detail-field"><div class="label">Category</div><div class="value" style="color:${categoryColors[item.category]}">${item.category}</div></div>
+    <div class="detail-field"><div class="label">Parameters</div><div class="value">${item.params}</div></div>
+  `;
+  document.getElementById('detailActions').innerHTML = '';
+
+  renderPickList();
+  renderResults();
+  drawGrid();
+}
+
+function refreshSearchAll() {
+  renderPickList();
+  renderResults();
+  drawGrid();
+  if (focusedItemId) {
+    const item = allItems.find(i => i.id === focusedItemId);
+    if (item) {
+      const isPicked = pickList.some(p => p.id === focusedItemId);
+      document.getElementById('detailContent').innerHTML = `
+        <div class="detail-field"><div class="label">Location</div><div class="value">${item.module}:${item.level}:${item.pos}</div></div>
+        <div class="detail-field"><div class="label">Category</div><div class="value" style="color:${categoryColors[item.category]}">${item.category}</div></div>
+        <div class="detail-field"><div class="label">Parameters</div><div class="value">${item.params}</div></div>
+      `;
+      document.getElementById('detailActions').innerHTML = `
+        <button class="action-btn primary" onclick="addToPick('${item.id}')">
+          ${isPicked ? 'Add Another' : 'Add to Pick List'}
+        </button>
+      `;
+    }
+  }
+}
+
+// === INIT ===
+document.getElementById('searchInput').addEventListener('input', (e) => doSearch(e.target.value));
+
+// Start in browse mode
+drawGrid();
+renderLevelList();
+</script>
+</body>
+</html>
