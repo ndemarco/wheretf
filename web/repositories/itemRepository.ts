@@ -1,18 +1,25 @@
 import { eq, or, and, ilike } from "drizzle-orm";
 import { db } from "@/db/connection";
-import { items, coStorability } from "@/db/schema";
+import {
+  items,
+  coStorability,
+  itemCategories,
+  itemAspects,
+  itemParameterValues,
+  aspectParameters,
+  parameterDefinitions,
+  categories,
+} from "@/db/schema";
 import { transactionRepository } from "./transactionRepository";
 
 export const itemRepository = {
   async create({
     name,
     description,
-    parameters,
     metadata,
   }: {
     name: string;
     description?: string;
-    parameters?: { key: string; value: string; unit?: string }[];
     metadata?: Record<string, unknown>;
   }) {
     const [item] = await db
@@ -20,7 +27,6 @@ export const itemRepository = {
       .values({
         name,
         description,
-        parameters,
         metadata,
       })
       .returning();
@@ -76,7 +82,6 @@ export const itemRepository = {
     id: string;
     name?: string;
     description?: string;
-    parameters?: { key: string; value: string; unit?: string }[];
     metadata?: Record<string, unknown>;
   }) {
     const before = await itemRepository.findById({ id });
@@ -200,5 +205,256 @@ export const itemRepository = {
     );
 
     return results.filter((item) => item !== null);
+  },
+
+  // --- Category management ---
+
+  async addCategory({
+    itemId,
+    categoryId,
+    isPrimary,
+  }: {
+    itemId: string;
+    categoryId: string;
+    isPrimary?: boolean;
+  }) {
+    const item = await itemRepository.findById({ id: itemId });
+    if (!item) throw new Error(`Item ${itemId} not found`);
+
+    // If setting as primary, unset any existing primary
+    if (isPrimary) {
+      await db
+        .update(itemCategories)
+        .set({ isPrimary: false })
+        .where(
+          and(
+            eq(itemCategories.itemId, itemId),
+            eq(itemCategories.isPrimary, true)
+          )
+        );
+    }
+
+    const [ic] = await db
+      .insert(itemCategories)
+      .values({ itemId, categoryId, isPrimary: isPrimary ?? false })
+      .returning();
+
+    return ic;
+  },
+
+  async removeCategory({
+    itemId,
+    categoryId,
+  }: {
+    itemId: string;
+    categoryId: string;
+  }) {
+    const [deleted] = await db
+      .delete(itemCategories)
+      .where(
+        and(
+          eq(itemCategories.itemId, itemId),
+          eq(itemCategories.categoryId, categoryId)
+        )
+      )
+      .returning();
+
+    if (!deleted) {
+      throw new Error(`Category ${categoryId} not on item ${itemId}`);
+    }
+  },
+
+  async setPrimaryCategory({
+    itemId,
+    categoryId,
+  }: {
+    itemId: string;
+    categoryId: string;
+  }) {
+    // Unset all primaries for this item
+    await db
+      .update(itemCategories)
+      .set({ isPrimary: false })
+      .where(eq(itemCategories.itemId, itemId));
+
+    // Set the specified one as primary
+    const [updated] = await db
+      .update(itemCategories)
+      .set({ isPrimary: true })
+      .where(
+        and(
+          eq(itemCategories.itemId, itemId),
+          eq(itemCategories.categoryId, categoryId)
+        )
+      )
+      .returning();
+
+    if (!updated) {
+      throw new Error(`Category ${categoryId} not on item ${itemId}`);
+    }
+
+    return updated;
+  },
+
+  async getCategories({ itemId }: { itemId: string }) {
+    return db
+      .select({
+        categoryId: itemCategories.categoryId,
+        isPrimary: itemCategories.isPrimary,
+        name: categories.name,
+        icon: categories.icon,
+        color: categories.color,
+      })
+      .from(itemCategories)
+      .innerJoin(categories, eq(itemCategories.categoryId, categories.id))
+      .where(eq(itemCategories.itemId, itemId));
+  },
+
+  // --- Aspect management ---
+
+  async applyAspect({
+    itemId,
+    aspectId,
+  }: {
+    itemId: string;
+    aspectId: string;
+  }) {
+    const item = await itemRepository.findById({ id: itemId });
+    if (!item) throw new Error(`Item ${itemId} not found`);
+
+    // Create the item-aspect link
+    const [ia] = await db
+      .insert(itemAspects)
+      .values({ itemId, aspectId })
+      .returning();
+
+    // Get the aspect's parameter definitions and create value slots
+    const aspectParams = await db
+      .select()
+      .from(aspectParameters)
+      .where(eq(aspectParameters.aspectId, aspectId));
+
+    for (const ap of aspectParams) {
+      // Get the parameter definition for its global default
+      const [pd] = await db
+        .select()
+        .from(parameterDefinitions)
+        .where(eq(parameterDefinitions.id, ap.parameterDefinitionId));
+
+      // Aspect-level default wins over parameter-level default
+      const defaultVal = ap.defaultValue ?? pd?.defaultValue ?? null;
+
+      await db.insert(itemParameterValues).values({
+        itemId,
+        parameterDefinitionId: ap.parameterDefinitionId,
+        itemAspectId: ia.id,
+        value: defaultVal,
+      });
+    }
+
+    return ia;
+  },
+
+  async removeAspect({
+    itemId,
+    aspectId,
+  }: {
+    itemId: string;
+    aspectId: string;
+  }) {
+    // cascade deletes item_parameter_values linked to this item_aspect
+    const [deleted] = await db
+      .delete(itemAspects)
+      .where(
+        and(eq(itemAspects.itemId, itemId), eq(itemAspects.aspectId, aspectId))
+      )
+      .returning();
+
+    if (!deleted) {
+      throw new Error(`Aspect ${aspectId} not applied to item ${itemId}`);
+    }
+  },
+
+  async getAspects({ itemId }: { itemId: string }) {
+    const rows = await db
+      .select()
+      .from(itemAspects)
+      .where(eq(itemAspects.itemId, itemId));
+    return rows;
+  },
+
+  // --- Parameter value management ---
+
+  async setParameterValue({
+    itemId,
+    parameterDefinitionId,
+    itemAspectId,
+    value,
+  }: {
+    itemId: string;
+    parameterDefinitionId: string;
+    itemAspectId?: string | null;
+    value: unknown;
+  }) {
+    // Try to update existing
+    const existing = await db
+      .select()
+      .from(itemParameterValues)
+      .where(
+        and(
+          eq(itemParameterValues.itemId, itemId),
+          eq(
+            itemParameterValues.parameterDefinitionId,
+            parameterDefinitionId
+          ),
+          itemAspectId
+            ? eq(itemParameterValues.itemAspectId, itemAspectId)
+            : undefined
+        )
+      );
+
+    if (existing.length > 0) {
+      const [updated] = await db
+        .update(itemParameterValues)
+        .set({ value, updatedAt: new Date() })
+        .where(eq(itemParameterValues.id, existing[0].id))
+        .returning();
+      return updated;
+    }
+
+    // Create new (standalone parameter or ad-hoc)
+    const [created] = await db
+      .insert(itemParameterValues)
+      .values({
+        itemId,
+        parameterDefinitionId,
+        itemAspectId: itemAspectId ?? null,
+        value,
+      })
+      .returning();
+
+    return created;
+  },
+
+  async getParameterValues({ itemId }: { itemId: string }) {
+    return db
+      .select({
+        id: itemParameterValues.id,
+        parameterDefinitionId: itemParameterValues.parameterDefinitionId,
+        itemAspectId: itemParameterValues.itemAspectId,
+        value: itemParameterValues.value,
+        parameterName: parameterDefinitions.name,
+        dataType: parameterDefinitions.dataType,
+        unit: parameterDefinitions.unit,
+      })
+      .from(itemParameterValues)
+      .innerJoin(
+        parameterDefinitions,
+        eq(
+          itemParameterValues.parameterDefinitionId,
+          parameterDefinitions.id
+        )
+      )
+      .where(eq(itemParameterValues.itemId, itemId));
   },
 };

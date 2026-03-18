@@ -8,6 +8,20 @@
       "when": 1773779269132,
       "tag": "0000_bent_star_brand",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1773854021169,
+      "tag": "0001_loud_scorpion",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1773860440340,
+      "tag": "0002_furry_quicksilver",
+      "breakpoints": true
     }
   ]
 }

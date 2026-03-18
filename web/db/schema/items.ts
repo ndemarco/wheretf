@@ -12,7 +12,6 @@ export const items = pgTable("items", {
   id: uuid("id").primaryKey().defaultRandom(),
   name: text("name").notNull(),
   description: text("description"),
-  parameters: jsonb("parameters"), // array of { key, value, unit? } triples
   metadata: jsonb("metadata"), // images, datasheets, notes — no prescribed shape
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),

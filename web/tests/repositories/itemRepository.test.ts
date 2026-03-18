@@ -14,24 +14,6 @@ describe("itemRepository", () => {
       expect(item.description).toBe("Stainless steel, DIN 912");
     });
 
-    it("creates an item with parameters", async () => {
-      const item = await itemRepository.create({
-        name: "Resistor",
-        parameters: [
-          { key: "resistance", value: "10k", unit: "ohm" },
-          { key: "tolerance", value: "5", unit: "%" },
-          { key: "package", value: "0805" },
-        ],
-      });
-
-      const found = await itemRepository.findById({ id: item.id });
-      expect(found?.parameters).toEqual([
-        { key: "resistance", value: "10k", unit: "ohm" },
-        { key: "tolerance", value: "5", unit: "%" },
-        { key: "package", value: "0805" },
-      ]);
-    });
-
     it("stores metadata as JSON", async () => {
       const item = await itemRepository.create({
         name: "LED",
@@ -163,22 +145,6 @@ describe("itemRepository", () => {
 
       expect(updated.description).toBe("Updated description");
       expect(updated.name).toBe("Screw"); // unchanged
-    });
-
-    it("updates parameters", async () => {
-      const created = await itemRepository.create({
-        name: "Resistor",
-        parameters: [{ key: "resistance", value: "10k", unit: "ohm" }],
-      });
-
-      const updated = await itemRepository.update({
-        id: created.id,
-        parameters: [{ key: "resistance", value: "4.7k", unit: "ohm" }],
-      });
-
-      expect(updated.parameters).toEqual([
-        { key: "resistance", value: "4.7k", unit: "ohm" },
-      ]);
     });
 
     it("logs a transaction with before and after state", async () => {
