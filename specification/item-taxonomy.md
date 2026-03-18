@@ -10,6 +10,8 @@ Hierarchical classification forces a dimension choice. Filing bank statements by
 
 Categories are useful for quick human scanning but fail at boundaries — a spork is neither spoon nor fork, an LED is both optical and electronic. Categories in WhereTF are lightweight visual tags, not structural classification. The real identity of an item is its parameters.
 
+Wrong is better than empty. Approximate categorization reduces large set scan cost but may introduce errors.
+
 ---
 
 ## Category
@@ -19,162 +21,121 @@ A broad, human-readable label used for visual grouping. Categories drive grid ti
 - An item can have zero or more categories.
 - One category may be marked primary. The primary category drives the visual representation on grid tiles.
 - If no primary is set, no icon is shown. The cell still displays the item name.
-- Categories are a fixed system list, broad and shallow — roughly 10-20 entries. Users do not create categories.
-- Categories do not affect search ranking or storage. They are purely a display aid.
-- Wrong is better than empty. Approximate categorization still serves the scan purpose.
+- Categories are a fixed system list and should be broad and shallow. Regular users do not create categories.
+- Categories are filterable in search but are not the primary search mechanism. The parametric data drives search; categories provide a quick narrowing filter.
 
 ---
 
 ## Parameter
 
-A single observable property of an item, expressed as a key/value pair with optional unit.
+A named property with a typed value. Parameters are the atomic unit of item description.
 
 Examples:
 - Length: 14 mm
 - Color: red
 - Voltage rating: 50 V
-- Thread direction: right
+- Thread direction: right (enum)
+- RoHS compliant: true (boolean)
 
 ### Parameter Definition
 
-A parameter definition prescribes the key name, data type, unit (if applicable), and constraints. Definitions are system-managed and reusable across items and classes.
+A parameter definition prescribes the key name, data type, unit (if applicable), and constraints. Definitions are system-managed and reusable across items and aspects.
 
-A parameter definition specifies:
 - Name — the key (e.g., "Thread diameter", "Length", "Drive size")
 - Data type — numeric, text, boolean, enum (pick from a list)
-- Unit — optional, declares the measurement domain (mm, inches, volts, ohms). When a unit is declared, the parameter value is numeric and unit-aware.
+- Unit — optional, declares the measurement domain (mm, inches, volts, ohms). When a unit is declared, the parameter value is numeric and unit-aware. Entry in non-native units is supported with autoconversion (consistent with the storage model's unit handling).
+- Default value — optional. Pre-filled when the parameter is added to an item via an aspect. The user can accept or change it. No inheritance, no update propagation — just a starting value.
 - Constraints — optional restrictions on valid values:
   - Enum values — a fixed list of valid options (e.g., Drive style: Phillips, Torx, Hex, Slotted)
   - Numeric range — min/max bounds (e.g., Thread pitch: min 0.2, max 6.0)
-  - Required vs. optional — whether the parameter must have a value when the class is applied
-
-Parameter definitions enable:
-- Validated data entry — the system knows what values are acceptable
-- Numeric range search — "show me all resistors between 1kΩ and 100kΩ"
-- Unit-aware comparison — the system understands that 25.4 mm = 1 inch
-- Consistent bulk edit — the system can offer valid replacement values
+  - Required vs. optional — whether the parameter must have a value when the aspect is applied. Required means the system flags it as incomplete, not that it blocks saving.
 
 ---
 
-## Class
+## Aspect
 
-A class is a reusable group of parameter definitions that describe one aspect of an item. Classes are the core normalization mechanism — they prescribe what parameters an item should have, ensuring consistent description across similar items.
+An aspect is a reusable group of parameter definitions that describes one facet of an item. Aspects are the core normalization mechanism — they prescribe what parameters an item should have, ensuring consistent description across similar items.
 
-A class defines:
-- Name — what aspect it describes (e.g., "Thread", "Drive", "Head", "Package", "Material")
-- Parameter definitions — the set of parameters belonging to this class, each marked required or optional
-- Description — what this class represents physically
+(The Charm/Odoo addon called this concept a "class." We use "aspect" to avoid collision with inventory management and programming terminology.)
 
-Classes do not carry values. They define structure. Values are supplied when a class is applied to an item.
+An aspect defines:
+- Name — what facet it describes (e.g., "Thread", "Drive", "Head", "Package", "Material")
+- Parameter definitions — the set of parameters belonging to this aspect, each with its data type, default value, and required/optional flag
+- Description — what this aspect represents physically
 
-### Class Application
+Aspects do not carry instance values. They define structure and defaults. Values are supplied when an aspect is applied to an item.
 
-An item gains parameters by applying one or more classes. Each application is called a class assignment. A class assignment consists of:
-- The class being applied
-- A role (optional) — distinguishes multiple applications of the same class on one item
-- Parameter values — the actual values for each parameter defined by the class
+### Applying Aspects
 
-The role is critical for items that have the same aspect more than once.
+An item gains parameters by applying one or more aspects. Each application copies the aspect's parameter definitions (with defaults) onto the item. The user fills in or adjusts the values.
 
-### Composition Examples
+Multiple applications of the same aspect on one item (e.g., two Thread aspects on a pipe nipple) require a role to distinguish them. Role handling is deferred — the concept is noted here; the mechanism will be specified when pipe fittings and similar multi-aspect items are actively modeled.
 
-A cap or plug has one threaded connection:
-- Class: Thread (no role needed — only one)
-  - Thread system: NPT
-  - Thread size: 1/2"
-  - Thread direction: right
+### Composition Example
 
-A standard nipple has two equivalent threaded connections:
-- Class: Thread, role: "end A"
-  - Thread system: NPT
-  - Thread size: 3/4"
-  - Thread direction: right
-- Class: Thread, role: "end B"
-  - (same values as end A)
-
-A reducing nipple has two different threaded connections:
-- Class: Thread, role: "large end"
-  - Thread system: NPT
-  - Thread size: 3/4"
-  - Thread direction: right
-- Class: Thread, role: "small end"
-  - Thread system: NPT
-  - Thread size: 1/2"
-  - Thread direction: right
-
-A machine screw composes multiple classes:
-- Class: Thread
+A machine screw:
+- Aspect: Thread
   - Thread system: metric
   - Thread diameter: M3
-  - Thread pitch: 0.5
-  - Thread direction: right
-- Class: Drive
+  - Thread pitch: 0.5 (default: standard for M3)
+  - Thread direction: right (default)
+- Aspect: Drive
   - Drive style: hex
   - Drive size: 2.5 mm
-- Class: Head
+- Aspect: Head
   - Head group: cylindrical
   - Head name: socket head cap
-- Class: Material
+- Aspect: Material
   - Material type: 18-8 stainless steel
   - Finish: black oxide
-  - Tensile strength: 70,000 PSI
-- Parameter: Length — 10 mm (standalone, not part of a class)
+- Length: 10 mm (standalone parameter, not part of any aspect)
 
-An SMD resistor composes differently:
-- Class: Electrical
+An SMD resistor:
+- Aspect: Electrical
   - Resistance: 10 kΩ
   - Tolerance: ±1%
   - Power rating: 0.125 W
-  - Temperature coefficient: 100 ppm/°C
-- Class: Package
+- Aspect: Package
   - Package type: SMD
   - Package code: 0805
-  - Dimensions: 2.0 × 1.25 mm
 
 ### Standalone Parameters
 
-Not every parameter belongs to a class. An item can have parameters that exist outside any class assignment. Length on a fastener is a standalone parameter — it doesn't group naturally with thread, drive, head, or material. It's a property of the whole item, not of one aspect.
+Not every parameter belongs to an aspect. Some parameters are properties of the whole item, not of one facet — like Length on a fastener, which is the item-level dimension that typically varies across a product family.
 
-### Classes Are Suggestions, Not Constraints
+### Aspects Are Suggestions, Not Constraints
 
-Classes prescribe what parameters should exist, but the system does not block an item that is missing parameters or has extra ones. An item can:
-- Have a class applied with some parameters left blank (incomplete but valid)
-- Have parameters that don't belong to any applied class (ad-hoc description)
-- Have no classes at all (fully ad-hoc, just loose parameters)
+Aspects prescribe what parameters should exist, but the system does not block an item that is missing parameters or has extra ones. An item can:
+- Have an aspect applied with some parameters left blank (incomplete but valid — flagged, not blocked)
+- Have parameters that don't belong to any applied aspect (ad-hoc description)
+- Have no aspects at all (fully ad-hoc, just loose parameters)
 
-This keeps the system from blocking the user. Get items in fast, refine later.
-
----
-
-## Matrix Expansion
-
-Classes and parameter definitions enable efficient creation of item families. A family is a set of items that share all parameters except one or more that vary.
-
-Flow:
-1. User creates one item fully (e.g., M3x10 SHCS with all classes and parameters filled in).
-2. User chooses "Expand" — selects a parameter to vary (e.g., Length).
-3. User enters the set of values (5, 6, 8, 10, 12, 14, 16, 20 mm).
-4. System generates new items for each value, inheriting all other parameters.
-5. User can expand again on another parameter (e.g., Finish: black oxide, bright zinc) — system multiplies across the matrix.
-
-The result is a set of individually addressable items that share a parameter signature. The system can derive "these are related" by detecting shared class assignments with matching values on all but the varied parameters. No explicit family entity is needed.
+Get items in fast, refine later.
 
 ---
 
-## Search Implications
+## Item Families and Matrix Expansion
 
-The parametric system enables multi-axis search without hierarchy:
-- "M3 socket head" — matches items with Thread diameter=M3 and Head name=socket head cap
-- "NPT 3/4" — matches items with Thread system=NPT and Thread size=3/4"
-- "0805 resistor under 100kΩ" — matches Package code=0805 and Resistance < 100kΩ
-- "stainless steel fasteners" — matches Material type containing "stainless" and category=fastener
+Deferred. Items that share parameters across a product family (e.g., M3 SHCS in lengths 5, 6, 8, 10, 12, 14, 16, 20) need a creation and management mechanism. Whether this is an explicit family entity or derived from shared parameter signatures — and how shared-parameter edits propagate — requires further design.
 
-Search operates on parameters, not categories or class names. Classes structure the data; search queries it.
+The parametric system and aspects defined here are the foundation for whatever family mechanism is chosen.
+
+---
+
+## Search
+
+Search is AI-driven. Users describe what they're looking for in natural language; the system interprets the query against the parametric data.
+
+The structure defined in this document — typed parameters, unit-aware values, aspects grouping related parameters — is what makes AI search effective. Without consistent, structured data, search degrades to fuzzy text matching. With it, the AI can resolve "M3 socket head" to Thread diameter=M3 + Head name=socket head cap, and "0805 resistor under 100kΩ" to Package code=0805 + Resistance < 100kΩ.
+
+Categories provide an additional narrowing filter but are not the primary search axis.
+
+Search design is specified separately.
 
 ---
 
 ## Relationship to Odoo/ERP
 
-Odoo requires every product to belong to exactly one category. When items sync to Odoo, WhereTF maps the primary category (or derives one from class assignments) to Odoo's single-category requirement. The parametric richness stays in WhereTF; Odoo gets the simplified view it needs.
+Odoo requires every product to belong to exactly one category. When items sync to Odoo, WhereTF maps the primary category (or derives one from applied aspects) to Odoo's single-category requirement. The parametric richness stays in WhereTF; Odoo gets the simplified view it needs.
 
-Class assignments and parameter values can map to Odoo product attributes and variants, enabling round-trip sync without losing structure.
+Integration details are specified separately.
