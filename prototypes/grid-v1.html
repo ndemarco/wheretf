@@ -305,6 +305,8 @@
   .detail-actions .action-btn.danger { background: #7f1d1d; color: #fca5a5; border-color: #991b1b; }
   .detail-actions .action-btn.danger:hover { background: #991b1b; }
   .detail-actions .selection-count { font-size: 11px; color: #64748b; width: 100%; margin-bottom: 4px; }
+  .also-at-link { color: #ff6600; text-decoration: none; font-size: 12px; }
+  .also-at-link:hover { text-decoration: underline; color: #fbbf24; }
 
   /* Provisional banner */
   .provisional-banner {
@@ -474,7 +476,7 @@ const colLabels = ['1', '2', '3', '4', '5', '6'];
 
 // Cell data: each cell has a state and optional item info
 const cells = {
-  'A1': { state: 'occupied', item: '10kΩ 0805 Resistor', category: 'passive', params: 'R=10kΩ, Size=0805, Tol=±5%' },
+  'A1': { state: 'occupied', item: '10kΩ 0805 Resistor', category: 'passive', params: 'R=10kΩ, Size=0805, Tol=±5%', otherLocations: ['NEON 2 / A3', 'ALEX 5 / C1'] },
   'A2': { state: 'occupied', item: '4.7kΩ 0805 Resistor', category: 'passive', params: 'R=4.7kΩ, Size=0805, Tol=±1%' },
   'A3': { state: 'occupied', item: '100nF 0805 Capacitor', category: 'passive', params: 'C=100nF, Size=0805, V=50V' },
   'A4': { state: 'empty' },
@@ -494,7 +496,7 @@ const cells = {
   'C6': { state: 'search', item: 'M4x20 BHCS', category: 'fastener', params: 'Thread=M4, L=20mm, Drive=Hex', resultNum: 2 },
   'D1': { state: 'empty' },
   'D2': { state: 'empty' },
-  'D3': { state: 'occupied', item: 'Dupont Jumper Wires', category: 'wire', params: 'Type=M-F, L=200mm' },
+  'D3': { state: 'occupied', item: 'Dupont Jumper Wires', category: 'wire', params: 'Type=M-F, L=200mm', otherLocations: ['ALEX 1 / B2'] },
   'D4': { state: 'empty' },
   'D5': { state: 'occupied', item: 'Heat Shrink Assortment', category: 'consumable', params: 'Sizes=1.5-10mm, Colors=Mixed' },
   'D6': { state: 'empty' },
@@ -758,18 +760,6 @@ function drawGrid() {
         g.appendChild(mergeLabel);
       }
 
-      // Category dot (bottom right)
-      if (cell.category && cell.state !== 'disabled') {
-        const dotR = 4;
-        const dot = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
-        dot.setAttribute('cx', x + cellW - 12);
-        dot.setAttribute('cy', y + CELL_H - 12);
-        dot.setAttribute('r', dotR);
-        dot.setAttribute('fill', categoryColors[cell.category]);
-        dot.setAttribute('opacity', '0.7');
-        g.appendChild(dot);
-      }
-
       // Hover events
       g.addEventListener('mouseenter', (e) => showTooltip(e, key, cell));
       g.addEventListener('mousemove', (e) => moveTooltip(e));
@@ -872,6 +862,18 @@ function showDetail(key, cell) {
     actions = `
       <button class="action-btn">Move</button>
       <button class="action-btn">Unassign</button>
+    `;
+  }
+
+  // Add "Also at" links if item exists at other locations
+  if (cell.otherLocations && cell.otherLocations.length > 0) {
+    html += `
+      <div class="detail-field">
+        <div class="label">Also at</div>
+        <div class="value">
+          ${cell.otherLocations.map(loc => `<div style="margin-top:4px"><a href="#" class="also-at-link" onclick="event.preventDefault(); alert('Navigate to ${loc}')">${loc}</a></div>`).join('')}
+        </div>
+      </div>
     `;
   }
 
