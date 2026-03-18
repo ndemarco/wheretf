@@ -21,23 +21,25 @@ Examples: a red cabinet (MUSE), an IKEA ALEX drawer unit, a shelving unit.
 ### Template
 An abstract blueprint representing a real storage product, including a user's custom design. Defines positions, their arrangement, and physical constraints. Templates are never modified by instance data — they remain pristine reference definitions.
 
-Storage is always a 2D array.
-
 A template defines:
+- **Unit system** — metric or imperial. All dimensions on the template are stored in the declared unit system. The UI allows entry in non-native units with autoconversion (e.g., entering "25.4 mm" into an imperial template stores "1 in").
 - **Origin** — which position is the reference point
 - **Primary axis** — orientation for insert compatibility and labeling direction
 - **Labeling scheme** — how positions are named (numeric, alpha, row-col, custom)
-- **Positions** — the arrangement and count
+- **Positions** — the arrangement and count (for discrete-position templates) or the physical dimensions of the location (for continuous-dimension templates)
 - **Subdivision options** — ways positions can be divided, including the labels for resulting child positions
 - **Physical constraints** — soft limits (warn) and hard limits (block) on dimensions or other physical properties (e.g. powders, liquids, gases, spools, rolls)
 - **Interface types accepted** — what inserts this template's positions can receive (if any)
-- **Interface type provided** — what receptacle type this template fits into (for insert templates)
+- **Interface types provided** — what receptacle types this template fits into (for insert templates). An insert template may provide multiple interface types (e.g., an Akro bin provides both a louver-hang interface and an open-surface interface).
 
 Templates carry a fixed structural core plus extensible metadata with no prescribed shape. Photos, manufacturer details, product numbers, physical dimensions, weight capacity, material — whatever is useful.
 
-There are two kinds of templates:
-- **Fixed templates** — represent a specific product with a fixed layout. A Plano 3600 Stowaway is always 4 rows × 6 columns.
+There are three kinds of templates:
+- **Fixed templates** — represent a specific product with a fixed layout. A Plano 3600 Stowaway is always 4 rows × 6 columns. An Akro-Mils 30220 AkroBin is a fixed single-compartment bin with known dimensions.
 - **Parametric templates** — represent a system with a standard unit, instantiated at user-specified dimensions. A Gridfinity baseplate defines the 42mm grid unit; the user specifies N×M at instantiation. Parametric templates define their unit, constraints (min/max grid size), and labeling scheme. The user supplies dimensions when applying the template.
+- **Continuous-dimension templates** — define locations by physical dimensions rather than discrete positions. A louver panel row has a width; inserts placed in it consume that width. See Continuous-Dimension Locations below.
+
+Insert templates may declare a **buffer** — a flat clearance value added to the insert's primary dimension when computing fit within a continuous-dimension location. For example, a 2" wide bin with a ¼" buffer effectively consumes 2.25" of row width. Buffer is a property of the insert's form factor, not the location.
 
 #### Template Versioning
 
@@ -76,13 +78,32 @@ Example: an ALEX drawer unit's 9 drawers are fixed — they are part of the furn
 
 A location is one or the other. A receptacle's sub-structure comes from its insert. A fixed location's sub-structure comes from the module's own configuration or a permanently applied template.
 
+#### Continuous-Dimension Locations
+
+A location may define capacity by physical dimensions rather than discrete positions. Instead of containing N positions, it has a measurable width (and optionally height and depth). Inserts placed in the location consume space along those dimensions. The system tracks utilization: the sum of (insert dimension + buffer) for all placed inserts, compared against the location's capacity.
+
+- **Dimensional utilization** — the system computes total consumed width vs. available width. Soft limit warns when nearing capacity; hard limit blocks placement when an insert would exceed capacity.
+- **Ordering** — inserts within a continuous-dimension location may optionally be ordered (e.g., left-to-right). Ordering is not enforced — the location may be treated as an unordered set if spatial sequence is not meaningful.
+
+Examples: a louver panel row (bins consume width), an open shelf (bins consume width and must fit within shelf height).
+
+#### Overflow Direction
+
+A location may declare an **overflow direction** — the direction in which an oversized insert extends into adjacent locations:
+
+- **Down** — the insert hangs from the location, and excess height extends into the row/level below. Used for louver rails and hanging storage where bins are suspended from a rail.
+- **Up** — the insert sits on the location, and excess height extends into the row/level above. Used for shelves where tall items stand upward.
+
+Overflow direction is a property of the location, not the insert. The same bin template may be placed in a hanging location (overflow down) or a shelf location (overflow up). When an insert's height exceeds the location's row pitch, the system checks for clearance conflicts in the overflow direction.
+
 ### Insert
 A distinct physical object that occupies one or more receptacle locations and provides its own internal locations. Each insert is an individual instance — if you own 8 Plano boxes, each is a separate insert record, potentially with different overrides.
 
 Key properties:
 - **Relocatable as a unit** — moving an insert carries all its internal structure, overrides, and assignments to the new receptacle location
 - **Overrides live on the insert** — structural modifications (merged cells, divided compartments, disabled positions) describe the physical state of this specific object, not the receptacle it sits in
-- **Footprint** — how many receptacle locations the insert occupies (e.g., a Gridfinity 2×1 bin spans two baseplate positions)
+- **Footprint** — how many receptacle locations the insert occupies (for discrete-position locations, e.g., a Gridfinity 2×1 bin spans two baseplate positions) or the physical dimensions consumed (for continuous-dimension locations, e.g., a 4⅛" wide bin consumes 4⅛" + buffer of row width)
+- **Buffer** — a flat clearance value declared on the insert's template, added to the insert's dimension when computing fit within a continuous-dimension location
 - **Must respect origin and primary axis alignment** of the receptacle
 
 An insert can be configured:
@@ -105,10 +126,11 @@ An interface type specifies:
 - **Directionality** — a template either *provides* an interface type (insert side: "I fit into plano-3600 receptacles") or *accepts* one (receptacle side: "I accept plano-3600 inserts"), never both on the same boundary
 
 Compatibility rules:
-- Placement of an insert into a receptacle is **strictly validated** — the insert must provide an interface type that the receptacle accepts. No implicit compatibility.
+- Placement of an insert into a receptacle is **strictly validated** — the insert must provide an interface type that the receptacle accepts. No implicit compatibility. For continuous-dimension locations, dimensional fit is also checked.
+- An insert template can provide **multiple interface types** (e.g., an Akro-Mils bin provides both a louver-hang interface and an open-surface interface, because it can hang on a rail or sit on a shelf).
 - Multiple insert templates can share the same interface type (e.g., several third-party organizers that all fit the Plano 3600 form factor).
 - A receptacle can accept multiple interface types if physically compatible.
-- Interface types are system-defined, not user-created. Users select from known types when configuring templates.
+- The taxonomy of interface types is intentionally open and will evolve as real storage products are modeled. Interface types are system-defined, not user-created. Users select from known types when configuring templates.
 
 ### Item
 What a thing is, independent of where it is. Has a name, description, and parameters (key/value/unit triples, images). Represents a type or category, not an individual instance or count.
@@ -344,6 +366,60 @@ Module: AKRO
     Override: disable (reason: "cracked drawer, on order")
 ```
 
+### LOUVER (Akro-Mils Louvered Panel with Hanging Bins)
+
+LOUVER is a wall-mounted louvered panel. It has rows defined by the louver rail spacing. Each row is a **continuous-dimension location** — bins consume width, not discrete positions. Bins hang from the rail, so overflow direction is **down** (a tall bin extends into the row below).
+
+```
+Module: LOUVER
+  Primary dimension: row (1-8)
+  Template: Akro-Mils 30636 (continuous-dimension, imperial)
+    Row width: 36 in
+    Row pitch: 3.5 in (vertical spacing between rails)
+    Overflow direction: down
+
+  Location: row 1                       ← continuous-dimension (width: 36 in, overflow: down)
+    Insert: akro-30220-001              ← 4⅛" wide bin, ¼" buffer → consumes 4.375"
+      Location: (single cell)           ← leaf
+    Insert: akro-30220-002              ← another 4⅛" bin → consumes 4.375"
+      Location: (single cell)           ← leaf
+    Insert: akro-30230-005              ← 5½" wide bin → consumes 5.75"
+      Override: divide (ad-hoc → left + right)
+        Location: left                  ← leaf
+        Location: right                 ← leaf
+    ...                                 ← total consumed: 14.5" of 36" available
+
+  Location: row 4                       ← continuous-dimension
+    Insert: akro-30250-010              ← 10⅞" wide, 7" tall (spans 2 row pitches)
+      Location: (single cell)           ← leaf, overflow extends into row 5
+    ...
+
+  Location: row 7                       ← continuous-dimension, currently empty
+                                        ← leaf, can hold a provisional assignment
+```
+
+The same Akro-Mils bin templates can also be placed on a shelf (overflow direction: up) without any change to the bin template — the bin provides multiple interface types (louver-hang and open-surface).
+
+### SHELF (Open Shelving Unit)
+
+SHELF is a utility shelving unit. Each level is a **continuous-dimension location** — bins and items consume width. Items sit on the shelf, so overflow direction is **up**.
+
+```
+Module: SHELF
+  Primary dimension: level (1-5)
+  Template: custom open shelf (continuous-dimension, imperial)
+    Level width: 48 in
+    Level height: 15 in
+    Overflow direction: up
+
+  Location: level 2                     ← continuous-dimension (width: 48 in, overflow: up)
+    Insert: akro-30220-015              ← same bin type as LOUVER, sitting on shelf
+      Location: (single cell)           ← leaf
+    Insert: plano-box-012               ← Plano box sitting on the shelf (open-surface interface)
+      Location: A1                      ← discrete grid inside the Plano box
+      ...
+```
+
 ---
 
 ## Established Points with Rationales
@@ -374,3 +450,15 @@ Templates are never modified by instance data. Overrides live on inserts or modu
 
 ### No linking between levels
 Each module location independently references its template. Batch operations ("apply this template to levels 2-5") are a UI/API convenience, not a data model concept. This keeps the data model simple.
+
+### Discrete vs. continuous-dimension locations
+Not all storage fits a grid. Louver panels, open shelves, and similar storage define locations by physical dimensions. Inserts consume measurable space rather than occupying discrete positions. Both modes coexist in the same model — a module can have discrete-position locations (Gridfinity baseplates) and continuous-dimension locations (open shelves) in different parts of its structure.
+
+### Unit system is per-template
+Different storage products use different measurement systems. An Akro-Mils panel is natively imperial; a European shelving system is metric. The template declares its unit system, and all dimensions are stored in native units. The UI supports entry in non-native units with autoconversion. No mixed units within a single template.
+
+### Overflow direction is a location property
+The same bin can hang on a louver rail (overflow down) or sit on a shelf (overflow up). The physical context — the location — determines which direction excess height extends, not the insert.
+
+### Interface type taxonomy is open
+The set of interface types will evolve as real storage products are modeled. The model defines the compatibility mechanism (provide/accept) but intentionally leaves the taxonomy open. Over-specifying interface types before real-world usage would create artificial constraints.
