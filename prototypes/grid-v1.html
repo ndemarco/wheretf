@@ -707,8 +707,8 @@ function drawGrid() {
         g.appendChild(badgeText);
       }
 
-      // Search result badge
-      if (cell.state === 'search') {
+      // Search result badge — only shown when pick list is active
+      if (cell.state === 'search' && showPickBadges) {
         const badgeSize = 22;
         const bx = x + cellW - badgeSize - 6;
         const by = y + 6;
@@ -802,7 +802,7 @@ function showTooltip(e, key, cell) {
     document.getElementById('ttCostored').textContent = '+ ' + cell.items[1] + '\n' + cell.reason;
   } else {
     document.getElementById('ttItem').textContent = cell.item;
-    document.getElementById('ttType').textContent = cell.state === 'search' ? 'Placed · Search result #' + cell.resultNum : 'Placed';
+    document.getElementById('ttType').textContent = (cell.state === 'search' && showPickBadges) ? 'Placed · Search result #' + cell.resultNum : 'Placed';
     document.getElementById('ttParams').textContent = cell.params || '';
     document.getElementById('ttCostored').textContent = '';
   }
@@ -965,6 +965,7 @@ const moduleData = {
 
 let selectedModules = new Set(['muse']);
 let selectedLevel = { module: 'muse', level: 3 };
+let showPickBadges = false; // only true when pick list / search mode is active
 
 function toggleModule(el, name) {
   if (selectedModules.has(name)) {
