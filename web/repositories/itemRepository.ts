@@ -1,4 +1,4 @@
-import { eq, or, and, ilike } from "drizzle-orm";
+import { eq, or, and, ilike, inArray, sql, asc, desc } from "drizzle-orm";
 import { db } from "@/db/connection";
 import {
   items,
@@ -9,6 +9,9 @@ import {
   aspectParameters,
   parameterDefinitions,
   categories,
+  aspects,
+  assignments,
+  locations,
 } from "@/db/schema";
 import { transactionRepository } from "./transactionRepository";
 
@@ -73,6 +76,294 @@ export const itemRepository = {
 
   async list() {
     return db.select().from(items);
+  },
+
+  // --- Rich listing with filters, search, sort ---
+
+  async listRich({
+    query,
+    filters,
+    categoryId,
+    sortBy,
+    sortDirection,
+  }: {
+    query?: string;
+    filters?: { parameterDefinitionId: string; value: unknown }[];
+    categoryId?: string;
+    sortBy?: string; // "name" or a parameter definition ID
+    sortDirection?: "asc" | "desc";
+  } = {}) {
+    // Step 1: Build filtered item ID set
+    let itemIds: string[] | null = null;
+
+    // Filter by parameter values — each filter narrows the set (AND)
+    if (filters?.length) {
+      for (const filter of filters) {
+        const matchingRows = await db
+          .select({ itemId: itemParameterValues.itemId })
+          .from(itemParameterValues)
+          .where(
+            and(
+              eq(
+                itemParameterValues.parameterDefinitionId,
+                filter.parameterDefinitionId
+              ),
+              sql`${itemParameterValues.value} = ${JSON.stringify(filter.value)}::jsonb`
+            )
+          );
+
+        const matchingIds = new Set(matchingRows.map((r) => r.itemId));
+
+        if (itemIds === null) {
+          itemIds = [...matchingIds];
+        } else {
+          itemIds = itemIds.filter((id) => matchingIds.has(id));
+        }
+
+        if (itemIds.length === 0) return { items: [], total: 0 };
+      }
+    }
+
+    // Filter by category
+    if (categoryId) {
+      const catRows = await db
+        .select({ itemId: itemCategories.itemId })
+        .from(itemCategories)
+        .where(eq(itemCategories.categoryId, categoryId));
+
+      const catIds = new Set(catRows.map((r) => r.itemId));
+
+      if (itemIds === null) {
+        itemIds = [...catIds];
+      } else {
+        itemIds = itemIds.filter((id) => catIds.has(id));
+      }
+
+      if (itemIds.length === 0) return { items: [], total: 0 };
+    }
+
+    // Search across name, description, and parameter values
+    if (query && query.length >= 2) {
+      const pattern = `%${query}%`;
+
+      // Items matching by name/description
+      const nameMatches = await db
+        .select({ id: items.id })
+        .from(items)
+        .where(
+          or(ilike(items.name, pattern), ilike(items.description, pattern))
+        );
+
+      // Items matching by parameter value (cast jsonb to text for ilike)
+      const paramMatches = await db
+        .select({ itemId: itemParameterValues.itemId })
+        .from(itemParameterValues)
+        .where(sql`${itemParameterValues.value}::text ILIKE ${pattern}`);
+
+      const searchIds = new Set([
+        ...nameMatches.map((r) => r.id),
+        ...paramMatches.map((r) => r.itemId),
+      ]);
+
+      if (itemIds === null) {
+        itemIds = [...searchIds];
+      } else {
+        itemIds = itemIds.filter((id) => searchIds.has(id));
+      }
+
+      if (itemIds.length === 0) return { items: [], total: 0 };
+    }
+
+    // Step 2: Fetch items
+    let itemRows;
+    if (itemIds !== null) {
+      if (itemIds.length === 0) return { items: [], total: 0 };
+      itemRows = await db
+        .select()
+        .from(items)
+        .where(inArray(items.id, itemIds));
+    } else {
+      itemRows = await db.select().from(items);
+    }
+
+    if (itemRows.length === 0) return { items: [], total: 0 };
+
+    const allIds = itemRows.map((r) => r.id);
+
+    // Step 3: Batch-fetch taxonomy data
+    const [catRows, aspectRows, paramValueRows, assignmentRows] =
+      await Promise.all([
+        // Categories
+        db
+          .select({
+            itemId: itemCategories.itemId,
+            categoryId: itemCategories.categoryId,
+            isPrimary: itemCategories.isPrimary,
+            name: categories.name,
+            icon: categories.icon,
+            color: categories.color,
+          })
+          .from(itemCategories)
+          .innerJoin(
+            categories,
+            eq(itemCategories.categoryId, categories.id)
+          )
+          .where(inArray(itemCategories.itemId, allIds)),
+
+        // Applied aspects
+        db
+          .select({
+            itemId: itemAspects.itemId,
+            itemAspectId: itemAspects.id,
+            aspectId: itemAspects.aspectId,
+            aspectName: aspects.name,
+            aspectDescription: aspects.description,
+          })
+          .from(itemAspects)
+          .innerJoin(aspects, eq(itemAspects.aspectId, aspects.id))
+          .where(inArray(itemAspects.itemId, allIds)),
+
+        // Parameter values with definitions
+        db
+          .select({
+            itemId: itemParameterValues.itemId,
+            parameterDefinitionId: itemParameterValues.parameterDefinitionId,
+            itemAspectId: itemParameterValues.itemAspectId,
+            value: itemParameterValues.value,
+            parameterName: parameterDefinitions.name,
+            dataType: parameterDefinitions.dataType,
+            unit: parameterDefinitions.unit,
+            constraints: parameterDefinitions.constraints,
+          })
+          .from(itemParameterValues)
+          .innerJoin(
+            parameterDefinitions,
+            eq(
+              itemParameterValues.parameterDefinitionId,
+              parameterDefinitions.id
+            )
+          )
+          .where(inArray(itemParameterValues.itemId, allIds)),
+
+        // Assignments with location paths
+        db
+          .select({
+            itemId: assignments.itemId,
+            assignmentType: assignments.assignmentType,
+            locationId: assignments.locationId,
+            locationPath: locations.path,
+          })
+          .from(assignments)
+          .innerJoin(locations, eq(assignments.locationId, locations.id))
+          .where(inArray(assignments.itemId, allIds)),
+      ]);
+
+    // Step 4: Assemble rich items
+    const richItems = itemRows.map((item) => ({
+      ...item,
+      categories: catRows
+        .filter((c) => c.itemId === item.id)
+        .map(({ itemId, ...rest }) => rest),
+      aspects: aspectRows
+        .filter((a) => a.itemId === item.id)
+        .map((a) => ({
+          itemAspectId: a.itemAspectId,
+          aspectId: a.aspectId,
+          name: a.aspectName,
+          description: a.aspectDescription,
+          parameters: paramValueRows
+            .filter(
+              (pv) =>
+                pv.itemId === item.id && pv.itemAspectId === a.itemAspectId
+            )
+            .map(({ itemId, ...rest }) => rest),
+        })),
+      standaloneParameters: paramValueRows
+        .filter((pv) => pv.itemId === item.id && pv.itemAspectId === null)
+        .map(({ itemId, ...rest }) => rest),
+      assignments: assignmentRows
+        .filter((a) => a.itemId === item.id)
+        .map(({ itemId, ...rest }) => rest),
+    }));
+
+    // Step 5: Sort
+    const dir = sortDirection === "desc" ? -1 : 1;
+    if (sortBy === "name" || !sortBy) {
+      richItems.sort((a, b) => a.name.localeCompare(b.name) * dir);
+    } else {
+      // Sort by a parameter value
+      richItems.sort((a, b) => {
+        const allParamsA = [
+          ...a.aspects.flatMap((asp) => asp.parameters),
+          ...a.standaloneParameters,
+        ];
+        const allParamsB = [
+          ...b.aspects.flatMap((asp) => asp.parameters),
+          ...b.standaloneParameters,
+        ];
+        const valA = allParamsA.find(
+          (p) => p.parameterDefinitionId === sortBy
+        )?.value;
+        const valB = allParamsB.find(
+          (p) => p.parameterDefinitionId === sortBy
+        )?.value;
+
+        if (valA == null && valB == null) return 0;
+        if (valA == null) return 1;
+        if (valB == null) return -1;
+
+        if (typeof valA === "number" && typeof valB === "number") {
+          return (valA - valB) * dir;
+        }
+        return String(valA).localeCompare(String(valB)) * dir;
+      });
+    }
+
+    return { items: richItems, total: richItems.length };
+  },
+
+  // --- Category counts (respects active filters) ---
+
+  async getCategoryCounts({
+    query,
+    filters,
+  }: {
+    query?: string;
+    filters?: { parameterDefinitionId: string; value: unknown }[];
+  } = {}) {
+    // Get the filtered item set first (reuse filtering logic)
+    const { items: filteredItems } = await itemRepository.listRich({
+      query,
+      filters,
+    });
+
+    const filteredIds = filteredItems.map((i) => i.id);
+
+    // Get all categories with counts
+    const allCategories = await db
+      .select()
+      .from(categories)
+      .orderBy(categories.sortOrder);
+
+    if (filteredIds.length === 0) {
+      return allCategories.map((c) => ({ ...c, count: 0 }));
+    }
+
+    const catCounts = await db
+      .select({
+        categoryId: itemCategories.categoryId,
+        count: sql<number>`count(*)::int`,
+      })
+      .from(itemCategories)
+      .where(inArray(itemCategories.itemId, filteredIds))
+      .groupBy(itemCategories.categoryId);
+
+    const countMap = new Map(catCounts.map((c) => [c.categoryId, c.count]));
+
+    return allCategories.map((c) => ({
+      ...c,
+      count: countMap.get(c.id) ?? 0,
+    }));
   },
 
   async update({

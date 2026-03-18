@@ -6,7 +6,7 @@ How users browse, create, edit, and organize items in WhereTF.
 
 ## Page Structure
 
-Separate page from the storage navigator, accessible from the main menu. The item editor is reachable from any item reference in the app (grid cells, assignment lists, search results).
+Separate page from the storage navigator, accessible from the sidebar menu at `/items`. The item editor is reachable from any item reference in the app (grid cells, assignment lists, search results).
 
 Three-panel layout:
 - **Left panel** — search bar + filter pills + category filter
@@ -15,15 +15,31 @@ Three-panel layout:
 
 ---
 
+## Navigation
+
+Sidebar icon rail is the root layout — shared across all pages. Routes:
+- Modules icon → `/navigator`
+- Items icon → `/items`
+- Templates → `/templates` (future)
+- Activity → `/activity` (future)
+
+---
+
+## State in URL
+
+Active filters, sort column/direction, and search query are reflected in URL query parameters. Enables sharing and bookmarking filtered views. Example: `/items?filter=thread_diameter:M3,head_type:SHCS&sort=name:asc&q=stainless`
+
+---
+
 ## Left Panel: Search and Filters
 
 ### Search
 
-Text search bar at the top. Searches across item name, description, and parameter values. Results narrow the grid in real time (2+ characters).
+Text search bar at the top. Searches across item name, description, and parameter values. Executed at the database level. Results narrow the grid in real time (2+ characters).
 
 ### Filter Pills
 
-Below the search bar. Each pill shows `Parameter: Value` (e.g., `Thread diameter: M3`). Pills are added from the detail panel (see Right Panel). Multiple pills combine with AND logic. Click X on a pill to remove it. Removing all pills returns to the unfiltered view.
+Below the search bar. Each pill shows `Parameter: Value` (e.g., `Thread diameter: M3`). Pills are added from the detail panel (see Right Panel). Multiple pills combine with AND logic. Click X on a pill to remove it. Removing all pills returns to the unfiltered view. All filtering happens server-side — pills translate to query parameters sent to the API.
 
 Dynamic facet counts: when pills are active, the system indicates how many items match each remaining filter option. Prevents dead-end filtering.
 
@@ -35,16 +51,15 @@ Below the pills. Shows system categories with item counts. Click a category to a
 
 ## Center Panel: Item Grid
 
-The primary workspace. Items as rows, parameters as columns.
+The primary workspace. Items as rows, parameters as columns. Built with TanStack Table (headless — we control rendering).
 
 ### Columns
 
 - **Name** column is always first, always frozen (does not scroll horizontally).
 - **Primary category** icon column, frozen after name.
-- **Dynamic parameter columns** — determined by context:
-  - No filters active: show a set of common parameters across all items (or name + category + description if items are too diverse).
-  - Filters active: columns adapt to show parameters shared by the filtered set. Filtering to `Thread diameter: M3` surfaces Thread aspect columns (pitch, direction) plus other shared parameters.
-- **Column chooser** — button to manually show/hide/reorder columns. User column choices override the automatic selection.
+- **Dynamic parameter columns** — determined by context. Algorithm and calculation method deferred. Initially show a fixed set of common columns; dynamic adaptation is a future enhancement.
+- **Column chooser** — button to manually show/hide/reorder columns. User column choices override any automatic selection.
+- Horizontal scroll for overflow columns.
 
 ### Inline Editing
 
@@ -58,17 +73,17 @@ Changes save on blur or Enter. Esc cancels.
 
 ### Row Selection
 
-Click a row to select it and populate the detail panel. Ctrl+click for multi-select. Selected rows have accent highlight. Multi-select shows a comparison/bulk-edit view in the detail panel (deferred — show "N items selected" initially).
+Click a row to select it and populate the detail panel. Ctrl+click for multi-select. Selected rows have accent highlight. Multi-select shows "N items selected" in detail panel (bulk operations deferred).
 
 ### Sorting
 
-Click a column header to sort. Click again to reverse. Sort indicator arrow in header.
+Click a column header to sort. Click again to reverse. Sort indicator arrow in header. Sort is executed server-side.
 
 ---
 
 ## Right Panel: Item Detail
 
-Shows the full description of the selected item. This is where you examine, manage, and pivot from an item.
+Shows the full description of the selected item. This is the only place where filter-from-value interaction occurs.
 
 ### Header
 
@@ -76,36 +91,53 @@ Item name (editable inline), description (editable inline).
 
 ### Categories
 
-Shown as tags below the header. Each tag has an X to remove. One tag can be starred as primary (drives grid tile icon in navigator). "Add category" button opens a picker.
+Tags/chips for each category. One can be starred as primary. X to remove. "+ Add" button opens a category picker dropdown.
 
 ### Aspects
 
-Each applied aspect is a collapsible section. Section header shows aspect name and a completeness indicator: `Thread (2/4)` meaning 2 of 4 parameters have values. Expand to see parameter rows:
+Each applied aspect as a collapsible section. Section header shows aspect name + completeness indicator: `Thread (2/4)` — filled/total params. Color: green=complete, orange=partial, gray=empty. X button to remove aspect.
 
+Inside: parameter rows with:
 - Parameter name, value (editable), unit label
-- Each value has a **filter icon** (funnel). Clicking it adds a `Parameter: Value` pill to the left panel. This is the "pivot from current item" interaction.
-- Unfilled parameters show placeholder text with the default value (if any) in muted style.
+- **Filter funnel icon** — clicking adds a `Param: Value` pill to the left panel. Only shown when value is non-empty. This is the only mechanism for adding parameter filters.
 
-Below the aspect sections: "Apply aspect" button to add a new aspect from a picker/dropdown.
+Below aspects: "+ Apply Aspect" button with dropdown of available aspects.
 
 ### Standalone Parameters
 
-Section below aspects for parameters not part of any aspect. Same layout: name, value, unit, filter icon. "Add parameter" button to attach a parameter definition and set its value.
+Section below aspects. Same row layout (name, value, unit, filter icon). "+ Add Parameter" button to attach a parameter definition.
 
 ### Locations
 
-"Stored at" section showing all locations where this item is assigned. Each location is a clickable link to the storage navigator. Shows assignment type (placed/provisional).
+"Stored at" section. Location paths as clickable links (navigate to `/navigator` with that location focused). Assignment type badge (placed/provisional).
 
 ### Actions
 
 - Delete item — immediate with undo toast
-- Remove aspect — X on the aspect section header, cascades parameter values
 
 ---
 
 ## Item Creation
 
-Floating action button (`+ Item`) in the bottom-right of the center panel. Creates a new item row at the top of the grid with the name field focused. The user types a name and presses Enter. The item is saved immediately. All other fields are optional — populate via the detail panel or inline grid editing.
+Floating action button (`+ Item`) bottom-right of center panel. Creates a new item, selects it, focuses the name field. Item saves immediately with just a name. All other fields populated via detail panel or inline grid editing.
+
+---
+
+## Data Fetching
+
+### Rich Item Endpoint
+
+`GET /api/items` returns items with taxonomy data included — categories, applied aspects, and parameter values. Supports query parameters:
+- `q` — text search across name, description, parameter values
+- `filter` — parameter value filters (AND logic)
+- `sort` — column and direction
+- `category` — category filter
+
+All filtering, searching, and sorting is executed at the database level.
+
+### Mutations
+
+Individual API calls for each mutation (update name, set parameter value, add category, apply aspect, etc.). Optimistic updates in the UI.
 
 ---
 
@@ -113,19 +145,19 @@ Floating action button (`+ Item`) in the bottom-right of the center panel. Creat
 
 ### Completeness Indicators
 
-When an aspect is applied, the detail panel shows how many of its parameters have values vs. how many exist. This supports "get items in fast, refine later" — the system shows what's missing without blocking.
+Aspect sections show filled/total parameter count. Supports "get items in fast, refine later."
 
 ### No Right-Click
 
-All actions are reachable through visible UI elements. See [ui-paradigms.md](ui-paradigms.md).
+All actions via visible UI elements. See [ui-paradigms.md](ui-paradigms.md).
 
 ### Undo, Not Confirm
 
-Destructive actions (delete item, remove aspect, remove category) execute immediately with an undo toast.
+Destructive actions execute immediately with undo toast.
 
 ### Item Reachability
 
-Every item reference in the app (navigator grid cells, search results, assignment lists) links to the item management page with that item selected.
+Every item reference in the app links to `/items?selected={id}`.
 
 ---
 
@@ -137,3 +169,5 @@ Every item reference in the app (navigator grid cells, search results, assignmen
 - AI-assisted item creation
 - Saved/named views (filter + column + sort configurations)
 - Multi-item comparison view in detail panel
+- Dynamic column prevalence calculation
+- Pagination / virtual scrolling strategy
