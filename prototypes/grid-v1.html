@@ -411,9 +411,13 @@
       <div class="grid-header">
         <h1>MUSE / Level 3</h1>
         <div class="grid-toolbar">
-          <button>Zoom Fit</button>
           <button>Filter</button>
           <button>Add Insert</button>
+          <select id="hoverSelect" onchange="setHoverMode(this.value)" style="background:#334155;color:#e2e8f0;border:1px solid #475569;padding:4px 8px;border-radius:6px;font-size:12px;cursor:pointer">
+            <option value="off">Hover: off</option>
+            <option value="on">Hover: instant</option>
+            <option value="delay" selected>Hover: delayed</option>
+          </select>
         </div>
       </div>
 
@@ -760,11 +764,58 @@ function drawGrid() {
         g.appendChild(mergeLabel);
       }
 
-      // Hover events
-      g.addEventListener('mouseenter', (e) => showTooltip(e, key, cell));
-      g.addEventListener('mousemove', (e) => moveTooltip(e));
-      g.addEventListener('mouseleave', hideTooltip);
-      g.addEventListener('click', () => showDetail(key, cell));
+      // Selection highlight
+      if (selectedCells.has(key)) {
+        const sel = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+        sel.setAttribute('x', x - 2);
+        sel.setAttribute('y', y - 2);
+        sel.setAttribute('width', cellW + 4);
+        sel.setAttribute('height', CELL_H + 4);
+        sel.setAttribute('rx', RADIUS + 2);
+        sel.setAttribute('fill', 'none');
+        sel.setAttribute('stroke', '#ff6600');
+        sel.setAttribute('stroke-width', '3');
+        sel.setAttribute('stroke-dasharray', '');
+        g.appendChild(sel);
+      }
+
+      // Hover events (mode-aware)
+      g.addEventListener('mouseenter', (e) => {
+        if (hoverMode === 'on') {
+          showTooltip(e, key, cell);
+        } else if (hoverMode === 'delay') {
+          hoverTimer = setTimeout(() => showTooltip(e, key, cell), hoverDelay);
+        }
+      });
+      g.addEventListener('mousemove', (e) => {
+        if (hoverMode !== 'off') moveTooltip(e);
+      });
+      g.addEventListener('mouseleave', () => {
+        if (hoverTimer) { clearTimeout(hoverTimer); hoverTimer = null; }
+        hideTooltip();
+      });
+
+      // Click — select/deselect cell
+      g.addEventListener('click', (e) => {
+        if (e.ctrlKey || e.metaKey) {
+          // Multi-select toggle
+          if (selectedCells.has(key)) {
+            selectedCells.delete(key);
+          } else {
+            selectedCells.add(key);
+          }
+        } else {
+          // Single select toggle
+          if (selectedCells.has(key) && selectedCells.size === 1) {
+            selectedCells.clear();
+          } else {
+            selectedCells.clear();
+            selectedCells.add(key);
+          }
+        }
+        drawGrid();
+        updateDetailForSelection();
+      });
 
       svg.appendChild(g);
     }
@@ -830,6 +881,7 @@ function showDetail(key, cell) {
     `;
     actions = `
       <button class="action-btn primary">Assign Item</button>
+      <button class="action-btn">Split</button>
       <button class="action-btn">Disable</button>
     `;
   } else if (cell.state === 'disabled') {
@@ -861,8 +913,12 @@ function showDetail(key, cell) {
     `;
     actions = `
       <button class="action-btn">Move</button>
+      <button class="action-btn">Split</button>
       <button class="action-btn">Unassign</button>
     `;
+    if (cell.state === 'merged_origin') {
+      actions += `<button class="action-btn">Unmerge</button>`;
+    }
   }
 
   // Add "Also at" links if item exists at other locations
@@ -889,6 +945,56 @@ function showLevelDetail() {
     <div class="detail-field"><div class="label">Status</div><div class="value">Select a cell to view details</div></div>
   `;
   document.getElementById('detailActions').innerHTML = '';
+}
+
+function updateDetailForSelection() {
+  if (selectedCells.size === 0) {
+    showLevelDetail();
+    return;
+  }
+
+  if (selectedCells.size === 1) {
+    const key = [...selectedCells][0];
+    const cell = cells[key];
+    if (cell) showDetail(key, cell);
+    return;
+  }
+
+  // Multi-select — show selection summary with merge/split actions
+  const keys = [...selectedCells].sort();
+  document.getElementById('detailTitle').textContent = `${keys.length} cells selected`;
+
+  const items = keys.map(k => {
+    const c = cells[k];
+    const label = c && c.item ? c.item : (c && c.state === 'empty' ? 'empty' : c.state);
+    return `<div style="margin-top:2px">${k} — ${label}</div>`;
+  }).join('');
+
+  document.getElementById('detailContent').innerHTML = `
+    <div class="detail-field">
+      <div class="label">Selected</div>
+      <div class="value">${items}</div>
+    </div>
+  `;
+
+  // Check if merge is possible (all adjacent)
+  const allEmpty = keys.every(k => cells[k] && (cells[k].state === 'empty'));
+  const hasOccupied = keys.some(k => cells[k] && cells[k].state !== 'empty' && cells[k].state !== 'disabled');
+
+  let actions = '<div class="selection-count">' + keys.length + ' cells selected</div>';
+  actions += `<button class="action-btn" onclick="alert('Merge ${keys.join(' + ')}')">Merge</button>`;
+  if (hasOccupied) {
+    actions += `<button class="action-btn">Move All</button>`;
+    actions += `<button class="action-btn">Unassign All</button>`;
+  }
+
+  document.getElementById('detailActions').innerHTML = actions;
+}
+
+function setHoverMode(mode) {
+  hoverMode = mode;
+  if (hoverTimer) { clearTimeout(hoverTimer); hoverTimer = null; }
+  hideTooltip();
 }
 
 // Module data
@@ -968,6 +1074,10 @@ const moduleData = {
 let selectedModules = new Set(['muse']);
 let selectedLevel = { module: 'muse', level: 3 };
 let showPickBadges = false; // only true when pick list / search mode is active
+let selectedCells = new Set(); // currently selected cell keys
+let hoverMode = 'delay'; // 'off', 'on', 'delay'
+let hoverDelay = 400; // ms for delay mode
+let hoverTimer = null;
 
 function toggleModule(el, name) {
   if (selectedModules.has(name)) {
@@ -1031,6 +1141,7 @@ function renderLevelList() {
       `;
       row.addEventListener('click', () => {
         selectedLevel = { module: modKey, level: level.n };
+        selectedCells.clear();
         document.querySelectorAll('.level-row').forEach(r => r.classList.remove('selected'));
         row.classList.add('selected');
         document.querySelector('.grid-header h1').textContent = `${mod.name} / ${mod.dimLabel} ${level.n}`;
