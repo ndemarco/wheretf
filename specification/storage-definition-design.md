@@ -119,7 +119,7 @@ Row click → selects level, updates right panel.
 **Actions on module:**
 - Edit name/description (inline)
 - Add levels (append to end)
-- Delete module (with confirmation — destructive)
+- Delete module (immediate with undo toast — per ui-paradigms.md, no confirmation dialog)
 
 **Actions on level (via row selection or level detail):**
 - Place insert (if receptacle and empty)
@@ -219,6 +219,7 @@ Single-page form (not a wizard — templates are simpler than modules).
 - **Min/Max rows** (parametric only)
 - **Min/Max columns** (parametric only)
 - **Labeling scheme** — rows: alpha (default) or numeric. Columns: numeric (default) or alpha.
+- **Merge axis** — which directions allow cell merging. Options: "columns only" (within rows — e.g., Plano 3600 where row walls are molded but column dividers are removable), "rows only" (within columns), "both" (default), "none". This constraint is enforced when the user attempts a merge operation on an insert using this template.
 - **Origin** — which corner is position A1. Default: top-left.
 - **Unit system** — metric or imperial. Default: metric.
 
@@ -270,7 +271,7 @@ Combine adjacent cells into a single larger cell.
 
 **Constraints:**
 - Cells must be adjacent and contiguous
-- Template may restrict merge axes (e.g., Plano rows are molded walls — merge within rows only, not across)
+- Template's **merge axis** setting is enforced. If set to "columns only", the system blocks any merge that spans rows and explains why ("Row dividers on this template are permanent"). The merge action button is disabled for invalid selections.
 - Existing assignments at affected cells must be migrated or removed first (enforced, not warned)
 
 ### Divide

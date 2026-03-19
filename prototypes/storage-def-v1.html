@@ -415,7 +415,7 @@
           </div>
           <div style="padding:12px 16px;border-top:1px solid #334155;display:flex;gap:8px;">
             <button class="btn btn-secondary" style="font-size:11px;">+ Add Level</button>
-            <button class="btn btn-danger" style="font-size:11px;">Delete Module</button>
+            <button class="btn btn-danger" style="font-size:11px;" onclick="showView('modules'); showToast('Module MUSE deleted')">Delete Module</button>
           </div>
         </div>
         <div class="panel-right">
@@ -484,6 +484,16 @@
               <label>Column Labels</label>
               <select><option selected>Numeric (1, 2, 3...)</option><option>Alpha (A, B, C...)</option></select>
             </div>
+          </div>
+          <div class="form-group">
+            <label>Merge Axis</label>
+            <select>
+              <option>Both (rows and columns)</option>
+              <option selected>Columns only (row dividers permanent)</option>
+              <option>Rows only (column dividers permanent)</option>
+              <option>None (no merging)</option>
+            </select>
+            <div class="hint">Which directions can cells be merged? Depends on physical divider construction.</div>
           </div>
           <div class="form-group">
             <label>Origin</label>
