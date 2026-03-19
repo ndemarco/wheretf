@@ -8,19 +8,32 @@ import { parameterDefinitionRepository } from "../repositories/parameterDefiniti
 import { aspectRepository } from "../repositories/aspectRepository";
 import { itemRepository } from "../repositories/itemRepository";
 import { templateRepository } from "../repositories/templateRepository";
-import { categories, parameterDefinitions, aspects } from "./schema";
+import { categories, parameterDefinitions, aspects, templates } from "./schema";
 
 async function seed() {
   console.log("Seeding...");
 
-  // Check if data already exists
   const existingCats = await db.select().from(categories);
-  if (existingCats.length > 0) {
-    console.log("Data already exists, skipping seed.");
-    return;
+  const hasTaxonomy = existingCats.length > 0;
+
+  const existingTemplates = await db.select().from(templates);
+  const hasTemplates = existingTemplates.length > 0;
+
+  if (hasTaxonomy && hasTemplates) {
+    console.log("All seed data already exists, nothing to do.");
+    process.exit(0);
   }
 
-  // --- Categories ---
+  // --- Categories & Items ---
+  let catFastener, catElectronic, catTool, catAdhesive, catWire, catMeasure;
+  let pdThreadSize, pdLength, pdMaterial, pdHeadType, pdDriveType;
+  let pdVoltage, pdCapacitance, pdResistance, pdTolerance, pdPackage;
+  let pdWeight, pdColor, pdGauge, pdCureTime, pdTempRating;
+  let aspectThread, aspectScrew, aspectPhysical, aspectElectrical;
+
+  if (hasTaxonomy) {
+    console.log("Taxonomy/items already seeded, skipping.");
+  } else {
   const catFastener = await categoryRepository.create({
     name: "Fasteners",
     icon: "🔩",
@@ -384,7 +397,14 @@ async function seed() {
   await itemRepository.setParameterValue({ itemId: wire2.id, parameterDefinitionId: pdColor.id, value: "black" });
   await itemRepository.setParameterValue({ itemId: wire2.id, parameterDefinitionId: pdVoltage.id, value: 300 });
 
+    console.log("Seeded 16 items across 6 categories with aspects and parameters.");
+  } // end taxonomy block
+
   // --- Templates ---
+
+  if (hasTemplates) {
+    console.log("Templates already seeded, skipping.");
+  } else {
 
   // Plano 3600 Stowaway — classic tackle box tray
   const tplPlano3600 = await templateRepository.create({
@@ -474,7 +494,10 @@ async function seed() {
     metadata: { unitSystem: "metric", manufacturer: "IKEA", productNumber: "ALEX" },
   });
 
-  console.log("Seeded 16 items across 6 categories, 5 templates with aspects and parameters.");
+    console.log("Seeded 5 templates.");
+  } // end templates block
+
+  console.log("Done.");
   process.exit(0);
 }
 
