@@ -113,6 +113,7 @@ body {
 }
 .entity-item:hover { background: #334155; }
 .entity-item.active { background: #1a0f00; color: #ff6600; }
+.entity-item.expanded { background: #111827; }
 .entity-name { flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .entity-badge {
   font-size: 10px;
@@ -123,6 +124,42 @@ body {
   flex-shrink: 0;
 }
 .entity-item.active .entity-badge { color: #ff6600; background: rgba(255,102,0,0.15); }
+.entity-chevron {
+  width: 12px;
+  font-size: 9px;
+  color: #475569;
+  flex-shrink: 0;
+  transition: transform 0.15s;
+}
+.entity-chevron.open { transform: rotate(90deg); color: #64748b; }
+
+/* Child parameter items (indented under expanded aspect) */
+.child-params {
+  overflow: hidden;
+  transition: max-height 0.2s ease;
+}
+.child-param-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 12px 5px 28px;
+  cursor: pointer;
+  transition: background 0.12s;
+  font-size: 12px;
+  color: #94a3b8;
+}
+.child-param-item:hover { background: #334155; color: #e2e8f0; }
+.child-param-item.active { background: #1a0f00; color: #ff6600; }
+.child-param-role {
+  font-size: 9px;
+  padding: 1px 5px;
+  border-radius: 3px;
+  flex-shrink: 0;
+}
+.child-param-role.role-key { color: #fbbf24; background: rgba(120,53,15,0.4); }
+.child-param-role.role-derived { color: #64748b; background: rgba(51,65,85,0.5); }
+.child-param-role.role-info { color: #475569; background: rgba(51,65,85,0.3); }
+
 .type-indicator {
   width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0;
 }
@@ -448,6 +485,91 @@ body {
 .constraint-input:focus { border-color: #ff6600; }
 .constraint-label { font-size: 11px; color: #64748b; }
 
+/* Center detail sections */
+.center-detail-section {
+  padding: 16px 20px;
+  border-bottom: 1px solid #334155;
+}
+.center-detail-section:last-child { border-bottom: none; }
+.center-detail-name {
+  font-size: 18px;
+  font-weight: 700;
+  margin-bottom: 4px;
+}
+.center-detail-desc {
+  font-size: 13px;
+  color: #94a3b8;
+  margin-bottom: 12px;
+}
+.center-section-label {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: #64748b;
+  font-weight: 600;
+  padding: 8px 0 4px;
+  border-bottom: 1px solid #334155;
+  margin-bottom: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.center-standard-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 0;
+  cursor: pointer;
+  font-size: 13px;
+  transition: color 0.12s;
+}
+.center-standard-row:hover { color: #ff6600; }
+.center-standard-row .std-name { flex: 1; }
+.center-standard-row .std-meta { color: #475569; font-size: 11px; }
+.center-standard-row .std-domain { color: #64748b; font-size: 11px; }
+
+.center-param-detail {
+  padding: 16px 20px;
+  background: #0f172a;
+  border-top: 2px solid #ff6600;
+}
+.center-param-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+.center-param-name {
+  font-size: 16px;
+  font-weight: 600;
+}
+.center-param-props {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px 16px;
+}
+.center-prop-item {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.center-prop-label {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: #64748b;
+}
+.center-prop-value {
+  font-size: 13px;
+  color: #e2e8f0;
+}
+.center-used-by-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 4px;
+}
+
 /* FAB */
 .fab {
   position: absolute;
@@ -564,43 +686,20 @@ body {
   </div>
 
   <div class="grid-scroll-container">
-    <!-- Aspect Parameters Table (shown when an aspect is selected) -->
-    <div id="center-aspect-view" style="display:none;">
-      <table class="data-table" id="aspect-param-table">
-        <thead>
-          <tr>
-            <th>Parameter</th>
-            <th>Type</th>
-            <th>Unit</th>
-            <th>Role</th>
-            <th></th>
-          </tr>
-        </thead>
-        <tbody id="aspect-param-tbody"></tbody>
-      </table>
-    </div>
+    <!-- Aspect detail (shown when an aspect is selected) -->
+    <div id="center-aspect-view" style="display:none;"></div>
 
-    <!-- Parameter Aspects Table (shown when a parameter is selected) -->
-    <div id="center-param-view" style="display:none;">
-      <table class="data-table" id="param-aspect-table">
-        <thead>
-          <tr>
-            <th>Aspect</th>
-            <th>Role</th>
-            <th>Items</th>
-          </tr>
-        </thead>
-        <tbody id="param-aspect-tbody"></tbody>
-      </table>
-    </div>
+    <!-- Parameter detail below aspect (shown when param selected in aspect context) -->
+    <div id="center-param-in-aspect-view" style="display:none;"></div>
 
-    <!-- Standards Table (shown when drilling into a standard) -->
+    <!-- Standalone parameter view (selected from flat list) -->
+    <div id="center-param-view" style="display:none;"></div>
+
+    <!-- Standards designation table -->
     <div id="center-standard-view" style="display:none;">
       <table class="data-table" id="standard-desig-table">
         <thead>
-          <tr id="standard-desig-thead">
-            <!-- dynamic columns -->
-          </tr>
+          <tr id="standard-desig-thead"></tr>
         </thead>
         <tbody id="standard-desig-tbody"></tbody>
       </table>
@@ -758,6 +857,7 @@ const designations = {
 let selectedType = null; // 'aspect' | 'param' | 'standard'
 let selectedId = null;
 let selectedStandardAspect = null; // parent aspect when viewing a standard
+let expandedAspect = null; // which aspect is expanded in the tree
 let showHidden = false;
 let searchText = '';
 
@@ -765,7 +865,7 @@ let searchText = '';
 function renderLeftPanel() {
   const search = searchText.toLowerCase();
 
-  // Aspects
+  // Aspects (with tree expansion)
   const aspectList = document.getElementById('aspect-list');
   let aspectHtml = '';
   let visibleAspects = 0;
@@ -773,18 +873,49 @@ function renderLeftPanel() {
     if (asp.hidden && !showHidden) continue;
     if (search && !asp.name.toLowerCase().includes(search)) continue;
     visibleAspects++;
+    const isExpanded = expandedAspect === asp.id;
     const isActive = selectedType === 'aspect' && selectedId === asp.id;
     const hiddenClass = asp.hidden ? ' hidden-entity' : '';
-    aspectHtml += `<div class="entity-item${isActive ? ' active' : ''}${hiddenClass}" onclick="selectAspect('${asp.id}')">
+    const expandedClass = isExpanded ? ' expanded' : '';
+    aspectHtml += `<div class="entity-item${isActive ? ' active' : ''}${hiddenClass}${expandedClass}" onclick="toggleAspectExpand('${asp.id}')">
+      <span class="entity-chevron${isExpanded ? ' open' : ''}">&#9654;</span>
       <span class="entity-name">${esc(asp.name)}</span>
       ${asp.hidden ? '<span class="hidden-badge">Hidden</span>' : ''}
       <span class="entity-badge">${asp.params.length}p</span>
     </div>`;
+    // Render child parameters if expanded
+    if (isExpanded) {
+      aspectHtml += `<div class="child-params">`;
+      for (const ap of asp.params) {
+        const pd = paramDefs.find(p => p.name === ap.name);
+        if (!pd) continue;
+        const pdIdx = paramDefs.indexOf(pd);
+        const isChildActive = selectedType === 'param' && selectedId === pdIdx && selectedStandardAspect === asp.id;
+        aspectHtml += `<div class="child-param-item${isChildActive ? ' active' : ''}" onclick="event.stopPropagation(); selectParamInContext('${asp.id}', ${pdIdx})">
+          <span class="type-indicator type-${pd.type}"></span>
+          <span class="entity-name">${esc(pd.name)}</span>
+          <span class="child-param-role role-${ap.role}">${ap.role}</span>
+        </div>`;
+      }
+      // Standards sub-section within expanded aspect
+      if (asp.standardsList.length > 0) {
+        aspectHtml += `<div style="padding:4px 12px 2px 20px;font-size:9px;text-transform:uppercase;letter-spacing:0.06em;color:#475569;margin-top:2px;">Standards</div>`;
+        for (const std of asp.standardsList) {
+          const isStdActive = selectedType === 'standard' && selectedId === std.id;
+          aspectHtml += `<div class="child-param-item${isStdActive ? ' active' : ''}" onclick="event.stopPropagation(); selectStandard('${asp.id}', '${std.id}')" style="padding-left:20px;">
+            <span style="color:#64748b;font-size:11px;">&#9671;</span>
+            <span class="entity-name">${esc(std.name)}</span>
+            <span style="font-size:9px;color:#475569;">${std.designationCount}</span>
+          </div>`;
+        }
+      }
+      aspectHtml += `</div>`;
+    }
   }
   aspectList.innerHTML = aspectHtml;
   document.getElementById('aspect-count').textContent = visibleAspects;
 
-  // Parameters
+  // Parameters (flat list — all parameters regardless of aspect)
   const paramList = document.getElementById('param-list');
   let paramHtml = '';
   let visibleParams = 0;
@@ -793,7 +924,7 @@ function renderLeftPanel() {
     if (p.hidden && !showHidden) continue;
     if (search && !p.name.toLowerCase().includes(search)) continue;
     visibleParams++;
-    const isActive = selectedType === 'param' && selectedId === i;
+    const isActive = selectedType === 'param' && selectedId === i && !selectedStandardAspect;
     const hiddenClass = p.hidden ? ' hidden-entity' : '';
     paramHtml += `<div class="entity-item${isActive ? ' active' : ''}${hiddenClass}" onclick="selectParam(${i})">
       <span class="type-indicator type-${p.type}"></span>
@@ -811,8 +942,21 @@ function renderLeftPanel() {
   hiddenToggle.textContent = showHidden ? 'Hide hidden' : 'Show hidden';
 }
 
-// ─── Select Aspect ───
-function selectAspect(id) {
+// ─── Toggle Aspect Expand (tree) ───
+function toggleAspectExpand(id) {
+  if (expandedAspect === id) {
+    // Collapse: if we're viewing something under this aspect, clear it
+    expandedAspect = null;
+    // If the aspect itself was selected, keep it; otherwise clear
+    if (selectedType !== 'aspect' || selectedId !== id) {
+      clearSelection();
+      return;
+    }
+  } else {
+    // Expand new aspect, collapse previous
+    expandedAspect = id;
+  }
+  // Select the aspect itself
   selectedType = 'aspect';
   selectedId = id;
   selectedStandardAspect = null;
@@ -821,30 +965,166 @@ function selectAspect(id) {
   renderRightAspect(id);
 }
 
+// ─── Select Param In Context (from aspect tree or aspect's param table) ───
+function selectParamInContext(aspectId, paramIdx) {
+  selectedType = 'param';
+  selectedId = paramIdx;
+  selectedStandardAspect = aspectId;
+  expandedAspect = aspectId;
+
+  const asp = aspects.find(a => a.id === aspectId);
+  const p = paramDefs[paramIdx];
+
+  // Breadcrumb
+  if (asp && p) {
+    document.getElementById('breadcrumb').innerHTML = `<a onclick="clearSelection()">Taxonomy</a><span class="sep">/</span><a onclick="toggleAspectExpand('${asp.id}')">${esc(asp.name)}</a><span class="sep">/</span><span>${esc(p.name)}</span>`;
+    document.getElementById('center-count').textContent = `${asp.params.length} parameters · ${asp.standardsList.length} standards`;
+  }
+
+  // Center: aspect detail on top (re-render to update selected row highlight)
+  renderCenterAspect(aspectId);
+  // Center: param detail below
+  renderCenterParamInAspect(aspectId, paramIdx);
+
+  // Right panel: parameter properties
+  renderRightParam(paramIdx);
+
+  // Left panel
+  renderLeftPanel();
+}
+
+// ─── Select Aspect ───
+function selectAspect(id) {
+  selectedType = 'aspect';
+  selectedId = id;
+  selectedStandardAspect = null;
+  expandedAspect = id;
+  renderLeftPanel();
+  renderCenterAspect(id);
+  renderRightAspect(id);
+}
+
+function hideCenterViews() {
+  document.getElementById('center-empty').style.display = 'none';
+  document.getElementById('center-aspect-view').style.display = 'none';
+  document.getElementById('center-param-in-aspect-view').style.display = 'none';
+  document.getElementById('center-param-view').style.display = 'none';
+  document.getElementById('center-standard-view').style.display = 'none';
+}
+
 function renderCenterAspect(id) {
   const asp = aspects.find(a => a.id === id);
   if (!asp) return;
 
-  document.getElementById('center-empty').style.display = 'none';
+  hideCenterViews();
   document.getElementById('center-aspect-view').style.display = '';
-  document.getElementById('center-param-view').style.display = 'none';
-  document.getElementById('center-standard-view').style.display = 'none';
 
   document.getElementById('breadcrumb').innerHTML = `<a onclick="clearSelection()">Taxonomy</a><span class="sep">/</span><span>${esc(asp.name)}</span>`;
-  document.getElementById('center-count').textContent = `${asp.params.length} parameters`;
+  document.getElementById('center-count').textContent = `${asp.params.length} parameters · ${asp.standardsList.length} standards`;
 
-  const tbody = document.getElementById('aspect-param-tbody');
-  tbody.innerHTML = asp.params.map(ap => {
+  let html = '';
+  // Description
+  html += `<div class="center-detail-section">`;
+  html += `<div class="center-detail-name">${esc(asp.name)}</div>`;
+  html += `<div class="center-detail-desc">${asp.desc ? esc(asp.desc) : '<span style="color:#475569;font-style:italic;">No description</span>'}</div>`;
+  html += `</div>`;
+
+  // Parameters table
+  html += `<div class="center-detail-section">`;
+  html += `<div class="center-section-label"><span>Parameters</span><button class="add-btn" style="font-size:11px;">+ Add</button></div>`;
+  html += `<table class="data-table"><thead><tr>
+    <th>Parameter</th><th>Type</th><th>Unit</th><th>Role</th><th></th>
+  </tr></thead><tbody>`;
+  for (const ap of asp.params) {
     const pd = paramDefs.find(p => p.name === ap.name);
-    if (!pd) return '';
-    return `<tr onclick="selectParam(${paramDefs.indexOf(pd)})">
+    if (!pd) continue;
+    const pdIdx = paramDefs.indexOf(pd);
+    const isSelected = selectedType === 'param' && selectedId === pdIdx && selectedStandardAspect === asp.id;
+    html += `<tr onclick="selectParamInContext('${id}', ${pdIdx})" class="${isSelected ? 'selected' : ''}">
       <td style="font-weight:500;">${esc(pd.name)}</td>
       <td><span class="badge type-${pd.type}">${pd.type}</span></td>
       <td style="color:#94a3b8;">${pd.unit || '\u2014'}</td>
       <td><span class="badge role-${ap.role}">${ap.role}</span></td>
       <td style="text-align:right;"><button class="btn-danger" style="font-size:11px;padding:2px 8px;opacity:0;" onmouseover="this.style.opacity=1" onmouseout="this.style.opacity=0" onclick="event.stopPropagation()">Remove</button></td>
     </tr>`;
-  }).join('');
+  }
+  html += `</tbody></table></div>`;
+
+  // Standards
+  html += `<div class="center-detail-section">`;
+  html += `<div class="center-section-label"><span>Standards</span><button class="add-btn" style="font-size:11px;">+ Add</button></div>`;
+  if (asp.standardsList.length === 0) {
+    html += `<div style="color:#475569;font-size:12px;padding:8px 0;">No standards. Standards provide lookup tables that map designations to parameter values.</div>`;
+  } else {
+    for (const std of asp.standardsList) {
+      html += `<div class="center-standard-row" onclick="selectStandard('${asp.id}', '${std.id}')">
+        <span style="color:#64748b;">&#9671;</span>
+        <span class="std-name">${esc(std.name)}</span>
+        ${std.domainTag ? `<span class="std-domain">${esc(std.domainTag)}</span>` : ''}
+        <span class="std-meta">${std.designationCount} desig.</span>
+      </div>`;
+    }
+  }
+  html += `</div>`;
+
+  // Usage
+  html += `<div class="center-detail-section">`;
+  html += `<div class="center-section-label"><span>Usage</span></div>`;
+  html += `<div style="font-size:13px;color:#94a3b8;">Applied to <strong style="color:#e2e8f0;">${asp.items}</strong> items</div>`;
+  html += `</div>`;
+
+  document.getElementById('center-aspect-view').innerHTML = html;
+}
+
+function renderCenterParamInAspect(aspectId, paramIdx) {
+  const asp = aspects.find(a => a.id === aspectId);
+  const p = paramDefs[paramIdx];
+  if (!asp || !p) return;
+
+  const view = document.getElementById('center-param-in-aspect-view');
+  view.style.display = '';
+
+  const ap = asp.params.find(ap => ap.name === p.name);
+
+  let html = `<div class="center-param-detail">`;
+  html += `<div class="center-param-header">`;
+  html += `<span class="type-indicator type-${p.type}"></span>`;
+  html += `<span class="center-param-name">${esc(p.name)}</span>`;
+  html += `<span class="badge role-${ap ? ap.role : 'info'}">${ap ? ap.role : 'info'} in ${esc(asp.name)}</span>`;
+  html += `</div>`;
+
+  html += `<div class="center-param-props">`;
+  html += `<div class="center-prop-item"><span class="center-prop-label">Type</span><span class="center-prop-value"><span class="badge type-${p.type}">${p.type}</span></span></div>`;
+  html += `<div class="center-prop-item"><span class="center-prop-label">Unit</span><span class="center-prop-value">${p.unit || '\u2014'}</span></div>`;
+  html += `<div class="center-prop-item"><span class="center-prop-label">Default</span><span class="center-prop-value" style="color:#475569;">\u2014</span></div>`;
+
+  // Constraints inline
+  if (p.type === 'numeric') {
+    html += `<div class="center-prop-item"><span class="center-prop-label">Constraints</span><span class="center-prop-value" style="color:#475569;">No min/max set</span></div>`;
+  } else if (p.type === 'enum' && p.enumValues) {
+    html += `<div class="center-prop-item"><span class="center-prop-label">Values</span><span class="center-prop-value"><span class="enum-tags" style="margin:0;">`;
+    for (const v of p.enumValues) {
+      html += `<span class="enum-tag">${esc(v)}</span>`;
+    }
+    html += `</span></span></div>`;
+  }
+  html += `</div>`; // close grid
+
+  // Used by aspects
+  html += `<div style="margin-top:12px;">`;
+  html += `<div class="center-section-label" style="border:none;padding-bottom:0;margin-bottom:2px;"><span>Used By Aspects</span></div>`;
+  html += `<div class="center-used-by-list">`;
+  for (const aspName of p.aspects) {
+    const a = aspects.find(a => a.name === aspName);
+    if (a) {
+      const isCurrent = a.id === aspectId;
+      html += `<span class="tag${isCurrent ? '' : ''}" onclick="event.stopPropagation(); toggleAspectExpand('${a.id}')" style="${isCurrent ? 'border-color:#ff6600;color:#ff6600;' : ''}">${esc(a.name)}${isCurrent ? ' (current)' : ''}</span>`;
+    }
+  }
+  html += `</div></div>`;
+
+  html += `</div>`; // close center-param-detail
+  view.innerHTML = html;
 }
 
 function renderRightAspect(id) {
@@ -895,11 +1175,12 @@ function renderRightAspect(id) {
   dc.innerHTML = html;
 }
 
-// ─── Select Parameter ───
+// ─── Select Parameter (from flat list, no aspect context) ───
 function selectParam(idx) {
   selectedType = 'param';
   selectedId = idx;
   selectedStandardAspect = null;
+  expandedAspect = null;
   renderLeftPanel();
   renderCenterParam(idx);
   renderRightParam(idx);
@@ -909,25 +1190,46 @@ function renderCenterParam(idx) {
   const p = paramDefs[idx];
   if (!p) return;
 
-  document.getElementById('center-empty').style.display = 'none';
-  document.getElementById('center-aspect-view').style.display = 'none';
+  hideCenterViews();
   document.getElementById('center-param-view').style.display = '';
-  document.getElementById('center-standard-view').style.display = 'none';
 
   document.getElementById('breadcrumb').innerHTML = `<a onclick="clearSelection()">Taxonomy</a><span class="sep">/</span><span>${esc(p.name)}</span>`;
   document.getElementById('center-count').textContent = `${p.aspects.length} aspects`;
 
-  const tbody = document.getElementById('param-aspect-tbody');
-  tbody.innerHTML = p.aspects.map(aspName => {
+  let html = '';
+  // Parameter detail
+  html += `<div class="center-detail-section">`;
+  html += `<div class="center-detail-name">${esc(p.name)}</div>`;
+  html += `<div class="center-param-props" style="margin-top:8px;">`;
+  html += `<div class="center-prop-item"><span class="center-prop-label">Type</span><span class="center-prop-value"><span class="badge type-${p.type}">${p.type}</span></span></div>`;
+  html += `<div class="center-prop-item"><span class="center-prop-label">Unit</span><span class="center-prop-value">${p.unit || '\u2014'}</span></div>`;
+  html += `<div class="center-prop-item"><span class="center-prop-label">Default</span><span class="center-prop-value" style="color:#475569;">\u2014</span></div>`;
+  if (p.type === 'enum' && p.enumValues) {
+    html += `<div class="center-prop-item"><span class="center-prop-label">Values</span><span class="center-prop-value"><span class="enum-tags" style="margin:0;">`;
+    for (const v of p.enumValues) html += `<span class="enum-tag">${esc(v)}</span>`;
+    html += `</span></span></div>`;
+  }
+  html += `</div></div>`;
+
+  // Used by aspects
+  html += `<div class="center-detail-section">`;
+  html += `<div class="center-section-label"><span>Used By Aspects</span></div>`;
+  html += `<table class="data-table"><thead><tr>
+    <th>Aspect</th><th>Role</th><th>Items</th>
+  </tr></thead><tbody>`;
+  for (const aspName of p.aspects) {
     const asp = aspects.find(a => a.name === aspName);
-    if (!asp) return '';
+    if (!asp) continue;
     const ap = asp.params.find(ap => ap.name === p.name);
-    return `<tr onclick="selectAspect('${asp.id}')">
+    html += `<tr onclick="toggleAspectExpand('${asp.id}')">
       <td style="font-weight:500;">${esc(asp.name)}</td>
       <td><span class="badge role-${ap ? ap.role : 'info'}">${ap ? ap.role : 'info'}</span></td>
       <td style="color:#94a3b8;">${asp.items} items</td>
     </tr>`;
-  }).join('');
+  }
+  html += `</tbody></table></div>`;
+
+  document.getElementById('center-param-view').innerHTML = html;
 }
 
 function renderRightParam(idx) {
@@ -1006,10 +1308,9 @@ function selectStandard(aspectId, standardId) {
   selectedType = 'standard';
   selectedId = standardId;
   selectedStandardAspect = aspectId;
+  expandedAspect = aspectId;
 
-  document.getElementById('center-empty').style.display = 'none';
-  document.getElementById('center-aspect-view').style.display = 'none';
-  document.getElementById('center-param-view').style.display = 'none';
+  hideCenterViews();
   document.getElementById('center-standard-view').style.display = '';
 
   document.getElementById('breadcrumb').innerHTML = `<a onclick="clearSelection()">Taxonomy</a><span class="sep">/</span><a onclick="selectAspect('${asp.id}')">${esc(asp.name)}</a><span class="sep">/</span><span>${esc(std.name)}</span>`;
@@ -1095,11 +1396,10 @@ function clearSelection() {
   selectedType = null;
   selectedId = null;
   selectedStandardAspect = null;
+  expandedAspect = null;
 
+  hideCenterViews();
   document.getElementById('center-empty').style.display = 'flex';
-  document.getElementById('center-aspect-view').style.display = 'none';
-  document.getElementById('center-param-view').style.display = 'none';
-  document.getElementById('center-standard-view').style.display = 'none';
   document.getElementById('breadcrumb').innerHTML = '<span>Taxonomy</span>';
   document.getElementById('center-count').textContent = '';
   document.getElementById('detailEmpty').style.display = 'flex';
