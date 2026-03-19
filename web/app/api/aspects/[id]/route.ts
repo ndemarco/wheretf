@@ -11,7 +11,9 @@ export async function GET(
     if (!aspect) {
       return NextResponse.json({ error: "Aspect not found" }, { status: 404 });
     }
-    return NextResponse.json({ aspect });
+    const itemCount = await aspectRepository.countItemsUsing({ aspectId: id });
+    const parameters = await aspectRepository.getParameters({ aspectId: id });
+    return NextResponse.json({ aspect, itemCount, parameters });
   } catch (err) {
     return NextResponse.json(
       { error: err instanceof Error ? err.message : "Unexpected error" },

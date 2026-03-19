@@ -1,6 +1,11 @@
-import { eq, and } from "drizzle-orm";
+import { eq, and, count } from "drizzle-orm";
 import { db } from "@/db/connection";
-import { aspects, aspectParameters, parameterDefinitions } from "@/db/schema";
+import {
+  aspects,
+  aspectParameters,
+  parameterDefinitions,
+  itemAspects,
+} from "@/db/schema";
 import { transactionRepository } from "./transactionRepository";
 
 export const aspectRepository = {
@@ -88,6 +93,14 @@ export const aspectRepository = {
       beforeState: before,
       afterState: null,
     });
+  },
+
+  async countItemsUsing({ aspectId }: { aspectId: string }) {
+    const [result] = await db
+      .select({ count: count() })
+      .from(itemAspects)
+      .where(eq(itemAspects.aspectId, aspectId));
+    return result?.count ?? 0;
   },
 
   // --- Aspect parameter management ---

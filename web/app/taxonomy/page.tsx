@@ -88,6 +88,13 @@ function AspectsTab() {
   const [newName, setNewName] = useState("");
   const [newDesc, setNewDesc] = useState("");
 
+  // Delete confirmation
+  const [deleteTarget, setDeleteTarget] = useState<{
+    aspect: Aspect;
+    itemCount: number;
+    parameterCount: number;
+  } | null>(null);
+
   const fetchAspects = useCallback(async () => {
     setLoading(true);
     try {
@@ -152,11 +159,26 @@ function AspectsTab() {
     }
   }
 
-  async function deleteAspect(id: string) {
-    if (!confirm("Delete this aspect? It will be removed from all items.")) return;
+  async function prepareDeleteAspect(aspect: Aspect) {
     try {
-      await fetch(`/api/aspects/${id}`, { method: "DELETE" });
-      if (selectedId === id) setSelectedId(null);
+      const res = await fetch(`/api/aspects/${aspect.id}`);
+      const data = await res.json();
+      setDeleteTarget({
+        aspect,
+        itemCount: data.itemCount ?? 0,
+        parameterCount: data.parameters?.length ?? 0,
+      });
+    } catch (err) {
+      console.error(err);
+    }
+  }
+
+  async function confirmDeleteAspect() {
+    if (!deleteTarget) return;
+    try {
+      await fetch(`/api/aspects/${deleteTarget.aspect.id}`, { method: "DELETE" });
+      if (selectedId === deleteTarget.aspect.id) setSelectedId(null);
+      setDeleteTarget(null);
       await fetchAspects();
     } catch (err) {
       console.error(err);
@@ -293,7 +315,7 @@ function AspectsTab() {
                 )}
               </div>
               <button
-                onClick={() => deleteAspect(selectedAspect.id)}
+                onClick={() => prepareDeleteAspect(selectedAspect)}
                 className="text-xs text-red-400 hover:text-red-300"
               >
                 Delete
@@ -382,6 +404,133 @@ function AspectsTab() {
             )}
           </div>
         )}
+      </div>
+
+      {/* Delete confirmation modal */}
+      {deleteTarget && (
+        <DeleteAspectModal
+          aspect={deleteTarget.aspect}
+          itemCount={deleteTarget.itemCount}
+          parameterCount={deleteTarget.parameterCount}
+          onConfirm={confirmDeleteAspect}
+          onCancel={() => setDeleteTarget(null)}
+        />
+      )}
+    </div>
+  );
+}
+
+// --- Delete Aspect Modal ---
+
+function DeleteAspectModal({
+  aspect,
+  itemCount,
+  parameterCount,
+  onConfirm,
+  onCancel,
+}: {
+  aspect: Aspect;
+  itemCount: number;
+  parameterCount: number;
+  onConfirm: () => void;
+  onCancel: () => void;
+}) {
+  const [confirmText, setConfirmText] = useState("");
+  const isConfirmed = confirmText === aspect.name;
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60">
+      <div className="bg-slate-800 border border-slate-600 rounded-lg shadow-xl w-full max-w-md mx-4">
+        <div className="p-5 border-b border-slate-700">
+          <h2 className="text-base font-semibold text-red-400">
+            Delete aspect: {aspect.name}
+          </h2>
+        </div>
+
+        <div className="p-5 space-y-4">
+          {/* Impact summary */}
+          <div className="space-y-2">
+            {itemCount > 0 ? (
+              <div className="p-3 bg-red-900/20 border border-red-800/50 rounded text-sm">
+                <p className="text-red-300 font-medium">
+                  This aspect is currently applied to{" "}
+                  <span className="text-red-200 font-semibold">
+                    {itemCount} item{itemCount !== 1 ? "s" : ""}
+                  </span>
+                  .
+                </p>
+                <p className="text-red-400/80 text-xs mt-1.5">
+                  Deleting it will remove the aspect and{" "}
+                  <span className="font-medium text-red-300">
+                    permanently erase all parameter values
+                  </span>{" "}
+                  those items have for this aspect&apos;s{" "}
+                  {parameterCount} parameter
+                  {parameterCount !== 1 ? "s" : ""}.
+                </p>
+              </div>
+            ) : (
+              <div className="p-3 bg-slate-700/30 border border-slate-600 rounded text-sm">
+                <p className="text-slate-300">
+                  This aspect is not applied to any items.
+                </p>
+              </div>
+            )}
+
+            {/* Reversibility */}
+            <div className="p-3 bg-amber-900/15 border border-amber-800/40 rounded text-sm">
+              <p className="text-amber-300 font-medium text-xs uppercase tracking-wider mb-1">
+                This action cannot be automatically reversed.
+              </p>
+              <p className="text-amber-400/70 text-xs">
+                The aspect definition and its parameter structure are recorded
+                in the transaction log, but cascade-deleted parameter values on
+                individual items are not. To recover, you would need to
+                re-create the aspect, re-attach its parameters, re-apply it to
+                each item, and manually re-enter every parameter value.
+              </p>
+            </div>
+          </div>
+
+          {/* Type-to-confirm */}
+          <div>
+            <label className="block text-xs text-slate-400 mb-1.5">
+              Type{" "}
+              <span className="font-mono text-slate-200 bg-slate-700 px-1.5 py-0.5 rounded">
+                {aspect.name}
+              </span>{" "}
+              to confirm:
+            </label>
+            <input
+              type="text"
+              value={confirmText}
+              onChange={(e) => setConfirmText(e.target.value)}
+              autoFocus
+              className="w-full px-3 py-2 bg-slate-900 border border-slate-600 rounded text-sm text-slate-200 placeholder:text-slate-600 focus:border-red-500 focus:outline-none"
+              placeholder={aspect.name}
+            />
+          </div>
+        </div>
+
+        <div className="p-5 border-t border-slate-700 flex items-center justify-end gap-3">
+          <button
+            onClick={onCancel}
+            className="px-4 py-2 text-sm text-slate-300 hover:text-slate-100 transition-colors"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={onConfirm}
+            disabled={!isConfirmed}
+            className={`px-4 py-2 text-sm rounded font-medium transition-all ${
+              isConfirmed
+                ? "bg-red-600 text-white hover:bg-red-500"
+                : "bg-slate-700 text-slate-500 cursor-not-allowed"
+            }`}
+          >
+            Delete this aspect
+          </button>
+        </div>
       </div>
     </div>
   );
