@@ -1,0 +1,393 @@
+/**
+ * Seed script: creates sample taxonomy data and items for UI development.
+ * Run: cd web && npx tsx db/seed.ts
+ */
+import { db } from "./connection";
+import { categoryRepository } from "../repositories/categoryRepository";
+import { parameterDefinitionRepository } from "../repositories/parameterDefinitionRepository";
+import { aspectRepository } from "../repositories/aspectRepository";
+import { itemRepository } from "../repositories/itemRepository";
+import { categories, parameterDefinitions, aspects } from "./schema";
+
+async function seed() {
+  console.log("Seeding...");
+
+  // Check if data already exists
+  const existingCats = await db.select().from(categories);
+  if (existingCats.length > 0) {
+    console.log("Data already exists, skipping seed.");
+    return;
+  }
+
+  // --- Categories ---
+  const catFastener = await categoryRepository.create({
+    name: "Fasteners",
+    icon: "🔩",
+    color: "#6366f1",
+    sortOrder: 1,
+  });
+  const catElectronic = await categoryRepository.create({
+    name: "Electronics",
+    icon: "⚡",
+    color: "#f59e0b",
+    sortOrder: 2,
+  });
+  const catTool = await categoryRepository.create({
+    name: "Tools",
+    icon: "🔧",
+    color: "#10b981",
+    sortOrder: 3,
+  });
+  const catAdhesive = await categoryRepository.create({
+    name: "Adhesives",
+    icon: "🧴",
+    color: "#ec4899",
+    sortOrder: 4,
+  });
+  const catWire = await categoryRepository.create({
+    name: "Wire & Cable",
+    icon: "🔌",
+    color: "#8b5cf6",
+    sortOrder: 5,
+  });
+  const catMeasure = await categoryRepository.create({
+    name: "Measurement",
+    icon: "📏",
+    color: "#06b6d4",
+    sortOrder: 6,
+  });
+
+  // --- Parameter Definitions ---
+  const pdThreadSize = await parameterDefinitionRepository.create({
+    name: "thread_size",
+    dataType: "text",
+  });
+  const pdLength = await parameterDefinitionRepository.create({
+    name: "length",
+    dataType: "numeric",
+    unit: "mm",
+  });
+  const pdMaterial = await parameterDefinitionRepository.create({
+    name: "material",
+    dataType: "enum",
+    constraints: {
+      enumValues: [
+        "steel",
+        "stainless_steel",
+        "brass",
+        "aluminum",
+        "nylon",
+        "copper",
+      ],
+    },
+  });
+  const pdHeadType = await parameterDefinitionRepository.create({
+    name: "head_type",
+    dataType: "enum",
+    constraints: {
+      enumValues: ["pan", "flat", "hex", "socket", "button", "truss"],
+    },
+  });
+  const pdDriveType = await parameterDefinitionRepository.create({
+    name: "drive_type",
+    dataType: "enum",
+    constraints: {
+      enumValues: ["phillips", "slotted", "torx", "hex", "square"],
+    },
+  });
+  const pdVoltage = await parameterDefinitionRepository.create({
+    name: "voltage_rating",
+    dataType: "numeric",
+    unit: "V",
+  });
+  const pdCapacitance = await parameterDefinitionRepository.create({
+    name: "capacitance",
+    dataType: "numeric",
+    unit: "µF",
+  });
+  const pdResistance = await parameterDefinitionRepository.create({
+    name: "resistance",
+    dataType: "numeric",
+    unit: "Ω",
+  });
+  const pdTolerance = await parameterDefinitionRepository.create({
+    name: "tolerance",
+    dataType: "text",
+  });
+  const pdPackage = await parameterDefinitionRepository.create({
+    name: "package",
+    dataType: "enum",
+    constraints: {
+      enumValues: ["0402", "0603", "0805", "1206", "SOT-23", "SOIC-8", "DIP-8", "through-hole"],
+    },
+  });
+  const pdWeight = await parameterDefinitionRepository.create({
+    name: "weight",
+    dataType: "numeric",
+    unit: "g",
+  });
+  const pdColor = await parameterDefinitionRepository.create({
+    name: "color",
+    dataType: "text",
+  });
+  const pdGauge = await parameterDefinitionRepository.create({
+    name: "gauge",
+    dataType: "text",
+  });
+  const pdCureTime = await parameterDefinitionRepository.create({
+    name: "cure_time",
+    dataType: "numeric",
+    unit: "min",
+  });
+  const pdTempRating = await parameterDefinitionRepository.create({
+    name: "temp_rating",
+    dataType: "numeric",
+    unit: "°C",
+  });
+
+  // --- Aspects ---
+  const aspectThread = await aspectRepository.create({
+    name: "Threading",
+    description: "Thread specifications for fasteners",
+  });
+  await aspectRepository.addParameter({
+    aspectId: aspectThread.id,
+    parameterDefinitionId: pdThreadSize.id,
+    sortOrder: 0,
+  });
+  await aspectRepository.addParameter({
+    aspectId: aspectThread.id,
+    parameterDefinitionId: pdLength.id,
+    sortOrder: 1,
+  });
+
+  const aspectScrew = await aspectRepository.create({
+    name: "Screw Head",
+    description: "Head and drive type for screws",
+  });
+  await aspectRepository.addParameter({
+    aspectId: aspectScrew.id,
+    parameterDefinitionId: pdHeadType.id,
+    sortOrder: 0,
+  });
+  await aspectRepository.addParameter({
+    aspectId: aspectScrew.id,
+    parameterDefinitionId: pdDriveType.id,
+    sortOrder: 1,
+  });
+
+  const aspectPhysical = await aspectRepository.create({
+    name: "Physical Properties",
+    description: "Weight, material, color",
+  });
+  await aspectRepository.addParameter({
+    aspectId: aspectPhysical.id,
+    parameterDefinitionId: pdMaterial.id,
+    sortOrder: 0,
+  });
+  await aspectRepository.addParameter({
+    aspectId: aspectPhysical.id,
+    parameterDefinitionId: pdWeight.id,
+    sortOrder: 1,
+  });
+  await aspectRepository.addParameter({
+    aspectId: aspectPhysical.id,
+    parameterDefinitionId: pdColor.id,
+    sortOrder: 2,
+  });
+
+  const aspectElectrical = await aspectRepository.create({
+    name: "Electrical Ratings",
+    description: "Voltage, tolerance, package",
+  });
+  await aspectRepository.addParameter({
+    aspectId: aspectElectrical.id,
+    parameterDefinitionId: pdVoltage.id,
+    sortOrder: 0,
+  });
+  await aspectRepository.addParameter({
+    aspectId: aspectElectrical.id,
+    parameterDefinitionId: pdTolerance.id,
+    sortOrder: 1,
+  });
+  await aspectRepository.addParameter({
+    aspectId: aspectElectrical.id,
+    parameterDefinitionId: pdPackage.id,
+    sortOrder: 2,
+  });
+
+  // --- Items ---
+
+  // Machine Screws
+  const screw1 = await itemRepository.create({
+    name: "M3x10 Socket Head Cap Screw",
+    description: "Stainless steel socket head cap screw",
+  });
+  await itemRepository.addCategory({ itemId: screw1.id, categoryId: catFastener.id, isPrimary: true });
+  await itemRepository.applyAspect({ itemId: screw1.id, aspectId: aspectThread.id });
+  await itemRepository.applyAspect({ itemId: screw1.id, aspectId: aspectScrew.id });
+  await itemRepository.applyAspect({ itemId: screw1.id, aspectId: aspectPhysical.id });
+  await itemRepository.setParameterValue({ itemId: screw1.id, parameterDefinitionId: pdThreadSize.id, value: "M3" });
+  await itemRepository.setParameterValue({ itemId: screw1.id, parameterDefinitionId: pdLength.id, value: 10 });
+  await itemRepository.setParameterValue({ itemId: screw1.id, parameterDefinitionId: pdHeadType.id, value: "socket" });
+  await itemRepository.setParameterValue({ itemId: screw1.id, parameterDefinitionId: pdDriveType.id, value: "hex" });
+  await itemRepository.setParameterValue({ itemId: screw1.id, parameterDefinitionId: pdMaterial.id, value: "stainless_steel" });
+
+  const screw2 = await itemRepository.create({
+    name: "M4x20 Pan Head Machine Screw",
+    description: "Zinc-plated steel pan head screw",
+  });
+  await itemRepository.addCategory({ itemId: screw2.id, categoryId: catFastener.id, isPrimary: true });
+  await itemRepository.applyAspect({ itemId: screw2.id, aspectId: aspectThread.id });
+  await itemRepository.applyAspect({ itemId: screw2.id, aspectId: aspectScrew.id });
+  await itemRepository.applyAspect({ itemId: screw2.id, aspectId: aspectPhysical.id });
+  await itemRepository.setParameterValue({ itemId: screw2.id, parameterDefinitionId: pdThreadSize.id, value: "M4" });
+  await itemRepository.setParameterValue({ itemId: screw2.id, parameterDefinitionId: pdLength.id, value: 20 });
+  await itemRepository.setParameterValue({ itemId: screw2.id, parameterDefinitionId: pdHeadType.id, value: "pan" });
+  await itemRepository.setParameterValue({ itemId: screw2.id, parameterDefinitionId: pdDriveType.id, value: "phillips" });
+  await itemRepository.setParameterValue({ itemId: screw2.id, parameterDefinitionId: pdMaterial.id, value: "steel" });
+
+  const screw3 = await itemRepository.create({
+    name: "M5x16 Flat Head Screw",
+  });
+  await itemRepository.addCategory({ itemId: screw3.id, categoryId: catFastener.id, isPrimary: true });
+  await itemRepository.applyAspect({ itemId: screw3.id, aspectId: aspectThread.id });
+  await itemRepository.applyAspect({ itemId: screw3.id, aspectId: aspectScrew.id });
+  await itemRepository.setParameterValue({ itemId: screw3.id, parameterDefinitionId: pdThreadSize.id, value: "M5" });
+  await itemRepository.setParameterValue({ itemId: screw3.id, parameterDefinitionId: pdLength.id, value: 16 });
+  await itemRepository.setParameterValue({ itemId: screw3.id, parameterDefinitionId: pdHeadType.id, value: "flat" });
+  await itemRepository.setParameterValue({ itemId: screw3.id, parameterDefinitionId: pdDriveType.id, value: "torx" });
+
+  // Nuts & Washers
+  const nut1 = await itemRepository.create({
+    name: "M3 Hex Nut",
+    description: "Stainless steel hex nut",
+  });
+  await itemRepository.addCategory({ itemId: nut1.id, categoryId: catFastener.id, isPrimary: true });
+  await itemRepository.applyAspect({ itemId: nut1.id, aspectId: aspectThread.id });
+  await itemRepository.applyAspect({ itemId: nut1.id, aspectId: aspectPhysical.id });
+  await itemRepository.setParameterValue({ itemId: nut1.id, parameterDefinitionId: pdThreadSize.id, value: "M3" });
+  await itemRepository.setParameterValue({ itemId: nut1.id, parameterDefinitionId: pdMaterial.id, value: "stainless_steel" });
+
+  const nut2 = await itemRepository.create({ name: "M4 Nylon Lock Nut" });
+  await itemRepository.addCategory({ itemId: nut2.id, categoryId: catFastener.id, isPrimary: true });
+  await itemRepository.applyAspect({ itemId: nut2.id, aspectId: aspectThread.id });
+  await itemRepository.setParameterValue({ itemId: nut2.id, parameterDefinitionId: pdThreadSize.id, value: "M4" });
+
+  // Electronics
+  const cap1 = await itemRepository.create({
+    name: "100µF Electrolytic Capacitor",
+    description: "25V aluminum electrolytic capacitor",
+  });
+  await itemRepository.addCategory({ itemId: cap1.id, categoryId: catElectronic.id, isPrimary: true });
+  await itemRepository.applyAspect({ itemId: cap1.id, aspectId: aspectElectrical.id });
+  await itemRepository.setParameterValue({ itemId: cap1.id, parameterDefinitionId: pdCapacitance.id, value: 100 });
+  await itemRepository.setParameterValue({ itemId: cap1.id, parameterDefinitionId: pdVoltage.id, value: 25 });
+  await itemRepository.setParameterValue({ itemId: cap1.id, parameterDefinitionId: pdPackage.id, value: "through-hole" });
+  await itemRepository.setParameterValue({ itemId: cap1.id, parameterDefinitionId: pdTolerance.id, value: "±20%" });
+
+  const cap2 = await itemRepository.create({
+    name: "10µF Ceramic Capacitor",
+    description: "50V X7R ceramic capacitor",
+  });
+  await itemRepository.addCategory({ itemId: cap2.id, categoryId: catElectronic.id, isPrimary: true });
+  await itemRepository.applyAspect({ itemId: cap2.id, aspectId: aspectElectrical.id });
+  await itemRepository.setParameterValue({ itemId: cap2.id, parameterDefinitionId: pdCapacitance.id, value: 10 });
+  await itemRepository.setParameterValue({ itemId: cap2.id, parameterDefinitionId: pdVoltage.id, value: 50 });
+  await itemRepository.setParameterValue({ itemId: cap2.id, parameterDefinitionId: pdPackage.id, value: "0805" });
+  await itemRepository.setParameterValue({ itemId: cap2.id, parameterDefinitionId: pdTolerance.id, value: "±10%" });
+
+  const resistor1 = await itemRepository.create({
+    name: "10kΩ Resistor",
+    description: "1/4W metal film resistor",
+  });
+  await itemRepository.addCategory({ itemId: resistor1.id, categoryId: catElectronic.id, isPrimary: true });
+  await itemRepository.applyAspect({ itemId: resistor1.id, aspectId: aspectElectrical.id });
+  await itemRepository.setParameterValue({ itemId: resistor1.id, parameterDefinitionId: pdResistance.id, value: 10000 });
+  await itemRepository.setParameterValue({ itemId: resistor1.id, parameterDefinitionId: pdTolerance.id, value: "±1%" });
+  await itemRepository.setParameterValue({ itemId: resistor1.id, parameterDefinitionId: pdPackage.id, value: "through-hole" });
+
+  const resistor2 = await itemRepository.create({
+    name: "470Ω SMD Resistor",
+  });
+  await itemRepository.addCategory({ itemId: resistor2.id, categoryId: catElectronic.id, isPrimary: true });
+  await itemRepository.applyAspect({ itemId: resistor2.id, aspectId: aspectElectrical.id });
+  await itemRepository.setParameterValue({ itemId: resistor2.id, parameterDefinitionId: pdResistance.id, value: 470 });
+  await itemRepository.setParameterValue({ itemId: resistor2.id, parameterDefinitionId: pdPackage.id, value: "0603" });
+
+  const led1 = await itemRepository.create({
+    name: "5mm Red LED",
+    description: "Standard through-hole LED, 2.0V forward voltage",
+  });
+  await itemRepository.addCategory({ itemId: led1.id, categoryId: catElectronic.id, isPrimary: true });
+  await itemRepository.applyAspect({ itemId: led1.id, aspectId: aspectElectrical.id });
+  await itemRepository.applyAspect({ itemId: led1.id, aspectId: aspectPhysical.id });
+  await itemRepository.setParameterValue({ itemId: led1.id, parameterDefinitionId: pdVoltage.id, value: 2.0 });
+  await itemRepository.setParameterValue({ itemId: led1.id, parameterDefinitionId: pdColor.id, value: "red" });
+  await itemRepository.setParameterValue({ itemId: led1.id, parameterDefinitionId: pdPackage.id, value: "through-hole" });
+
+  // Tools
+  const tool1 = await itemRepository.create({
+    name: "Weller WE1010 Soldering Station",
+    description: "70W digital soldering station",
+  });
+  await itemRepository.addCategory({ itemId: tool1.id, categoryId: catTool.id, isPrimary: true });
+  await itemRepository.addCategory({ itemId: tool1.id, categoryId: catElectronic.id });
+  await itemRepository.applyAspect({ itemId: tool1.id, aspectId: aspectElectrical.id });
+  await itemRepository.setParameterValue({ itemId: tool1.id, parameterDefinitionId: pdVoltage.id, value: 120 });
+  await itemRepository.setParameterValue({ itemId: tool1.id, parameterDefinitionId: pdTempRating.id, value: 450 });
+
+  const tool2 = await itemRepository.create({
+    name: "Digital Calipers",
+    description: "6-inch stainless steel digital calipers",
+  });
+  await itemRepository.addCategory({ itemId: tool2.id, categoryId: catTool.id, isPrimary: true });
+  await itemRepository.addCategory({ itemId: tool2.id, categoryId: catMeasure.id });
+
+  // Adhesives
+  const glue1 = await itemRepository.create({
+    name: "Loctite Super Glue",
+    description: "Instant cyanoacrylate adhesive",
+  });
+  await itemRepository.addCategory({ itemId: glue1.id, categoryId: catAdhesive.id, isPrimary: true });
+  await itemRepository.setParameterValue({ itemId: glue1.id, parameterDefinitionId: pdCureTime.id, value: 1 });
+
+  const glue2 = await itemRepository.create({
+    name: "JB Weld Original",
+    description: "Two-part epoxy, steel-reinforced",
+  });
+  await itemRepository.addCategory({ itemId: glue2.id, categoryId: catAdhesive.id, isPrimary: true });
+  await itemRepository.setParameterValue({ itemId: glue2.id, parameterDefinitionId: pdCureTime.id, value: 960 });
+  await itemRepository.setParameterValue({ itemId: glue2.id, parameterDefinitionId: pdTempRating.id, value: 288 });
+
+  // Wire
+  const wire1 = await itemRepository.create({
+    name: "22 AWG Hookup Wire (Red)",
+    description: "Solid core hookup wire, 25ft spool",
+  });
+  await itemRepository.addCategory({ itemId: wire1.id, categoryId: catWire.id, isPrimary: true });
+  await itemRepository.addCategory({ itemId: wire1.id, categoryId: catElectronic.id });
+  await itemRepository.applyAspect({ itemId: wire1.id, aspectId: aspectPhysical.id });
+  await itemRepository.setParameterValue({ itemId: wire1.id, parameterDefinitionId: pdGauge.id, value: "22 AWG" });
+  await itemRepository.setParameterValue({ itemId: wire1.id, parameterDefinitionId: pdColor.id, value: "red" });
+  await itemRepository.setParameterValue({ itemId: wire1.id, parameterDefinitionId: pdVoltage.id, value: 300 });
+
+  const wire2 = await itemRepository.create({
+    name: "22 AWG Hookup Wire (Black)",
+    description: "Solid core hookup wire, 25ft spool",
+  });
+  await itemRepository.addCategory({ itemId: wire2.id, categoryId: catWire.id, isPrimary: true });
+  await itemRepository.addCategory({ itemId: wire2.id, categoryId: catElectronic.id });
+  await itemRepository.applyAspect({ itemId: wire2.id, aspectId: aspectPhysical.id });
+  await itemRepository.setParameterValue({ itemId: wire2.id, parameterDefinitionId: pdGauge.id, value: "22 AWG" });
+  await itemRepository.setParameterValue({ itemId: wire2.id, parameterDefinitionId: pdColor.id, value: "black" });
+  await itemRepository.setParameterValue({ itemId: wire2.id, parameterDefinitionId: pdVoltage.id, value: 300 });
+
+  console.log("Seeded 16 items across 6 categories with aspects and parameters.");
+  process.exit(0);
+}
+
+seed().catch((err) => {
+  console.error("Seed failed:", err);
+  process.exit(1);
+});
