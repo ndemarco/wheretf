@@ -3,7 +3,7 @@ import { templateRepository } from "@/repositories/templateRepository";
 
 export async function GET() {
   try {
-    const templates = await templateRepository.list();
+    const templates = await templateRepository.listWithCurrentVersion();
     return NextResponse.json({ templates });
   } catch (err) {
     const message = err instanceof Error ? err.message : "Unknown error";

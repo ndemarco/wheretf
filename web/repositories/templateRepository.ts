@@ -116,6 +116,28 @@ export const templateRepository = {
     return db.select().from(templates);
   },
 
+  async listWithCurrentVersion() {
+    const allTemplates = await db.select().from(templates);
+    if (allTemplates.length === 0) return [];
+
+    const allVersions = await db.select().from(templateVersions);
+    const versionMap = new Map<string, typeof allVersions>();
+    for (const v of allVersions) {
+      const list = versionMap.get(v.templateId) ?? [];
+      list.push(v);
+      versionMap.set(v.templateId, list);
+    }
+
+    return allTemplates.map((t) => {
+      const versions = versionMap.get(t.id) ?? [];
+      const currentVer = versions.find((v) => v.version === t.currentVersion);
+      return {
+        ...t,
+        currentVersionData: currentVer ?? null,
+      };
+    });
+  },
+
   async update({
     id,
     ...updates
