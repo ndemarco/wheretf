@@ -251,6 +251,23 @@ List of inserts and fixed locations that reference this template, grouped by mod
 - Insert name (or "fixed" for direct applications)
 - Module name → level label
 - Version applied
+- **Upgrade indicator** — if the instance is on an older version, show a version badge with an "Upgrade" action
+
+### Version Upgrade Flow
+
+When a new version is published, existing instances stay on their current version. The user upgrades selectively:
+
+1. From the **Instances** list on the template detail page, instances on older versions show an "Upgrade available" indicator
+2. User can select individual instances (checkboxes) or "Select all outdated"
+3. Click "Upgrade Selected" → **preview panel** shows per-instance impact:
+   - **No conflicts** — structure is compatible, upgrade is clean. Shows before/after grid side by side.
+   - **Override conflicts** — the instance has overrides (merges, divides) that conflict with the new version's structure (e.g., new version removed a column that was part of a merge). Lists each conflict with resolution options: keep override, drop override, or skip this instance.
+   - **Assignment conflicts** — locations that exist in the old version but not the new have active assignments. Lists affected assignments with options: reassign to a new location, unassign, or skip this instance.
+4. User resolves any conflicts per instance, or skips instances that need manual attention
+5. Click "Apply Upgrades" → instances updated, child locations restructured, toast with undo
+6. Skipped instances remain on the old version — no partial upgrades per instance
+
+The upgrade is a compound transaction — all changes for one instance are grouped and undone atomically.
 
 ---
 

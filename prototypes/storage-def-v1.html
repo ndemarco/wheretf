@@ -534,13 +534,47 @@
           </table>
           <button class="btn btn-secondary" style="margin-bottom:24px;">Publish New Version</button>
 
-          <h3 style="font-size:11px;font-weight:600;color:#94a3b8;text-transform:uppercase;letter-spacing:0.05em;margin-bottom:10px;">Instances</h3>
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
+            <h3 style="font-size:11px;font-weight:600;color:#94a3b8;text-transform:uppercase;letter-spacing:0.05em;">Instances</h3>
+            <button class="btn btn-secondary" style="font-size:10px;" onclick="showToast('2 instances upgraded to v2')">Upgrade Selected</button>
+          </div>
           <div style="font-size:12px;">
-            <div style="padding:6px 0;border-bottom:1px solid #1e293b;display:flex;justify-content:space-between;"><span>Plano 3600 #1</span><span style="color:#64748b;">MUSE → Level 1 (v2)</span></div>
-            <div style="padding:6px 0;border-bottom:1px solid #1e293b;display:flex;justify-content:space-between;"><span>Plano 3600 #2</span><span style="color:#64748b;">MUSE → Level 2 (v2)</span></div>
-            <div style="padding:6px 0;border-bottom:1px solid #1e293b;display:flex;justify-content:space-between;"><span>Plano 3600 #3</span><span style="color:#64748b;">MUSE → Level 3 (v2)</span></div>
-            <div style="padding:6px 0;border-bottom:1px solid #1e293b;display:flex;justify-content:space-between;"><span>Plano 3600 #4</span><span style="color:#64748b;">MUSE → Level 4 (v1)</span></div>
-            <div style="padding:6px 0;display:flex;justify-content:space-between;"><span>Plano 3600 #5</span><span style="color:#64748b;">MUSE → Level 5 (v2)</span></div>
+            <div style="padding:6px 0;border-bottom:1px solid #1e293b;display:flex;align-items:center;gap:8px;">
+              <input type="checkbox" disabled>
+              <span style="flex:1;">Plano 3600 #1</span>
+              <span style="color:#64748b;">MUSE → Level 1</span>
+              <span class="badge badge-active" style="font-size:9px;">v2</span>
+            </div>
+            <div style="padding:6px 0;border-bottom:1px solid #1e293b;display:flex;align-items:center;gap:8px;">
+              <input type="checkbox" disabled>
+              <span style="flex:1;">Plano 3600 #2</span>
+              <span style="color:#64748b;">MUSE → Level 2</span>
+              <span class="badge badge-active" style="font-size:9px;">v2</span>
+            </div>
+            <div style="padding:6px 0;border-bottom:1px solid #1e293b;display:flex;align-items:center;gap:8px;">
+              <input type="checkbox" disabled>
+              <span style="flex:1;">Plano 3600 #3</span>
+              <span style="color:#64748b;">MUSE → Level 3</span>
+              <span class="badge badge-active" style="font-size:9px;">v2</span>
+            </div>
+            <div style="padding:6px 0;border-bottom:1px solid #1e293b;display:flex;align-items:center;gap:8px;">
+              <input type="checkbox" checked>
+              <span style="flex:1;">Plano 3600 #4</span>
+              <span style="color:#64748b;">MUSE → Level 4</span>
+              <span class="badge" style="background:#78350f;color:#fbbf24;font-size:9px;">v1 — upgrade available</span>
+            </div>
+            <div style="padding:6px 0;border-bottom:1px solid #1e293b;display:flex;align-items:center;gap:8px;">
+              <input type="checkbox" checked>
+              <span style="flex:1;">Plano 3600 #6</span>
+              <span style="color:#64748b;">MUSE → Level 6</span>
+              <span class="badge" style="background:#78350f;color:#fbbf24;font-size:9px;">v1 — upgrade available</span>
+            </div>
+            <div style="padding:6px 0;display:flex;align-items:center;gap:8px;">
+              <input type="checkbox" disabled>
+              <span style="flex:1;">Plano 3600 #5</span>
+              <span style="color:#64748b;">MUSE → Level 5</span>
+              <span class="badge badge-active" style="font-size:9px;">v2</span>
+            </div>
           </div>
         </div>
         <div class="tpl-form-right">
