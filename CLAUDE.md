@@ -75,6 +75,7 @@ Tailwind v4 with custom `accent` color (#ff6600 orange). Dark mode supported. Gr
 - [specification/storage-model.md](specification/storage-model.md) — storage data model (modules, templates, inserts, overrides, paths)
 - [specification/deployment.md](specification/deployment.md) — CI/CD pipeline and deployment
 - [specification/storage-navigator-design.md](specification/storage-navigator-design.md) — grid visualization UI/UX spec
+- [specification/storage-definition-design.md](specification/storage-definition-design.md) — module/template/insert definition UI/UX spec
 - [specification/item-taxonomy.md](specification/item-taxonomy.md) — item classification (categories, parameters, aspects)
 - [specification/item-maintenance.md](specification/item-maintenance.md) — item lifecycle use cases
 - [specification/item-management-design.md](specification/item-management-design.md) — item management UI/UX spec

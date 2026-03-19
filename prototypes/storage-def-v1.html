@@ -1,0 +1,834 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>WhereTF — Storage Definition Prototype</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #0f172a; color: #e2e8f0; font-size: 13px; height: 100vh; display: flex; overflow: hidden; }
+
+  /* Sidebar */
+  .sidebar { width: 52px; background: #1e293b; border-right: 1px solid #334155; display: flex; flex-direction: column; align-items: center; padding: 12px 0; gap: 12px; flex-shrink: 0; }
+  .sidebar a { width: 32px; height: 32px; border-radius: 6px; display: flex; align-items: center; justify-content: center; color: #94a3b8; text-decoration: none; transition: all 0.15s; font-size: 16px; }
+  .sidebar a:hover, .sidebar a.active { background: #334155; color: #ff6600; }
+
+  /* Main content */
+  .main { flex: 1; display: flex; flex-direction: column; min-width: 0; }
+  .topbar { height: 44px; background: #1e293b; border-bottom: 1px solid #334155; display: flex; align-items: center; padding: 0 20px; gap: 8px; flex-shrink: 0; }
+  .topbar .breadcrumb { color: #94a3b8; font-size: 12px; }
+  .topbar .breadcrumb a { color: #94a3b8; text-decoration: none; }
+  .topbar .breadcrumb a:hover { color: #ff6600; }
+  .topbar .breadcrumb .sep { margin: 0 6px; }
+  .topbar .breadcrumb .current { color: #e2e8f0; }
+  .content { flex: 1; overflow-y: auto; }
+
+  /* Views */
+  .view { display: none; height: 100%; }
+  .view.active { display: flex; flex-direction: column; }
+
+  /* Module List */
+  .module-list-header { display: flex; align-items: center; justify-content: space-between; padding: 20px 24px 12px; }
+  .module-list-header h1 { font-size: 18px; font-weight: 600; }
+  .card-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 16px; padding: 0 24px 24px; }
+  .module-card { background: #1e293b; border: 1px solid #334155; border-radius: 8px; padding: 16px; cursor: pointer; transition: all 0.15s; }
+  .module-card:hover { border-color: #ff6600; }
+  .module-card h3 { font-size: 15px; font-weight: 600; margin-bottom: 4px; }
+  .module-card .desc { color: #94a3b8; font-size: 12px; margin-bottom: 10px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .module-card .stats { display: flex; gap: 16px; font-size: 11px; color: #64748b; }
+  .module-card .occ-bar { height: 4px; background: #334155; border-radius: 2px; margin-top: 10px; overflow: hidden; }
+  .module-card .occ-bar .fill { height: 100%; background: #ff6600; border-radius: 2px; }
+
+  /* Buttons */
+  .btn { padding: 6px 14px; border-radius: 6px; border: none; cursor: pointer; font-size: 12px; font-weight: 500; transition: all 0.15s; display: inline-flex; align-items: center; gap: 6px; }
+  .btn-primary { background: #ff6600; color: white; }
+  .btn-primary:hover { background: #e65c00; }
+  .btn-secondary { background: #334155; color: #e2e8f0; }
+  .btn-secondary:hover { background: #475569; }
+  .btn-danger { background: transparent; color: #f87171; border: 1px solid #7f1d1d; }
+  .btn-danger:hover { background: #7f1d1d; }
+  .btn-ghost { background: transparent; color: #94a3b8; }
+  .btn-ghost:hover { color: #e2e8f0; }
+  .btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+  /* Wizard */
+  .wizard { max-width: 640px; margin: 0 auto; padding: 32px 24px; }
+  .wizard h1 { font-size: 20px; font-weight: 600; margin-bottom: 4px; }
+  .wizard .subtitle { color: #64748b; font-size: 12px; margin-bottom: 24px; }
+  .wizard-steps { display: flex; gap: 4px; margin-bottom: 28px; }
+  .wizard-step { flex: 1; height: 3px; background: #334155; border-radius: 2px; }
+  .wizard-step.done { background: #ff6600; }
+  .wizard-step.active { background: #ff6600; opacity: 0.6; }
+  .form-group { margin-bottom: 18px; }
+  .form-group label { display: block; font-size: 11px; font-weight: 600; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 6px; }
+  .form-group input, .form-group select, .form-group textarea { width: 100%; padding: 8px 12px; background: #0f172a; border: 1px solid #334155; border-radius: 6px; color: #e2e8f0; font-size: 13px; outline: none; transition: border-color 0.15s; font-family: inherit; }
+  .form-group input:focus, .form-group select:focus { border-color: #ff6600; }
+  .form-group .hint { font-size: 11px; color: #64748b; margin-top: 4px; }
+  .form-row { display: flex; gap: 16px; }
+  .form-row .form-group { flex: 1; }
+  .wizard-footer { display: flex; justify-content: space-between; margin-top: 28px; }
+
+  /* Stack preview */
+  .stack-preview { background: #0f172a; border: 1px solid #334155; border-radius: 8px; padding: 16px; margin-top: 8px; }
+  .stack-row { display: flex; align-items: center; gap: 8px; padding: 6px 12px; border: 1px solid #334155; border-radius: 4px; margin-bottom: 4px; font-size: 12px; }
+  .stack-row .num { color: #ff6600; font-weight: 600; width: 24px; }
+  .stack-row .label { color: #94a3b8; }
+
+  /* Two-panel layout */
+  .two-panel { display: flex; flex: 1; min-height: 0; }
+  .panel-left { flex: 1; min-width: 320px; max-width: 520px; border-right: 1px solid #334155; display: flex; flex-direction: column; overflow-y: auto; }
+  .panel-right { flex: 1; display: flex; flex-direction: column; overflow-y: auto; background: #0f172a; }
+
+  /* Module detail header */
+  .module-header { padding: 16px 20px; border-bottom: 1px solid #334155; }
+  .module-header h2 { font-size: 16px; font-weight: 600; }
+  .module-header .module-desc { color: #94a3b8; font-size: 12px; margin-top: 2px; }
+  .module-header .module-meta { display: flex; gap: 16px; margin-top: 8px; font-size: 11px; color: #64748b; }
+
+  /* Level table */
+  .level-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+  .level-table th { text-align: left; padding: 8px 16px; color: #64748b; font-weight: 600; font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; border-bottom: 1px solid #334155; position: sticky; top: 0; background: #1e293b; z-index: 1; }
+  .level-table td { padding: 8px 16px; border-bottom: 1px solid #1e293b; }
+  .level-table tr { cursor: pointer; transition: background 0.1s; }
+  .level-table tr:hover { background: #1e293b; }
+  .level-table tr.selected { background: rgba(255, 102, 0, 0.08); }
+  .level-table tr.disabled-row td { opacity: 0.5; }
+  .badge { display: inline-block; padding: 2px 8px; border-radius: 10px; font-size: 10px; font-weight: 500; }
+  .badge-receptacle { background: #1e3a5f; color: #60a5fa; }
+  .badge-fixed { background: #3b1f4a; color: #c084fc; }
+  .badge-disabled { background: #7f1d1d; color: #fca5a5; }
+  .badge-active { background: #14532d; color: #86efac; }
+  .insert-name { color: #ff6600; font-size: 11px; }
+  .occ-inline { font-size: 11px; color: #64748b; }
+  .occ-inline .filled { color: #86efac; }
+
+  /* Grid preview panel */
+  .grid-panel { padding: 20px; display: flex; flex-direction: column; align-items: center; }
+  .grid-panel h3 { font-size: 13px; font-weight: 600; color: #94a3b8; margin-bottom: 16px; text-transform: uppercase; letter-spacing: 0.05em; }
+  .grid-empty { display: flex; flex-direction: column; align-items: center; justify-content: center; flex: 1; color: #64748b; font-size: 13px; text-align: center; gap: 12px; padding: 40px; }
+
+  /* SVG Grid */
+  .svg-grid-container { display: flex; justify-content: center; }
+  .svg-grid rect.cell { stroke: #475569; stroke-width: 1; fill: transparent; cursor: pointer; transition: all 0.15s; }
+  .svg-grid rect.cell:hover { stroke: #ff6600; stroke-width: 2; }
+  .svg-grid rect.cell.occupied { fill: #1e3a5f; }
+  .svg-grid rect.cell.selected { stroke: #ff6600; stroke-width: 2; }
+  .svg-grid rect.cell.disabled { fill: url(#stripe-pattern); opacity: 0.5; }
+  .svg-grid rect.cell.merged { fill: #1a2744; }
+  .svg-grid rect.cell.merge-select { stroke: #ff6600; stroke-width: 2; stroke-dasharray: 4 2; }
+  .svg-grid text.label { fill: #64748b; font-size: 10px; text-anchor: middle; dominant-baseline: central; pointer-events: none; }
+  .svg-grid text.axis-label { fill: #94a3b8; font-size: 11px; font-weight: 600; text-anchor: middle; dominant-baseline: central; }
+  .svg-grid text.cell-text { fill: #94a3b8; font-size: 9px; text-anchor: middle; dominant-baseline: central; pointer-events: none; }
+
+  /* Grid toolbar */
+  .grid-toolbar { display: flex; gap: 6px; margin-bottom: 12px; padding: 6px 8px; background: #1e293b; border-radius: 6px; border: 1px solid #334155; }
+
+  /* Continuous dimension visualization */
+  .cont-row { margin-bottom: 12px; }
+  .cont-row-label { font-size: 11px; color: #94a3b8; margin-bottom: 4px; display: flex; justify-content: space-between; }
+  .cont-row-bar { height: 48px; background: #1e293b; border: 1px solid #334155; border-radius: 4px; display: flex; overflow: hidden; position: relative; }
+  .cont-insert { display: flex; align-items: center; justify-content: center; font-size: 10px; color: #e2e8f0; border-right: 1px solid #334155; cursor: pointer; transition: all 0.15s; }
+  .cont-insert:hover { outline: 2px solid #ff6600; outline-offset: -2px; z-index: 1; }
+  .cont-insert.bin-blue { background: #1e3a5f; }
+  .cont-insert.bin-green { background: #14532d; }
+  .cont-insert.bin-purple { background: #3b1f4a; }
+  .cont-empty { flex: 1; }
+  .cont-overflow { position: absolute; bottom: -20px; font-size: 9px; color: #f59e0b; }
+
+  /* Template list */
+  .tpl-table { width: 100%; border-collapse: collapse; font-size: 12px; margin: 0 24px; max-width: calc(100% - 48px); }
+  .tpl-table th { text-align: left; padding: 10px 16px; color: #64748b; font-weight: 600; font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; border-bottom: 1px solid #334155; }
+  .tpl-table td { padding: 10px 16px; border-bottom: 1px solid #1e293b; }
+  .tpl-table tr { cursor: pointer; transition: background 0.1s; }
+  .tpl-table tr:hover { background: #1e293b; }
+
+  /* Template form */
+  .tpl-form-layout { display: flex; flex: 1; min-height: 0; }
+  .tpl-form-left { flex: 1; max-width: 400px; padding: 24px; overflow-y: auto; }
+  .tpl-form-right { flex: 1; display: flex; align-items: center; justify-content: center; background: #0f172a; border-left: 1px solid #334155; padding: 24px; }
+
+  /* Toast */
+  .toast-container { position: fixed; bottom: 20px; right: 20px; z-index: 100; display: flex; flex-direction: column; gap: 8px; }
+  .toast { background: #1e293b; border: 1px solid #334155; border-radius: 8px; padding: 10px 16px; font-size: 12px; display: flex; align-items: center; gap: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.4); animation: slideIn 0.2s ease-out; }
+  .toast .undo { color: #ff6600; cursor: pointer; font-weight: 500; white-space: nowrap; }
+  .toast .undo:hover { text-decoration: underline; }
+  @keyframes slideIn { from { transform: translateY(10px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+
+  /* Place insert modal */
+  .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.6); z-index: 50; display: flex; align-items: center; justify-content: center; }
+  .modal { background: #1e293b; border: 1px solid #334155; border-radius: 10px; width: 680px; max-height: 80vh; display: flex; flex-direction: column; }
+  .modal-header { padding: 14px 20px; border-bottom: 1px solid #334155; display: flex; align-items: center; justify-content: space-between; }
+  .modal-header h2 { font-size: 14px; font-weight: 600; }
+  .modal-body { padding: 16px 20px; overflow-y: auto; flex: 1; }
+  .modal-footer { padding: 12px 20px; border-top: 1px solid #334155; display: flex; justify-content: flex-end; gap: 8px; }
+
+  .tpl-picker-row { display: flex; align-items: center; justify-content: space-between; padding: 8px 12px; border: 1px solid #334155; border-radius: 6px; margin-bottom: 6px; cursor: pointer; transition: all 0.15s; }
+  .tpl-picker-row:hover { border-color: #475569; }
+  .tpl-picker-row.selected { border-color: #ff6600; background: rgba(255,102,0,0.08); }
+  .tpl-picker-row .tpl-name { font-weight: 500; }
+  .tpl-picker-row .tpl-dims { color: #64748b; font-size: 11px; }
+
+  /* Divide panel */
+  .divide-options { display: flex; flex-direction: column; gap: 8px; }
+  .divide-option { padding: 10px 14px; border: 1px solid #334155; border-radius: 6px; cursor: pointer; transition: all 0.15s; }
+  .divide-option:hover { border-color: #475569; }
+  .divide-option.selected { border-color: #ff6600; background: rgba(255,102,0,0.08); }
+  .divide-option .opt-name { font-weight: 500; font-size: 12px; }
+  .divide-option .opt-desc { color: #64748b; font-size: 11px; margin-top: 2px; }
+</style>
+</head>
+<body>
+
+<!-- Sidebar -->
+<nav class="sidebar">
+  <a href="#" title="Modules" class="active" onclick="showView('modules')">▦</a>
+  <a href="#" title="Items" onclick="showView('modules')">⬡</a>
+  <a href="#" title="Templates" onclick="showView('templates')">⊞</a>
+  <a href="#" title="Activity">⏱</a>
+</nav>
+
+<div class="main">
+  <div class="topbar">
+    <div class="breadcrumb" id="breadcrumb">
+      <span class="current">Modules</span>
+    </div>
+  </div>
+
+  <div class="content" id="content">
+
+    <!-- ===================== MODULE LIST ===================== -->
+    <div class="view active" id="view-modules">
+      <div class="module-list-header">
+        <h1>Modules</h1>
+        <button class="btn btn-primary" onclick="showView('wizard-1')">+ New Module</button>
+      </div>
+      <div class="card-grid">
+        <div class="module-card" onclick="showView('module-detail')">
+          <h3>MUSE</h3>
+          <p class="desc">Red metal cabinet, 11 shelf levels, under workbench</p>
+          <div class="stats">
+            <span>11 levels</span>
+            <span>7 inserts placed</span>
+          </div>
+          <div class="occ-bar"><div class="fill" style="width:62%"></div></div>
+        </div>
+        <div class="module-card" onclick="showView('module-detail-alex')">
+          <h3>ALEX</h3>
+          <p class="desc">IKEA ALEX drawer unit, 9 drawers, left of desk</p>
+          <div class="stats">
+            <span>9 drawers</span>
+            <span>4 inserts placed</span>
+          </div>
+          <div class="occ-bar"><div class="fill" style="width:38%"></div></div>
+        </div>
+        <div class="module-card">
+          <h3>AKRO</h3>
+          <p class="desc">Akro-Mils 10116, 16-drawer small parts cabinet</p>
+          <div class="stats">
+            <span>16 drawers</span>
+            <span>0 inserts</span>
+          </div>
+          <div class="occ-bar"><div class="fill" style="width:0%"></div></div>
+        </div>
+        <div class="module-card">
+          <h3>LOUVER</h3>
+          <p class="desc">Wall-mounted louvered panel, 8 rows, hanging bins</p>
+          <div class="stats">
+            <span>8 rows</span>
+            <span>12 inserts</span>
+          </div>
+          <div class="occ-bar"><div class="fill" style="width:71%"></div></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ===================== WIZARD STEP 1 ===================== -->
+    <div class="view" id="view-wizard-1">
+      <div class="wizard">
+        <h1>New Module</h1>
+        <p class="subtitle">Define a physical storage unit</p>
+        <div class="wizard-steps">
+          <div class="wizard-step active"></div>
+          <div class="wizard-step"></div>
+          <div class="wizard-step"></div>
+          <div class="wizard-step"></div>
+        </div>
+        <div class="form-group">
+          <label>Name</label>
+          <input type="text" placeholder="e.g. MUSE, ALEX, SHELF-1" value="BENCH">
+          <div class="hint">Short identifier. This becomes the first segment of every location path.</div>
+        </div>
+        <div class="form-group">
+          <label>Description</label>
+          <textarea rows="2" placeholder="What is this physically?">Workbench pegboard and shelf unit, 5 levels</textarea>
+        </div>
+        <div class="wizard-footer">
+          <button class="btn btn-ghost" onclick="showView('modules')">Cancel</button>
+          <button class="btn btn-primary" onclick="showView('wizard-2')">Next →</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ===================== WIZARD STEP 2 ===================== -->
+    <div class="view" id="view-wizard-2">
+      <div class="wizard">
+        <h1>New Module</h1>
+        <p class="subtitle">Define the primary dimension</p>
+        <div class="wizard-steps">
+          <div class="wizard-step done"></div>
+          <div class="wizard-step active"></div>
+          <div class="wizard-step"></div>
+          <div class="wizard-step"></div>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label>Dimension Label</label>
+            <input type="text" placeholder="level, drawer, shelf, row..." value="level" list="dim-suggestions">
+            <datalist id="dim-suggestions">
+              <option value="level">
+              <option value="drawer">
+              <option value="shelf">
+              <option value="row">
+              <option value="bay">
+            </datalist>
+            <div class="hint">What are the subdivisions called?</div>
+          </div>
+          <div class="form-group">
+            <label>Count</label>
+            <input type="number" min="1" value="5">
+          </div>
+        </div>
+        <div class="stack-preview">
+          <div class="stack-row"><span class="num">1</span><span class="label">Level 1</span></div>
+          <div class="stack-row"><span class="num">2</span><span class="label">Level 2</span></div>
+          <div class="stack-row"><span class="num">3</span><span class="label">Level 3</span></div>
+          <div class="stack-row"><span class="num">4</span><span class="label">Level 4</span></div>
+          <div class="stack-row"><span class="num">5</span><span class="label">Level 5</span></div>
+        </div>
+        <div class="wizard-footer">
+          <button class="btn btn-ghost" onclick="showView('wizard-1')">← Back</button>
+          <button class="btn btn-primary" onclick="showView('wizard-3')">Next →</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ===================== WIZARD STEP 3 ===================== -->
+    <div class="view" id="view-wizard-3">
+      <div class="wizard">
+        <h1>New Module</h1>
+        <p class="subtitle">Configure levels</p>
+        <div class="wizard-steps">
+          <div class="wizard-step done"></div>
+          <div class="wizard-step done"></div>
+          <div class="wizard-step active"></div>
+          <div class="wizard-step"></div>
+        </div>
+        <table class="level-table" style="margin-bottom: 16px;">
+          <thead>
+            <tr><th><input type="checkbox"></th><th>Label</th><th>Type</th><th>Notes</th></tr>
+          </thead>
+          <tbody>
+            <tr><td><input type="checkbox"></td><td><input type="text" value="1" style="width:60px;padding:4px 8px;background:#0f172a;border:1px solid #334155;border-radius:4px;color:#e2e8f0;font-size:12px;"></td><td><select style="padding:4px 8px;background:#0f172a;border:1px solid #334155;border-radius:4px;color:#e2e8f0;font-size:12px;"><option>receptacle</option><option>fixed</option></select></td><td><input type="text" placeholder="—" style="width:100%;padding:4px 8px;background:#0f172a;border:1px solid #334155;border-radius:4px;color:#e2e8f0;font-size:12px;"></td></tr>
+            <tr><td><input type="checkbox"></td><td><input type="text" value="2" style="width:60px;padding:4px 8px;background:#0f172a;border:1px solid #334155;border-radius:4px;color:#e2e8f0;font-size:12px;"></td><td><select style="padding:4px 8px;background:#0f172a;border:1px solid #334155;border-radius:4px;color:#e2e8f0;font-size:12px;"><option>receptacle</option><option>fixed</option></select></td><td><input type="text" placeholder="—" style="width:100%;padding:4px 8px;background:#0f172a;border:1px solid #334155;border-radius:4px;color:#e2e8f0;font-size:12px;"></td></tr>
+            <tr><td><input type="checkbox"></td><td><input type="text" value="3" style="width:60px;padding:4px 8px;background:#0f172a;border:1px solid #334155;border-radius:4px;color:#e2e8f0;font-size:12px;"></td><td><select style="padding:4px 8px;background:#0f172a;border:1px solid #334155;border-radius:4px;color:#e2e8f0;font-size:12px;"><option>receptacle</option><option>fixed</option></select></td><td><input type="text" placeholder="—" style="width:100%;padding:4px 8px;background:#0f172a;border:1px solid #334155;border-radius:4px;color:#e2e8f0;font-size:12px;"></td></tr>
+            <tr><td><input type="checkbox"></td><td><input type="text" value="4" style="width:60px;padding:4px 8px;background:#0f172a;border:1px solid #334155;border-radius:4px;color:#e2e8f0;font-size:12px;"></td><td><select style="padding:4px 8px;background:#0f172a;border:1px solid #334155;border-radius:4px;color:#e2e8f0;font-size:12px;"><option>receptacle</option><option>fixed</option></select></td><td><input type="text" placeholder="—" style="width:100%;padding:4px 8px;background:#0f172a;border:1px solid #334155;border-radius:4px;color:#e2e8f0;font-size:12px;"></td></tr>
+            <tr><td><input type="checkbox"></td><td><input type="text" value="5" style="width:60px;padding:4px 8px;background:#0f172a;border:1px solid #334155;border-radius:4px;color:#e2e8f0;font-size:12px;"></td><td><select style="padding:4px 8px;background:#0f172a;border:1px solid #334155;border-radius:4px;color:#e2e8f0;font-size:12px;"><option>receptacle</option><option>fixed</option></select></td><td><input type="text" placeholder="—" style="width:100%;padding:4px 8px;background:#0f172a;border:1px solid #334155;border-radius:4px;color:#e2e8f0;font-size:12px;"></td></tr>
+          </tbody>
+        </table>
+        <div style="display:flex;gap:8px;margin-bottom:16px;">
+          <button class="btn btn-secondary" style="font-size:11px;">Set Selected → Receptacle</button>
+          <button class="btn btn-secondary" style="font-size:11px;">Set Selected → Fixed</button>
+        </div>
+        <div class="wizard-footer">
+          <button class="btn btn-ghost" onclick="showView('wizard-2')">← Back</button>
+          <button class="btn btn-primary" onclick="showView('wizard-4')">Next →</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ===================== WIZARD STEP 4 ===================== -->
+    <div class="view" id="view-wizard-4">
+      <div class="wizard">
+        <h1>New Module</h1>
+        <p class="subtitle">Review and create</p>
+        <div class="wizard-steps">
+          <div class="wizard-step done"></div>
+          <div class="wizard-step done"></div>
+          <div class="wizard-step done"></div>
+          <div class="wizard-step active"></div>
+        </div>
+        <div style="background:#1e293b;border:1px solid #334155;border-radius:8px;padding:16px;margin-bottom:20px;">
+          <div style="display:flex;justify-content:space-between;margin-bottom:12px;">
+            <div>
+              <div style="font-size:16px;font-weight:600;">BENCH</div>
+              <div style="color:#94a3b8;font-size:12px;margin-top:2px;">Workbench pegboard and shelf unit, 5 levels</div>
+            </div>
+            <div style="color:#64748b;font-size:12px;">5 levels</div>
+          </div>
+          <table style="width:100%;font-size:12px;border-collapse:collapse;">
+            <tr style="border-bottom:1px solid #334155;"><td style="padding:6px 0;color:#94a3b8;">Level 1</td><td><span class="badge badge-receptacle">receptacle</span></td></tr>
+            <tr style="border-bottom:1px solid #334155;"><td style="padding:6px 0;color:#94a3b8;">Level 2</td><td><span class="badge badge-receptacle">receptacle</span></td></tr>
+            <tr style="border-bottom:1px solid #334155;"><td style="padding:6px 0;color:#94a3b8;">Level 3</td><td><span class="badge badge-receptacle">receptacle</span></td></tr>
+            <tr style="border-bottom:1px solid #334155;"><td style="padding:6px 0;color:#94a3b8;">Level 4</td><td><span class="badge badge-receptacle">receptacle</span></td></tr>
+            <tr><td style="padding:6px 0;color:#94a3b8;">Level 5</td><td><span class="badge badge-receptacle">receptacle</span></td></tr>
+          </table>
+        </div>
+        <div class="wizard-footer">
+          <button class="btn btn-ghost" onclick="showView('wizard-3')">← Back</button>
+          <button class="btn btn-primary" onclick="showView('modules'); showToast('Module BENCH created with 5 levels')">Create Module</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ===================== MODULE DETAIL (MUSE) ===================== -->
+    <div class="view" id="view-module-detail">
+      <div class="two-panel">
+        <div class="panel-left">
+          <div class="module-header">
+            <h2>MUSE</h2>
+            <p class="module-desc">Red metal cabinet, 11 shelf levels, under workbench</p>
+            <div class="module-meta">
+              <span>11 levels</span>
+              <span>7 inserts</span>
+              <span>62% occupied</span>
+            </div>
+          </div>
+          <div style="flex:1;overflow-y:auto;">
+            <table class="level-table">
+              <thead>
+                <tr><th>Level</th><th>Type</th><th>Insert</th><th>Status</th><th>Occ.</th></tr>
+              </thead>
+              <tbody>
+                <tr onclick="selectLevel(this, 'plano')" class="selected"><td>1</td><td><span class="badge badge-receptacle">rec.</span></td><td><span class="insert-name">Plano 3600 #1</span></td><td><span class="badge badge-active">active</span></td><td><span class="occ-inline"><span class="filled">18</span>/24</span></td></tr>
+                <tr onclick="selectLevel(this, 'plano')"><td>2</td><td><span class="badge badge-receptacle">rec.</span></td><td><span class="insert-name">Plano 3600 #2</span></td><td><span class="badge badge-active">active</span></td><td><span class="occ-inline"><span class="filled">12</span>/24</span></td></tr>
+                <tr onclick="selectLevel(this, 'plano-merged')"><td>3</td><td><span class="badge badge-receptacle">rec.</span></td><td><span class="insert-name">Plano 3600 #3</span></td><td><span class="badge badge-active">active</span></td><td><span class="occ-inline"><span class="filled">20</span>/22</span></td></tr>
+                <tr onclick="selectLevel(this, 'plano')"><td>4</td><td><span class="badge badge-receptacle">rec.</span></td><td><span class="insert-name">Plano 3600 #4</span></td><td><span class="badge badge-active">active</span></td><td><span class="occ-inline"><span class="filled">6</span>/24</span></td></tr>
+                <tr onclick="selectLevel(this, 'plano')"><td>5</td><td><span class="badge badge-receptacle">rec.</span></td><td><span class="insert-name">Plano 3600 #5</span></td><td><span class="badge badge-active">active</span></td><td><span class="occ-inline"><span class="filled">22</span>/24</span></td></tr>
+                <tr onclick="selectLevel(this, 'plano')"><td>6</td><td><span class="badge badge-receptacle">rec.</span></td><td><span class="insert-name">Plano 3600 #6</span></td><td><span class="badge badge-active">active</span></td><td><span class="occ-inline"><span class="filled">9</span>/24</span></td></tr>
+                <tr onclick="selectLevel(this, 'plano')"><td>7</td><td><span class="badge badge-receptacle">rec.</span></td><td><span class="insert-name">Plano 3600 #7</span></td><td><span class="badge badge-active">active</span></td><td><span class="occ-inline"><span class="filled">0</span>/24</span></td></tr>
+                <tr onclick="selectLevel(this, 'empty')"><td>8</td><td><span class="badge badge-receptacle">rec.</span></td><td style="color:#64748b;">—</td><td><span class="badge badge-active">active</span></td><td style="color:#64748b;">—</td></tr>
+                <tr onclick="selectLevel(this, 'empty')"><td>9</td><td><span class="badge badge-receptacle">rec.</span></td><td style="color:#64748b;">—</td><td><span class="badge badge-active">active</span></td><td style="color:#64748b;">—</td></tr>
+                <tr class="disabled-row" onclick="selectLevel(this, 'disabled')"><td>10</td><td><span class="badge badge-receptacle">rec.</span></td><td style="color:#64748b;">—</td><td><span class="badge badge-disabled">disabled</span></td><td style="color:#64748b;">—</td></tr>
+                <tr onclick="selectLevel(this, 'empty')"><td>11</td><td><span class="badge badge-receptacle">rec.</span></td><td style="color:#64748b;">—</td><td><span class="badge badge-active">active</span></td><td style="color:#64748b;">—</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <div style="padding:12px 16px;border-top:1px solid #334155;display:flex;gap:8px;">
+            <button class="btn btn-secondary" style="font-size:11px;">+ Add Level</button>
+            <button class="btn btn-danger" style="font-size:11px;">Delete Module</button>
+          </div>
+        </div>
+        <div class="panel-right">
+          <div class="grid-panel" id="grid-panel">
+            <!-- Populated by JS -->
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ===================== TEMPLATE LIST ===================== -->
+    <div class="view" id="view-templates">
+      <div class="module-list-header">
+        <h1>Templates</h1>
+        <button class="btn btn-primary" onclick="showView('template-new')">+ New Template</button>
+      </div>
+      <table class="tpl-table">
+        <thead>
+          <tr><th>Name</th><th>Type</th><th>Version</th><th>Dimensions</th><th>Instances</th></tr>
+        </thead>
+        <tbody>
+          <tr onclick="showView('template-detail')"><td style="font-weight:500;">Plano 3600 Stowaway</td><td><span class="badge badge-fixed">fixed</span></td><td>v2</td><td>4 × 6</td><td>7</td></tr>
+          <tr><td style="font-weight:500;">Gridfinity Baseplate</td><td><span class="badge" style="background:#14532d;color:#86efac;">parametric</span></td><td>v1</td><td>1×1 – 12×12</td><td>4</td></tr>
+          <tr><td style="font-weight:500;">Akro-Mils 30220</td><td><span class="badge badge-fixed">fixed</span></td><td>v1</td><td>1 × 1</td><td>12</td></tr>
+          <tr><td style="font-weight:500;">Akro-Mils 30230</td><td><span class="badge badge-fixed">fixed</span></td><td>v1</td><td>1 × 1</td><td>6</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <!-- ===================== TEMPLATE CREATION ===================== -->
+    <div class="view" id="view-template-new">
+      <div class="tpl-form-layout">
+        <div class="tpl-form-left">
+          <h2 style="font-size:16px;font-weight:600;margin-bottom:20px;">New Template</h2>
+          <div class="form-group">
+            <label>Name</label>
+            <input type="text" placeholder="e.g. Plano 3600 Stowaway" value="Stanley FatMax Pro">
+          </div>
+          <div class="form-group">
+            <label>Description</label>
+            <input type="text" placeholder="Optional" value="Deep organizer, removable dividers">
+          </div>
+          <div class="form-group">
+            <label>Type</label>
+            <select>
+              <option selected>Fixed</option>
+              <option>Parametric</option>
+            </select>
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label>Rows</label>
+              <input type="number" min="1" value="5" id="tpl-rows" oninput="updateTemplatePreview()">
+            </div>
+            <div class="form-group">
+              <label>Columns</label>
+              <input type="number" min="1" value="4" id="tpl-cols" oninput="updateTemplatePreview()">
+            </div>
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label>Row Labels</label>
+              <select><option selected>Alpha (A, B, C...)</option><option>Numeric (1, 2, 3...)</option></select>
+            </div>
+            <div class="form-group">
+              <label>Column Labels</label>
+              <select><option selected>Numeric (1, 2, 3...)</option><option>Alpha (A, B, C...)</option></select>
+            </div>
+          </div>
+          <div class="form-group">
+            <label>Origin</label>
+            <select><option selected>Top-left</option><option>Top-right</option><option>Bottom-left</option><option>Bottom-right</option></select>
+          </div>
+          <div class="form-group">
+            <label>Unit System</label>
+            <select><option selected>Metric</option><option>Imperial</option></select>
+          </div>
+          <div style="display:flex;gap:8px;margin-top:24px;">
+            <button class="btn btn-ghost" onclick="showView('templates')">Cancel</button>
+            <button class="btn btn-primary" onclick="showView('templates'); showToast('Template Stanley FatMax Pro created (v1)')">Create Template</button>
+          </div>
+        </div>
+        <div class="tpl-form-right">
+          <div id="tpl-preview"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ===================== TEMPLATE DETAIL ===================== -->
+    <div class="view" id="view-template-detail">
+      <div class="tpl-form-layout">
+        <div class="tpl-form-left">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;">
+            <h2 style="font-size:16px;font-weight:600;">Plano 3600 Stowaway</h2>
+            <span class="badge badge-fixed">fixed</span>
+          </div>
+          <p style="color:#94a3b8;font-size:12px;margin-bottom:20px;">4-row × 6-column organizer with removable dividers. Standard Plano Stowaway form factor.</p>
+
+          <h3 style="font-size:11px;font-weight:600;color:#94a3b8;text-transform:uppercase;letter-spacing:0.05em;margin-bottom:10px;">Version History</h3>
+          <table style="width:100%;font-size:12px;border-collapse:collapse;margin-bottom:20px;">
+            <thead><tr><th style="text-align:left;padding:6px 0;color:#64748b;font-size:11px;border-bottom:1px solid #334155;">Version</th><th style="text-align:left;padding:6px 0;color:#64748b;font-size:11px;border-bottom:1px solid #334155;">Dims</th><th style="text-align:left;padding:6px 0;color:#64748b;font-size:11px;border-bottom:1px solid #334155;">Published</th><th style="text-align:left;padding:6px 0;color:#64748b;font-size:11px;border-bottom:1px solid #334155;">Instances</th></tr></thead>
+            <tbody>
+              <tr><td style="padding:6px 0;color:#ff6600;font-weight:500;">v2</td><td style="padding:6px 0;">4 × 6</td><td style="padding:6px 0;color:#64748b;">Mar 15, 2026</td><td style="padding:6px 0;">5</td></tr>
+              <tr><td style="padding:6px 0;">v1</td><td style="padding:6px 0;">4 × 6</td><td style="padding:6px 0;color:#64748b;">Mar 1, 2026</td><td style="padding:6px 0;">2</td></tr>
+            </tbody>
+          </table>
+          <button class="btn btn-secondary" style="margin-bottom:24px;">Publish New Version</button>
+
+          <h3 style="font-size:11px;font-weight:600;color:#94a3b8;text-transform:uppercase;letter-spacing:0.05em;margin-bottom:10px;">Instances</h3>
+          <div style="font-size:12px;">
+            <div style="padding:6px 0;border-bottom:1px solid #1e293b;display:flex;justify-content:space-between;"><span>Plano 3600 #1</span><span style="color:#64748b;">MUSE → Level 1 (v2)</span></div>
+            <div style="padding:6px 0;border-bottom:1px solid #1e293b;display:flex;justify-content:space-between;"><span>Plano 3600 #2</span><span style="color:#64748b;">MUSE → Level 2 (v2)</span></div>
+            <div style="padding:6px 0;border-bottom:1px solid #1e293b;display:flex;justify-content:space-between;"><span>Plano 3600 #3</span><span style="color:#64748b;">MUSE → Level 3 (v2)</span></div>
+            <div style="padding:6px 0;border-bottom:1px solid #1e293b;display:flex;justify-content:space-between;"><span>Plano 3600 #4</span><span style="color:#64748b;">MUSE → Level 4 (v1)</span></div>
+            <div style="padding:6px 0;display:flex;justify-content:space-between;"><span>Plano 3600 #5</span><span style="color:#64748b;">MUSE → Level 5 (v2)</span></div>
+          </div>
+        </div>
+        <div class="tpl-form-right">
+          <div id="tpl-detail-preview"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ===================== CONTINUOUS DIMENSION (LOUVER) ===================== -->
+    <div class="view" id="view-continuous">
+      <div class="two-panel">
+        <div class="panel-left">
+          <div class="module-header">
+            <h2>LOUVER</h2>
+            <p class="module-desc">Wall-mounted louvered panel, 8 rows, hanging bins</p>
+            <div class="module-meta">
+              <span>8 rows</span>
+              <span>12 inserts</span>
+              <span>Continuous-dimension</span>
+            </div>
+          </div>
+          <div style="flex:1;overflow-y:auto;">
+            <table class="level-table">
+              <thead><tr><th>Row</th><th>Width</th><th>Used</th><th>Inserts</th></tr></thead>
+              <tbody>
+                <tr class="selected"><td>1</td><td>36 in</td><td>14.5 in (40%)</td><td>3</td></tr>
+                <tr><td>2</td><td>36 in</td><td>22 in (61%)</td><td>4</td></tr>
+                <tr><td>3</td><td>36 in</td><td>8.75 in (24%)</td><td>2</td></tr>
+                <tr><td>4</td><td>36 in</td><td>10.875 in (30%)</td><td>1</td></tr>
+                <tr><td>5</td><td>36 in</td><td>0 in</td><td>0</td></tr>
+                <tr><td>6</td><td>36 in</td><td>0 in</td><td>0</td></tr>
+                <tr><td>7</td><td>36 in</td><td>0 in</td><td>0</td></tr>
+                <tr><td>8</td><td>36 in</td><td>0 in</td><td>0</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+        <div class="panel-right">
+          <div class="grid-panel" style="align-items:stretch;">
+            <h3>Row 1 — 36 in capacity</h3>
+            <div style="padding:0 20px;">
+              <div class="cont-row">
+                <div class="cont-row-bar">
+                  <div class="cont-insert bin-blue" style="width:12.15%;" title="Akro 30220 — 4.375 in">30220</div>
+                  <div class="cont-insert bin-blue" style="width:12.15%;" title="Akro 30220 — 4.375 in">30220</div>
+                  <div class="cont-insert bin-green" style="width:15.97%;" title="Akro 30230 — 5.75 in">30230</div>
+                  <div class="cont-empty"></div>
+                </div>
+                <div style="display:flex;justify-content:space-between;margin-top:4px;font-size:10px;color:#64748b;">
+                  <span>14.5 in used</span>
+                  <span>21.5 in remaining</span>
+                </div>
+              </div>
+              <div style="margin-top:16px;">
+                <button class="btn btn-secondary" style="font-size:11px;">+ Place Insert in Row 1</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div><!-- /content -->
+</div><!-- /main -->
+
+<!-- Place Insert Modal -->
+<div class="modal-overlay" id="place-insert-modal" style="display:none;">
+  <div class="modal">
+    <div class="modal-header">
+      <h2>Place Insert — MUSE Level 8</h2>
+      <button class="btn btn-ghost" onclick="closePlaceModal()" style="font-size:16px;">×</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-group">
+        <label>Choose Template</label>
+        <div style="margin-top:6px;">
+          <div class="tpl-picker-row selected" onclick="this.parentElement.querySelectorAll('.tpl-picker-row').forEach(r=>r.classList.remove('selected'));this.classList.add('selected');">
+            <div><span class="tpl-name">Plano 3600 Stowaway</span></div>
+            <div><span class="tpl-dims">4 × 6 · fixed · v2</span></div>
+          </div>
+          <div class="tpl-picker-row" onclick="this.parentElement.querySelectorAll('.tpl-picker-row').forEach(r=>r.classList.remove('selected'));this.classList.add('selected');">
+            <div><span class="tpl-name">Gridfinity Baseplate</span></div>
+            <div><span class="tpl-dims">parametric · v1</span></div>
+          </div>
+          <div class="tpl-picker-row" onclick="this.parentElement.querySelectorAll('.tpl-picker-row').forEach(r=>r.classList.remove('selected'));this.classList.add('selected');">
+            <div><span class="tpl-name">Akro-Mils 30220</span></div>
+            <div><span class="tpl-dims">1 × 1 · fixed · v1</span></div>
+          </div>
+        </div>
+      </div>
+      <div class="form-group" style="margin-top:16px;">
+        <label>Insert Name</label>
+        <input type="text" value="Plano 3600 #8">
+      </div>
+      <div style="margin-top:16px;">
+        <label style="display:block;font-size:11px;font-weight:600;color:#94a3b8;text-transform:uppercase;letter-spacing:0.05em;margin-bottom:8px;">Preview</label>
+        <div id="modal-grid-preview" style="display:flex;justify-content:center;"></div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closePlaceModal()">Cancel</button>
+      <button class="btn btn-primary" onclick="closePlaceModal(); showToast('Plano 3600 #8 placed in MUSE Level 8')">Place Insert</button>
+    </div>
+  </div>
+</div>
+
+<!-- Toast container -->
+<div class="toast-container" id="toast-container"></div>
+
+<script>
+  // View switching
+  function showView(viewId) {
+    document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
+    const el = document.getElementById('view-' + viewId);
+    if (el) el.classList.add('active');
+
+    // Update breadcrumb
+    const bc = document.getElementById('breadcrumb');
+    const crumbs = {
+      'modules': '<span class="current">Modules</span>',
+      'wizard-1': '<a href="#" onclick="showView(\'modules\')">Modules</a><span class="sep">/</span><span class="current">New Module</span>',
+      'wizard-2': '<a href="#" onclick="showView(\'modules\')">Modules</a><span class="sep">/</span><span class="current">New Module</span>',
+      'wizard-3': '<a href="#" onclick="showView(\'modules\')">Modules</a><span class="sep">/</span><span class="current">New Module</span>',
+      'wizard-4': '<a href="#" onclick="showView(\'modules\')">Modules</a><span class="sep">/</span><span class="current">New Module</span>',
+      'module-detail': '<a href="#" onclick="showView(\'modules\')">Modules</a><span class="sep">/</span><span class="current">MUSE</span>',
+      'module-detail-alex': '<a href="#" onclick="showView(\'modules\')">Modules</a><span class="sep">/</span><span class="current">ALEX</span>',
+      'continuous': '<a href="#" onclick="showView(\'modules\')">Modules</a><span class="sep">/</span><span class="current">LOUVER</span>',
+      'templates': '<span class="current">Templates</span>',
+      'template-new': '<a href="#" onclick="showView(\'templates\')">Templates</a><span class="sep">/</span><span class="current">New Template</span>',
+      'template-detail': '<a href="#" onclick="showView(\'templates\')">Templates</a><span class="sep">/</span><span class="current">Plano 3600 Stowaway</span>',
+    };
+    bc.innerHTML = crumbs[viewId] || '';
+
+    // Update sidebar active
+    document.querySelectorAll('.sidebar a').forEach(a => a.classList.remove('active'));
+    if (viewId.includes('template')) {
+      document.querySelectorAll('.sidebar a')[2].classList.add('active');
+    } else {
+      document.querySelectorAll('.sidebar a')[0].classList.add('active');
+    }
+
+    // Init grid previews
+    if (viewId === 'module-detail') renderGrid('grid-panel', 4, 6, 'plano');
+    if (viewId === 'template-new') updateTemplatePreview();
+    if (viewId === 'template-detail') renderGrid('tpl-detail-preview', 4, 6, 'empty-tpl');
+  }
+
+  // SVG Grid renderer
+  function renderGrid(containerId, rows, cols, mode) {
+    const container = document.getElementById(containerId);
+    const cellSize = 52;
+    const gap = 2;
+    const labelW = 28;
+    const labelH = 24;
+    const w = labelW + cols * (cellSize + gap);
+    const h = labelH + rows * (cellSize + gap);
+
+    // Mock data for occupied/disabled/merged cells
+    const occupied = mode === 'plano' ? new Set(['A1','A2','A4','A5','B1','B2','B3','B4','B5','C1','C2','C3','C4','C5','C6','D1','D2','D3']) :
+                     mode === 'plano-merged' ? new Set(['A1','A2','A5','A6','B1','B2','B3','B4','B5','B6','C1','C2','C3','C4','C5','C6','D1','D2','D3','D4']) : new Set();
+    const disabled = mode === 'plano' ? new Set(['A6']) : new Set();
+    const merged = mode === 'plano-merged' ? { 'A3': { spanCols: 2, label: 'A3–A4' } } : {};
+    const divided = mode === 'plano-merged' ? { 'D5': ['L','R'] } : {};
+    const skipCells = mode === 'plano-merged' ? new Set(['A4']) : new Set();
+
+    let showToolbar = (mode === 'plano' || mode === 'plano-merged');
+    let showActions = (mode !== 'empty-tpl');
+
+    let html = '';
+
+    if (showToolbar) {
+      html += `<div class="grid-toolbar">
+        <button class="btn btn-secondary" style="font-size:10px;" disabled>Merge</button>
+        <button class="btn btn-secondary" style="font-size:10px;" disabled>Divide</button>
+        <button class="btn btn-secondary" style="font-size:10px;" disabled>Disable</button>
+      </div>`;
+    }
+
+    if (mode === 'plano-merged') {
+      html += `<h3 style="font-size:12px;color:#94a3b8;margin-bottom:12px;">MUSE Level 3 — Plano 3600 #3 <span style="color:#64748b;font-size:10px;">(2 merged, 1 divided, 20/22 occ.)</span></h3>`;
+    } else if (mode === 'plano') {
+      html += `<h3 style="font-size:12px;color:#94a3b8;margin-bottom:12px;">MUSE Level 1 — Plano 3600 #1 <span style="color:#64748b;font-size:10px;">(18/24 occ.)</span></h3>`;
+    }
+
+    html += `<div class="svg-grid-container"><svg class="svg-grid" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}">`;
+    html += `<defs><pattern id="stripe-pattern" patternUnits="userSpaceOnUse" width="6" height="6" patternTransform="rotate(45)"><line x1="0" y1="0" x2="0" y2="6" stroke="#f87171" stroke-width="1.5" stroke-opacity="0.4"/></pattern></defs>`;
+
+    // Column labels
+    for (let c = 0; c < cols; c++) {
+      const x = labelW + c * (cellSize + gap) + cellSize / 2;
+      html += `<text class="axis-label" x="${x}" y="${labelH / 2}">${c + 1}</text>`;
+    }
+    // Row labels
+    const rowLabels = 'ABCDEFGHIJKLMNOP';
+    for (let r = 0; r < rows; r++) {
+      const y = labelH + r * (cellSize + gap) + cellSize / 2;
+      html += `<text class="axis-label" x="${labelW / 2}" y="${y}">${rowLabels[r]}</text>`;
+    }
+    // Cells
+    for (let r = 0; r < rows; r++) {
+      for (let c = 0; c < cols; c++) {
+        const cellId = rowLabels[r] + (c + 1);
+        if (skipCells.has(cellId)) continue;
+
+        const x = labelW + c * (cellSize + gap);
+        const y = labelH + r * (cellSize + gap);
+
+        if (merged[cellId]) {
+          const m = merged[cellId];
+          const mw = m.spanCols * (cellSize + gap) - gap;
+          const cls = occupied.has(cellId) ? 'cell merged occupied' : 'cell merged';
+          html += `<rect class="${cls}" x="${x}" y="${y}" width="${mw}" height="${cellSize}" rx="3"/>`;
+          html += `<text class="cell-text" x="${x + mw/2}" y="${y + cellSize/2}">${m.label}</text>`;
+        } else if (divided[cellId]) {
+          const parts = divided[cellId];
+          const partW = (cellSize - 1) / parts.length;
+          for (let p = 0; p < parts.length; p++) {
+            const px = x + p * partW + (p > 0 ? 1 : 0);
+            html += `<rect class="cell occupied" x="${px}" y="${y}" width="${partW}" height="${cellSize}" rx="2"/>`;
+            html += `<text class="cell-text" x="${px + partW/2}" y="${y + cellSize/2}" style="font-size:8px;">${parts[p]}</text>`;
+          }
+        } else {
+          let cls = 'cell';
+          if (disabled.has(cellId)) cls += ' disabled';
+          else if (occupied.has(cellId)) cls += ' occupied';
+          html += `<rect class="${cls}" x="${x}" y="${y}" width="${cellSize}" height="${cellSize}" rx="3"/>`;
+          html += `<text class="cell-text" x="${x + cellSize/2}" y="${y + cellSize/2}">${cellId}</text>`;
+        }
+      }
+    }
+    html += `</svg></div>`;
+
+    if (showActions && mode !== 'empty-tpl') {
+      html += `<div style="margin-top:16px;display:flex;gap:8px;">
+        <button class="btn btn-secondary" style="font-size:11px;" onclick="showToast('Insert removed from MUSE Level 1')">Remove Insert</button>
+        <button class="btn btn-ghost" style="font-size:11px;">Relocate</button>
+      </div>`;
+    }
+
+    if (mode === 'empty') {
+      html = `<div class="grid-empty">
+        <div style="font-size:24px;color:#334155;">⊞</div>
+        <div>No insert placed.</div>
+        <button class="btn btn-primary" onclick="openPlaceModal()">Place Insert</button>
+      </div>`;
+    }
+
+    if (mode === 'disabled') {
+      html = `<div class="grid-empty">
+        <div style="font-size:24px;color:#7f1d1d;">⊘</div>
+        <div style="color:#fca5a5;">Level disabled</div>
+        <div style="color:#64748b;font-size:11px;">Reason: shelf bracket broken</div>
+        <button class="btn btn-secondary" onclick="showToast('Level 10 enabled')">Enable Level</button>
+      </div>`;
+    }
+
+    container.innerHTML = html;
+  }
+
+  // Level selection
+  function selectLevel(row, mode) {
+    document.querySelectorAll('.level-table tr').forEach(r => r.classList.remove('selected'));
+    row.classList.add('selected');
+    renderGrid('grid-panel', 4, 6, mode);
+  }
+
+  // Template preview
+  function updateTemplatePreview() {
+    const rows = parseInt(document.getElementById('tpl-rows')?.value || 5);
+    const cols = parseInt(document.getElementById('tpl-cols')?.value || 4);
+    renderGrid('tpl-preview', Math.min(rows, 12), Math.min(cols, 12), 'empty-tpl');
+  }
+
+  // Place insert modal
+  function openPlaceModal() {
+    document.getElementById('place-insert-modal').style.display = 'flex';
+    renderGrid('modal-grid-preview', 4, 6, 'empty-tpl');
+  }
+  function closePlaceModal() {
+    document.getElementById('place-insert-modal').style.display = 'none';
+  }
+
+  // Toast
+  function showToast(msg) {
+    const container = document.getElementById('toast-container');
+    const toast = document.createElement('div');
+    toast.className = 'toast';
+    toast.innerHTML = `<span>${msg}</span><span class="undo" onclick="this.parentElement.remove()">Undo</span>`;
+    container.appendChild(toast);
+    setTimeout(() => toast.remove(), 6000);
+  }
+
+  // Init
+  showView('modules');
+
+  // Wire LOUVER card
+  document.querySelectorAll('.module-card')[3].onclick = () => showView('continuous');
+</script>
+
+</body>
+</html>
