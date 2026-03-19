@@ -8,7 +8,9 @@ import { parameterDefinitionRepository } from "../repositories/parameterDefiniti
 import { aspectRepository } from "../repositories/aspectRepository";
 import { itemRepository } from "../repositories/itemRepository";
 import { templateRepository } from "../repositories/templateRepository";
-import { categories, parameterDefinitions, aspects, templates } from "./schema";
+import { moduleRepository } from "../repositories/moduleRepository";
+import { locationRepository } from "../repositories/locationRepository";
+import { categories, parameterDefinitions, aspects, templates, modules } from "./schema";
 
 async function seed() {
   console.log("Seeding...");
@@ -19,7 +21,10 @@ async function seed() {
   const existingTemplates = await db.select().from(templates);
   const hasTemplates = existingTemplates.length > 0;
 
-  if (hasTaxonomy && hasTemplates) {
+  const existingMods = await db.select().from(modules);
+  const hasModules = existingMods.length > 0;
+
+  if (hasTaxonomy && hasTemplates && hasModules) {
     console.log("All seed data already exists, nothing to do.");
     process.exit(0);
   }
@@ -496,6 +501,62 @@ async function seed() {
 
     console.log("Seeded 5 templates.");
   } // end templates block
+
+  // --- Modules ---
+
+  if (hasModules) {
+    console.log("Modules already seeded, skipping.");
+  } else {
+    // MUSE — 11-shelf cabinet
+    const muse = await moduleRepository.create({
+      name: "MUSE",
+      description: "Red metal cabinet, 11 shelf levels, under workbench",
+      primaryDimensionLabel: "level",
+      primaryDimensionCount: 11,
+    });
+    for (let i = 1; i <= 11; i++) {
+      await locationRepository.create({
+        moduleId: muse.id,
+        label: String(i),
+        pathSegments: ["MUSE", String(i)],
+        locationType: "receptacle",
+      });
+    }
+
+    // ALEX — 5-drawer IKEA unit
+    const alex = await moduleRepository.create({
+      name: "ALEX",
+      description: "IKEA ALEX 5-drawer unit, white, right side of desk",
+      primaryDimensionLabel: "drawer",
+      primaryDimensionCount: 5,
+    });
+    for (let i = 1; i <= 5; i++) {
+      await locationRepository.create({
+        moduleId: alex.id,
+        label: String(i),
+        pathSegments: ["ALEX", String(i)],
+        locationType: "receptacle",
+      });
+    }
+
+    // BENCH — workbench with 3 bays
+    const bench = await moduleRepository.create({
+      name: "BENCH",
+      description: "Main workbench, 3 open bays underneath",
+      primaryDimensionLabel: "bay",
+      primaryDimensionCount: 3,
+    });
+    for (let i = 1; i <= 3; i++) {
+      await locationRepository.create({
+        moduleId: bench.id,
+        label: String(i),
+        pathSegments: ["BENCH", String(i)],
+        locationType: i <= 2 ? "receptacle" : "fixed",
+      });
+    }
+
+    console.log("Seeded 3 modules with levels.");
+  } // end modules block
 
   console.log("Done.");
   process.exit(0);

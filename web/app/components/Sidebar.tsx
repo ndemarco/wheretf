@@ -5,7 +5,7 @@ import { usePathname } from "next/navigation";
 
 const navItems = [
   {
-    href: "/",
+    href: "/modules",
     title: "Modules",
     icon: (
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="w-5 h-5">
