@@ -218,12 +218,14 @@ Single-page form (not a wizard — templates are simpler than modules).
 - **Columns** — number. Same as rows.
 - **Min/Max rows** (parametric only)
 - **Min/Max columns** (parametric only)
-- **Labeling scheme** — rows: alpha (default) or numeric. Columns: numeric (default) or alpha.
-- **Merge axis** — which directions allow cell merging. Options: "columns only" (within rows — e.g., Plano 3600 where row walls are molded but column dividers are removable), "rows only" (within columns), "both" (default), "none". This constraint is enforced when the user attempts a merge operation on an insert using this template.
-- **Origin** — which corner is position A1. Default: top-left.
-- **Unit system** — metric or imperial. Default: metric.
+- **Row labels** — radio: alpha (A, B, C…) or numeric (1, 2, 3…). Default: alpha. Row and column labels must differ — validation prevents selecting the same type for both.
+- **Column labels** — radio: numeric or alpha. Default: numeric.
+- **Origin** — dropdown: top-left (default), top-right, bottom-left, bottom-right. Controls which corner the label sequence starts from. Changing origin reverses the label rendering order on affected axes (e.g., bottom-left → row A is at the bottom, column 1 is at the left).
+- **Row dividers** — checkbox: fixed (checked) or removable (unchecked). Default: removable. Fixed means permanent physical dividers — merging across rows is blocked. Example: Plano 3600 row walls are molded plastic.
+- **Column dividers** — checkbox: fixed or removable. Default: removable. Independent of row dividers. Example: Plano 3600 column dividers are removable tabs.
+- **Unit system** — radio: imperial or metric. Default: metric.
 
-**Live preview** — SVG grid updates as the user changes rows/columns. Shows labels on axes. Gives immediate confirmation that the layout matches the physical product.
+**Live preview** — SVG grid updates as the user changes any property. Shows labels on axes with correct origin ordering. Fixed dividers render as thick lines between cells. Origin marker (accent triangle) appears in the label gutter corner outside cells.
 
 "Create Template" button. Creates the template with version 1 containing the specified configuration.
 
@@ -231,43 +233,69 @@ Single-page form (not a wizard — templates are simpler than modules).
 
 ## Template Detail (`/templates/:id`)
 
-### Header
-Template name (editable inline), description (editable inline), type badge, current version number.
+Three-panel layout: left panel (version history + instances), center panel (grid preview), right panel (properties).
 
-### Grid Preview
-SVG rendering of the current version's layout. Same visual style as module level preview.
+### Left Panel
 
-### Version History
-Table of versions, most recent first:
+**Header** — template name (editable inline), description (editable inline), type badge.
+
+**Version History** — table of versions, most recent first:
 - Version number
 - Dimensions (rows × columns)
 - Date published
 - Instance count (inserts/fixed locations using this version)
+- Active badge — one version is marked "active" (the default for new inserts)
+- Remove action (×) — visible only on versions with 0 instances. Hides the version from the list; data remains in the database.
 
-"Publish New Version" button → opens a form pre-filled with the current version's values. Edit and publish.
+Version rows are clickable. Clicking a version updates the center grid preview and right properties panel to show that version's configuration.
 
-### Instances
-List of inserts and fixed locations that reference this template, grouped by module. Each row shows:
+**Instances** — list below version history. Each row shows:
+- Checkbox (for batch operations)
 - Insert name (or "fixed" for direct applications)
 - Module name → level label
-- Version applied
-- **Upgrade indicator** — if the instance is on an older version, show a version badge with an "Upgrade" action
+- Version badge — shows current version, highlighted if not on the selected version
 
-### Version Upgrade Flow
+**"Apply v[X] to Selected"** button below the instance list. X is the currently selected version in the history table. Supports both upgrade (moving to a newer version) and downgrade (reverting to an older version).
 
-When a new version is published, existing instances stay on their current version. The user upgrades selectively:
+### Center Panel
 
-1. From the **Instances** list on the template detail page, instances on older versions show an "Upgrade available" indicator
-2. User can select individual instances (checkboxes) or "Select all outdated"
-3. Click "Upgrade Selected" → **preview panel** shows per-instance impact:
-   - **No conflicts** — structure is compatible, upgrade is clean. Shows before/after grid side by side.
-   - **Override conflicts** — the instance has overrides (merges, divides) that conflict with the new version's structure (e.g., new version removed a column that was part of a merge). Lists each conflict with resolution options: keep override, drop override, or skip this instance.
-   - **Assignment conflicts** — locations that exist in the old version but not the new have active assignments. Lists affected assignments with options: reassign to a new location, unassign, or skip this instance.
-4. User resolves any conflicts per instance, or skips instances that need manual attention
-5. Click "Apply Upgrades" → instances updated, child locations restructured, toast with undo
-6. Skipped instances remain on the old version — no partial upgrades per instance
+SVG grid rendering of the selected version's layout. Large cells (72px), 8px gaps between cells. Fixed dividers render as thick lines. Origin marker (accent triangle) in the label gutter corner outside cells. Labels reflect the version's labeling scheme and origin ordering.
 
-The upgrade is a compound transaction — all changes for one instance are grouped and undone atomically.
+### Right Panel — Properties
+
+Properties are **always editable** — no edit/view mode toggle. Controls are always live form inputs. All changes immediately update the grid preview.
+
+When the current form state differs from the selected version's saved data, two buttons appear:
+- **"Publish as v[N]"** — creates a new version with the current property values
+- **"Revert"** — resets all controls back to the selected version's values
+
+When the form matches the selected version, neither button is shown.
+
+**"Set as Active"** button — appears when viewing a non-active version. Sets the selected version as the default for new inserts.
+
+**Property controls:**
+- Dimensions — two number inputs (rows × cols)
+- Row labels — radio: Alpha / Numeric
+- Column labels — radio: Numeric / Alpha (validation: must differ from row labels)
+- Origin — dropdown: Top-left, Top-right, Bottom-left, Bottom-right
+- Row dividers — checkbox: Fixed (checked = permanent, blocks cross-row merging)
+- Column dividers — checkbox: Fixed (checked = permanent, blocks within-row merging)
+- Unit system — radio: Imperial / Metric
+
+### Version Application Flow
+
+Applying a version to instances (both upgrade and downgrade):
+
+1. User selects a version in the history table, then checks target instances
+2. Click "Apply v[X] to Selected" → **preview panel** shows per-instance impact:
+   - **No conflicts** — structure is compatible, application is clean. Shows before/after grid side by side.
+   - **Override conflicts** — the instance has overrides (merges, divides) that conflict with the target version's structure. Lists each conflict with resolution options: keep override, drop override, or skip this instance.
+   - **Assignment conflicts** — locations that exist in the current version but not the target have active assignments. Lists affected assignments with options: reassign, unassign, or skip this instance.
+3. User resolves conflicts per instance, or skips instances that need manual attention
+4. Click "Apply" → instances updated, child locations restructured, toast with undo
+5. Skipped instances remain on their current version — no partial changes per instance
+
+The application is a compound transaction — all changes for one instance are grouped and undone atomically.
 
 ---
 
@@ -288,7 +316,7 @@ Combine adjacent cells into a single larger cell.
 
 **Constraints:**
 - Cells must be adjacent and contiguous
-- Template's **merge axis** setting is enforced. If set to "columns only", the system blocks any merge that spans rows and explains why ("Row dividers on this template are permanent"). The merge action button is disabled for invalid selections.
+- Template's **row dividers** and **column dividers** settings are enforced independently. If row dividers are fixed, the system blocks any merge that spans rows and explains why ("Row dividers on this template are permanent"). If column dividers are fixed, same for column-spanning merges. The merge action button is disabled for invalid selections.
 - Existing assignments at affected cells must be migrated or removed first (enforced, not warned)
 
 ### Divide
@@ -364,18 +392,23 @@ Used in three contexts during storage definition:
 ### Rendering Rules
 
 - SVG within a React component. Scales to fit available width, maintains aspect ratio.
-- Rows labeled on left axis (A, B, C... or per labeling scheme)
-- Columns labeled on top axis (1, 2, 3... or per labeling scheme)
-- Each cell is a `<rect>` with label text centered
+- Rows labeled on left axis, columns labeled on top axis, per labeling scheme (alpha or numeric)
+- Label ordering follows origin setting — labels always ascend outward from the origin corner (e.g., bottom-left origin → row A at bottom, column 1 at left)
+- Each cell is a `<rect>` with label text centered (row label + column label, e.g., "A1")
 - Cell border: `#475569` (slate-600)
-- Cell fill: transparent (empty), `#dbeafe` light blue (occupied — has an assignment)
-- Disabled cells: diagonal stripe pattern, reduced opacity
-- Origin cell (A1): subtle accent dot in corner for orientation
+- Cell fill: transparent (empty), `#1e3a5f` dark blue (occupied — has an assignment)
+- Disabled cells: diagonal stripe pattern (`#f87171` at 40% opacity), reduced overall opacity
+- Merged cells: single `<rect>` spanning combined area, labeled by origin cell (e.g., "A3–A4")
+- Divided cells: parent cell split into sub-rects with custom labels (e.g., "L", "R")
+- **Fixed dividers** — thick lines (`#94a3b8`, 3px, 80% opacity) between rows and/or columns where dividers are marked fixed. Rendered independently per axis.
+- **Origin marker** — accent triangle (`#ff6600`) in the label gutter corner outside all cells, at the origin position. Not inside any cell.
 - Hover: border thickens, shows cell label tooltip (DOM overlay)
 
 ### Sizing
 
-- Cells are square by default, minimum 40px
+- Cells are square by default
+- Template detail context: 72px cells, 8px gaps, 14px axis labels, 12px cell labels
+- Module detail / modal contexts: 52px cells, 2px gaps, 11px axis labels, 9px cell labels
 - Grid scales down for large templates (many columns), minimum cell size 24px
 - Horizontal scroll if the grid exceeds available width at minimum cell size
 
@@ -423,4 +456,6 @@ Used in three contexts during storage definition:
 2. **Module photos** — deferred. Metadata field supports it; upload UI comes later.
 3. **Template sharing** — no import/export. Multi-tenant: templates promoted to system level via referential links, not per-tenant copies.
 4. **Undo** — always implemented. Toast notification with undo button on every mutation. Undo via transaction log per ui-paradigms.md. Only omit undo when explicitly agreed.
+5. **Custom row/column labels** — deferred. Current options are alpha and numeric. Custom labels (e.g., color names like "black, blue, red, green") are a future feature.
+6. **Template version list length** — versions with 0 instances can be hidden from the list to prevent clutter. Data is retained in the database. No pagination needed if unused versions are pruned.
 
