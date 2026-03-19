@@ -592,43 +592,7 @@
             </div>
             <div style="width:280px;padding:20px;border-left:1px solid #334155;flex-shrink:0;overflow-y:auto;">
               <h3 style="font-size:11px;font-weight:600;color:#94a3b8;text-transform:uppercase;letter-spacing:0.05em;margin-bottom:14px;">Properties</h3>
-              <div id="tpl-props-display" style="font-size:13px;">
-                <div style="display:grid;grid-template-columns:1fr;gap:14px;">
-                  <div>
-                    <div style="color:#64748b;font-size:11px;margin-bottom:2px;">Dimensions</div>
-                    <div id="tpl-prop-dims-display">4 rows × 6 columns</div>
-                  </div>
-                  <div>
-                    <div style="color:#64748b;font-size:11px;margin-bottom:2px;">Row labels</div>
-                    <div id="tpl-prop-rowlabel-display">Alpha (A, B, C…)</div>
-                  </div>
-                  <div>
-                    <div style="color:#64748b;font-size:11px;margin-bottom:2px;">Column labels</div>
-                    <div id="tpl-prop-collabel-display">Numeric (1, 2, 3…)</div>
-                  </div>
-                  <div>
-                    <div style="color:#64748b;font-size:11px;margin-bottom:2px;">Origin</div>
-                    <div id="tpl-prop-origin-display">Top-left</div>
-                  </div>
-                  <div>
-                    <div style="color:#64748b;font-size:11px;margin-bottom:2px;">Row dividers</div>
-                    <div id="tpl-prop-rowdiv-display" style="color:#f87171;">Fixed <span style="color:#64748b;">— cannot merge across rows</span></div>
-                  </div>
-                  <div>
-                    <div style="color:#64748b;font-size:11px;margin-bottom:2px;">Column dividers</div>
-                    <div id="tpl-prop-coldiv-display" style="color:#86efac;">Removable <span style="color:#64748b;">— can merge within rows</span></div>
-                  </div>
-                  <div>
-                    <div style="color:#64748b;font-size:11px;margin-bottom:2px;">Unit system</div>
-                    <div id="tpl-prop-unit-display">Imperial</div>
-                  </div>
-                </div>
-                <div style="margin-top:18px;padding-top:14px;border-top:1px solid #334155;">
-                  <button class="btn btn-ghost" style="font-size:12px;padding:5px 10px;" id="tpl-edit-toggle-btn" onclick="togglePropEdit()">Edit Properties</button>
-                </div>
-              </div>
-
-              <div id="tpl-props-edit" style="font-size:13px;display:none;">
+              <div style="font-size:13px;">
                 <div style="display:grid;grid-template-columns:1fr;gap:14px;">
                   <div>
                     <div style="color:#64748b;font-size:11px;margin-bottom:4px;">Dimensions</div>
@@ -686,8 +650,8 @@
                   </div>
                 </div>
                 <div style="margin-top:18px;padding-top:14px;border-top:1px solid #334155;display:flex;flex-direction:column;gap:8px;">
-                  <button class="btn btn-primary" style="font-size:12px;padding:5px 10px;" id="tpl-publish-btn" onclick="publishNewVersion()">Publish as v3</button>
-                  <button class="btn btn-ghost" style="font-size:12px;padding:5px 10px;" id="tpl-cancel-edit-btn" onclick="cancelPropEdit()">Cancel</button>
+                  <button class="btn btn-primary" style="font-size:12px;padding:5px 10px;display:none;" id="tpl-publish-btn" onclick="publishNewVersion()" disabled>Publish as v3</button>
+                  <button class="btn btn-ghost" style="font-size:12px;padding:5px 10px;display:none;" id="tpl-revert-btn" onclick="revertProps()">Revert</button>
                 </div>
               </div>
 
@@ -882,25 +846,32 @@
     html += `<div class="svg-grid-container"><svg class="svg-grid" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}">`;
     html += `<defs><pattern id="stripe-pattern" patternUnits="userSpaceOnUse" width="6" height="6" patternTransform="rotate(45)"><line x1="0" y1="0" x2="0" y2="6" stroke="#f87171" stroke-width="1.5" stroke-opacity="0.4"/></pattern></defs>`;
 
-    // Label settings
+    // Label settings + origin
     const labelSettings = getLabelSettings(mode);
+    const origin = getOriginSetting(mode);
+    const reverseRows = origin === 'bl' || origin === 'br';
+    const reverseCols = origin === 'tr' || origin === 'br';
 
-    // Column labels
+    // Column labels — origin affects order
     for (let c = 0; c < cols; c++) {
       const x = labelW + c * (cellSize + gap) + cellSize / 2;
-      html += `<text class="axis-label" x="${x}" y="${labelH / 2}" style="font-size:${axisFont}px">${getLabel(labelSettings.colLabel, c)}</text>`;
+      const labelIdx = reverseCols ? (cols - 1 - c) : c;
+      html += `<text class="axis-label" x="${x}" y="${labelH / 2}" style="font-size:${axisFont}px">${getLabel(labelSettings.colLabel, labelIdx)}</text>`;
     }
-    // Row labels
+    // Row labels — origin affects order
     for (let r = 0; r < rows; r++) {
       const y = labelH + r * (cellSize + gap) + cellSize / 2;
-      html += `<text class="axis-label" x="${labelW / 2}" y="${y}" style="font-size:${axisFont}px">${getLabel(labelSettings.rowLabel, r)}</text>`;
+      const labelIdx = reverseRows ? (rows - 1 - r) : r;
+      html += `<text class="axis-label" x="${labelW / 2}" y="${y}" style="font-size:${axisFont}px">${getLabel(labelSettings.rowLabel, labelIdx)}</text>`;
     }
     // Cells
     const rowLabelsStr = 'ABCDEFGHIJKLMNOP';
     for (let r = 0; r < rows; r++) {
       for (let c = 0; c < cols; c++) {
         const cellId = rowLabelsStr[r] + (c + 1); // internal ID for mock data lookups
-        const cellLabel = getLabel(labelSettings.rowLabel, r) + getLabel(labelSettings.colLabel, c);
+        const rowIdx = reverseRows ? (rows - 1 - r) : r;
+        const colIdx = reverseCols ? (cols - 1 - c) : c;
+        const cellLabel = getLabel(labelSettings.rowLabel, rowIdx) + getLabel(labelSettings.colLabel, colIdx);
         if (skipCells.has(cellId)) continue;
 
         const x = labelW + c * (cellSize + gap);
@@ -948,24 +919,27 @@
       }
     }
 
-    // Origin marker — accent triangle at the origin corner
-    const origin = getOriginSetting(mode);
-    let originX, originY, originPts;
-    const triSize = isTemplateDetail ? 10 : 8;
+    // Origin marker — in the label gutter corner, outside cells
+    const triSize = isTemplateDetail ? 8 : 6;
+    const gridLeft = labelW;
+    const gridTop = labelH;
+    const gridRight = labelW + cols * (cellSize + gap) - gap;
+    const gridBottom = labelH + rows * (cellSize + gap) - gap;
+    let ox, oy, oPts;
     if (origin === 'tl') {
-      originX = labelW + 2; originY = labelH + 2;
-      originPts = `${originX},${originY} ${originX+triSize},${originY} ${originX},${originY+triSize}`;
+      ox = gridLeft - 4; oy = gridTop - 4;
+      oPts = `${ox},${oy} ${ox+triSize},${oy} ${ox},${oy+triSize}`;
     } else if (origin === 'tr') {
-      originX = labelW + cols * (cellSize + gap) - gap - 2; originY = labelH + 2;
-      originPts = `${originX},${originY} ${originX-triSize},${originY} ${originX},${originY+triSize}`;
+      ox = gridRight + 4; oy = gridTop - 4;
+      oPts = `${ox},${oy} ${ox-triSize},${oy} ${ox},${oy+triSize}`;
     } else if (origin === 'bl') {
-      originX = labelW + 2; originY = labelH + rows * (cellSize + gap) - gap - 2;
-      originPts = `${originX},${originY} ${originX+triSize},${originY} ${originX},${originY-triSize}`;
+      ox = gridLeft - 4; oy = gridBottom + 4;
+      oPts = `${ox},${oy} ${ox+triSize},${oy} ${ox},${oy-triSize}`;
     } else {
-      originX = labelW + cols * (cellSize + gap) - gap - 2; originY = labelH + rows * (cellSize + gap) - gap - 2;
-      originPts = `${originX},${originY} ${originX-triSize},${originY} ${originX},${originY-triSize}`;
+      ox = gridRight + 4; oy = gridBottom + 4;
+      oPts = `${ox},${oy} ${ox-triSize},${oy} ${ox},${oy-triSize}`;
     }
-    html += `<polygon points="${originPts}" fill="#ff6600" opacity="0.7"/>`;
+    html += `<polygon points="${oPts}" fill="#ff6600" opacity="0.85"/>`;
 
     html += `</svg></div>`;
 
@@ -1038,21 +1012,14 @@
     2: { rows: 4, cols: 6, rowLabel: 'alpha', colLabel: 'numeric', origin: 'tl', rowDiv: 'fixed', colDiv: 'removable', unit: 'Imperial', date: 'Mar 15, 2026', instances: 5 }
   };
 
-  // Helper to get divider settings for grid rendering
+  // Helpers — always read from controls (always-editable)
   function getDividerSettings(mode) {
-    if (mode === 'empty-tpl' && editingProps) {
+    if (mode === 'empty-tpl') {
       return {
         rowFixed: document.getElementById('tpl-edit-rowdiv')?.checked || false,
         colFixed: document.getElementById('tpl-edit-coldiv')?.checked || false
       };
     }
-    if (mode === 'empty-tpl' && selectedVersion && versionData[selectedVersion]) {
-      return {
-        rowFixed: versionData[selectedVersion].rowDiv === 'fixed',
-        colFixed: versionData[selectedVersion].colDiv === 'fixed'
-      };
-    }
-    // Module detail views — Plano 3600 always has fixed rows, removable cols
     if (mode === 'plano' || mode === 'plano-merged') {
       return { rowFixed: true, colFixed: false };
     }
@@ -1060,28 +1027,17 @@
   }
 
   function getOriginSetting(mode) {
-    if (mode === 'empty-tpl' && editingProps) {
-      return currentEditOrigin || 'tl';
-    }
-    if (mode === 'empty-tpl' && selectedVersion && versionData[selectedVersion]) {
-      return versionData[selectedVersion].origin || 'tl';
+    if (mode === 'empty-tpl') {
+      return document.getElementById('tpl-edit-origin')?.value || 'tl';
     }
     return 'tl';
   }
 
-  let currentEditOrigin = 'tl';
-
   function getLabelSettings(mode) {
-    if (mode === 'empty-tpl' && editingProps) {
+    if (mode === 'empty-tpl') {
       return {
         rowLabel: document.querySelector('input[name="tpl-edit-rowlabel"]:checked')?.value || 'alpha',
         colLabel: document.querySelector('input[name="tpl-edit-collabel"]:checked')?.value || 'numeric'
-      };
-    }
-    if (mode === 'empty-tpl' && selectedVersion && versionData[selectedVersion]) {
-      return {
-        rowLabel: versionData[selectedVersion].rowLabel || 'alpha',
-        colLabel: versionData[selectedVersion].colLabel || 'numeric'
       };
     }
     return { rowLabel: 'alpha', colLabel: 'numeric' };
@@ -1092,54 +1048,91 @@
     return String(index + 1);
   }
 
-  const labelNames = { alpha: 'Alpha (A, B, C…)', numeric: 'Numeric (1, 2, 3…)' };
-  const originNames = { tl: 'Top-left', tr: 'Top-right', bl: 'Bottom-left', br: 'Bottom-right' };
+  // Read current form state
+  function getCurrentProps() {
+    return {
+      rows: parseInt(document.getElementById('tpl-edit-rows')?.value) || 1,
+      cols: parseInt(document.getElementById('tpl-edit-cols')?.value) || 1,
+      rowLabel: document.querySelector('input[name="tpl-edit-rowlabel"]:checked')?.value || 'alpha',
+      colLabel: document.querySelector('input[name="tpl-edit-collabel"]:checked')?.value || 'numeric',
+      origin: document.getElementById('tpl-edit-origin')?.value || 'tl',
+      rowDiv: document.getElementById('tpl-edit-rowdiv')?.checked ? 'fixed' : 'removable',
+      colDiv: document.getElementById('tpl-edit-coldiv')?.checked ? 'fixed' : 'removable',
+      unit: document.querySelector('input[name="tpl-edit-unit"]:checked')?.value || 'Imperial'
+    };
+  }
+
+  // Check if current form differs from selected version
+  function isDirty() {
+    const data = versionData[selectedVersion];
+    if (!data) return false;
+    const cur = getCurrentProps();
+    return cur.rows !== data.rows || cur.cols !== data.cols ||
+           cur.rowLabel !== data.rowLabel || cur.colLabel !== data.colLabel ||
+           cur.origin !== data.origin || cur.rowDiv !== data.rowDiv ||
+           cur.colDiv !== data.colDiv || cur.unit !== data.unit;
+  }
+
+  function updatePublishButton() {
+    const dirty = isDirty();
+    const rowVal = document.querySelector('input[name="tpl-edit-rowlabel"]:checked')?.value;
+    const colVal = document.querySelector('input[name="tpl-edit-collabel"]:checked')?.value;
+    const conflict = (rowVal === colVal);
+
+    const publishBtn = document.getElementById('tpl-publish-btn');
+    const revertBtn = document.getElementById('tpl-revert-btn');
+
+    publishBtn.style.display = dirty ? 'inline-flex' : 'none';
+    publishBtn.disabled = conflict;
+    revertBtn.style.display = dirty ? 'inline-flex' : 'none';
+
+    document.getElementById('label-conflict-msg').style.display = conflict ? 'block' : 'none';
+
+    if (dirty) {
+      const nextV = Math.max(...Object.keys(versionData).map(Number)) + 1;
+      publishBtn.textContent = `Publish as v${nextV}`;
+    }
+  }
+
+  // Populate controls from version data
+  function populateProps(data) {
+    document.getElementById('tpl-edit-rows').value = data.rows;
+    document.getElementById('tpl-edit-cols').value = data.cols;
+    document.querySelector(`input[name="tpl-edit-rowlabel"][value="${data.rowLabel}"]`).checked = true;
+    document.querySelector(`input[name="tpl-edit-collabel"][value="${data.colLabel}"]`).checked = true;
+    document.getElementById('tpl-edit-origin').value = data.origin;
+    document.getElementById('tpl-edit-rowdiv').checked = (data.rowDiv === 'fixed');
+    document.getElementById('tpl-edit-coldiv').checked = (data.colDiv === 'fixed');
+    document.querySelector(`input[name="tpl-edit-unit"][value="${data.unit}"]`).checked = true;
+    document.getElementById('label-conflict-msg').style.display = 'none';
+    updatePublishButton();
+  }
 
   function selectVersion(v) {
     selectedVersion = v;
-    cancelPropEdit();
 
     document.querySelectorAll('.version-row').forEach(r => r.classList.remove('selected-version'));
     document.querySelector(`.version-row[data-version="${v}"]`).classList.add('selected-version');
 
     const data = versionData[v];
     document.getElementById('tpl-version-title').textContent = `v${v} Layout`;
-    document.getElementById('tpl-prop-dims-display').textContent = `${data.rows} rows × ${data.cols} columns`;
-    document.getElementById('tpl-prop-rowlabel-display').textContent = labelNames[data.rowLabel];
-    document.getElementById('tpl-prop-collabel-display').textContent = labelNames[data.colLabel];
-    document.getElementById('tpl-prop-origin-display').textContent = originNames[data.origin];
 
-    const rowDivEl = document.getElementById('tpl-prop-rowdiv-display');
-    if (data.rowDiv === 'fixed') {
-      rowDivEl.innerHTML = '<span style="color:#f87171;">Fixed</span> <span style="color:#64748b;">— cannot merge across rows</span>';
-    } else {
-      rowDivEl.innerHTML = '<span style="color:#86efac;">Removable</span> <span style="color:#64748b;">— can merge across rows</span>';
-    }
-
-    const colDivEl = document.getElementById('tpl-prop-coldiv-display');
-    if (data.colDiv === 'fixed') {
-      colDivEl.innerHTML = '<span style="color:#f87171;">Fixed</span> <span style="color:#64748b;">— cannot merge within rows</span>';
-    } else {
-      colDivEl.innerHTML = '<span style="color:#86efac;">Removable</span> <span style="color:#64748b;">— can merge within rows</span>';
-    }
-
-    document.getElementById('tpl-prop-unit-display').textContent = data.unit;
+    // Populate controls with this version's data
+    populateProps(data);
 
     // Show/hide "Set as Active" button
-    const setActiveContainer = document.getElementById('tpl-set-active-container');
-    setActiveContainer.style.display = (v === activeVersion) ? 'none' : 'block';
+    document.getElementById('tpl-set-active-container').style.display = (v === activeVersion) ? 'none' : 'block';
 
     // Update apply button text
     const applyBtn = document.querySelector('#apply-version-btn button');
     applyBtn.textContent = `Apply v${v} to Selected`;
     applyBtn.onclick = () => applyVersionToSelected();
 
-    // Re-render grid for this version
+    // Render grid
     renderGrid('tpl-detail-preview', data.rows, data.cols, 'empty-tpl');
   }
 
   function setActiveVersion() {
-    const oldActive = activeVersion;
     activeVersion = selectedVersion;
 
     // Update badges in version table (5th column = badge column)
@@ -1153,76 +1146,31 @@
     showToast(`v${activeVersion} set as active version`);
   }
 
-  // Property editing
-  let editingProps = false;
-
-  function togglePropEdit() {
-    editingProps = true;
-    const data = versionData[selectedVersion];
-    // Populate edit fields from current version
-    document.getElementById('tpl-edit-rows').value = data.rows;
-    document.getElementById('tpl-edit-cols').value = data.cols;
-
-    // Radio buttons for labels
-    document.querySelector(`input[name="tpl-edit-rowlabel"][value="${data.rowLabel}"]`).checked = true;
-    document.querySelector(`input[name="tpl-edit-collabel"][value="${data.colLabel}"]`).checked = true;
-
-    // Origin dropdown
-    document.getElementById('tpl-edit-origin').value = data.origin;
-    currentEditOrigin = data.origin;
-
-    // Divider checkboxes (checked = fixed)
-    document.getElementById('tpl-edit-rowdiv').checked = (data.rowDiv === 'fixed');
-    document.getElementById('tpl-edit-coldiv').checked = (data.colDiv === 'fixed');
-
-    // Unit radio
-    document.querySelector(`input[name="tpl-edit-unit"][value="${data.unit}"]`).checked = true;
-
-    // Hide conflict message
-    document.getElementById('label-conflict-msg').style.display = 'none';
-
-    // Toggle panels
-    document.getElementById('tpl-props-display').style.display = 'none';
-    document.getElementById('tpl-props-edit').style.display = 'block';
-
-    const nextV = Math.max(...Object.keys(versionData).map(Number)) + 1;
-    document.getElementById('tpl-publish-btn').textContent = `Publish as v${nextV}`;
-
-    onPropEdit();
-  }
-
-  function cancelPropEdit() {
-    editingProps = false;
-    document.getElementById('tpl-props-display').style.display = '';
-    document.getElementById('tpl-props-edit').style.display = 'none';
-
-    // Restore grid to selected version
-    const data = versionData[selectedVersion];
-    if (data) renderGrid('tpl-detail-preview', data.rows, data.cols, 'empty-tpl');
-  }
-
   function onLabelChange(axis) {
-    const rowVal = document.querySelector('input[name="tpl-edit-rowlabel"]:checked').value;
-    const colVal = document.querySelector('input[name="tpl-edit-collabel"]:checked').value;
-    const conflict = (rowVal === colVal);
-    document.getElementById('label-conflict-msg').style.display = conflict ? 'block' : 'none';
-    document.getElementById('tpl-publish-btn').disabled = conflict;
     onPropEdit();
   }
 
   function onPropEdit() {
-    // Update origin from dropdown
-    currentEditOrigin = document.getElementById('tpl-edit-origin')?.value || 'tl';
-    // Live-update the grid preview as the user edits
+    // Live-update the grid preview
     const rows = parseInt(document.getElementById('tpl-edit-rows').value) || 1;
     const cols = parseInt(document.getElementById('tpl-edit-cols').value) || 1;
     renderGrid('tpl-detail-preview', Math.min(rows, 16), Math.min(cols, 16), 'empty-tpl');
+    updatePublishButton();
+  }
+
+  function revertProps() {
+    const data = versionData[selectedVersion];
+    populateProps(data);
+    renderGrid('tpl-detail-preview', data.rows, data.cols, 'empty-tpl');
   }
 
   function publishNewVersion() {
     const nextV = Math.max(...Object.keys(versionData).map(Number)) + 1;
-    cancelPropEdit();
+    const props = getCurrentProps();
+    // In a real app, this would POST to the API. For prototype, just toast.
+    populateProps(props); // reset dirty state
     showToast(`v${nextV} published`);
+    updatePublishButton();
   }
 
   function removeVersion(v) {
