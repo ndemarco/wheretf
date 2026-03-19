@@ -3,6 +3,15 @@ import { db } from "@/db/connection";
 import { inserts, locations } from "@/db/schema";
 import { transactionRepository } from "./transactionRepository";
 
+function generateUid(): string {
+  const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"; // no I/O/0/1 to avoid confusion
+  let uid = "";
+  for (let i = 0; i < 8; i++) {
+    uid += chars[Math.floor(Math.random() * chars.length)];
+  }
+  return uid;
+}
+
 export const insertRepository = {
   async create({
     name,
@@ -23,9 +32,12 @@ export const insertRepository = {
     overrides?: Record<string, unknown>;
     metadata?: Record<string, unknown>;
   }) {
+    const uid = generateUid();
+
     const [insert] = await db
       .insert(inserts)
       .values({
+        uid,
         name,
         templateId,
         templateVersionId,

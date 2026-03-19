@@ -48,6 +48,7 @@ export const locations = pgTable("locations", {
 
 export const inserts = pgTable("inserts", {
   id: uuid("id").primaryKey().defaultRandom(),
+  uid: text("uid").unique(), // short alphanumeric identifier, writable to RFID tags
   name: text("name"), // optional user-given name for this specific insert
   templateId: uuid("template_id").references(() => templates.id),
   templateVersionId: uuid("template_version_id").references(
