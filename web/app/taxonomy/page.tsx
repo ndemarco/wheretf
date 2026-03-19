@@ -451,45 +451,24 @@ function DeleteAspectModal({
           {/* Impact summary */}
           <div className="space-y-2">
             {itemCount > 0 ? (
-              <div className="p-3 bg-red-900/20 border border-red-800/50 rounded text-sm">
-                <p className="text-red-300 font-medium">
-                  This aspect is currently applied to{" "}
-                  <span className="text-red-200 font-semibold">
-                    {itemCount} item{itemCount !== 1 ? "s" : ""}
-                  </span>
-                  .
-                </p>
-                <p className="text-red-400/80 text-xs mt-1.5">
-                  Deleting it will remove the aspect and{" "}
-                  <span className="font-medium text-red-300">
-                    permanently erase all parameter values
-                  </span>{" "}
-                  those items have for this aspect&apos;s{" "}
-                  {parameterCount} parameter
-                  {parameterCount !== 1 ? "s" : ""}.
-                </p>
-              </div>
+              <p className="text-sm text-slate-300">
+                Applied to{" "}
+                <span className="font-semibold text-slate-100">
+                  {itemCount} item{itemCount !== 1 ? "s" : ""}
+                </span>
+                . Their {parameterCount} parameter value
+                {parameterCount !== 1 ? "s" : ""} will be permanently erased.
+              </p>
             ) : (
-              <div className="p-3 bg-slate-700/30 border border-slate-600 rounded text-sm">
-                <p className="text-slate-300">
-                  This aspect is not applied to any items.
-                </p>
-              </div>
+              <p className="text-sm text-slate-400">
+                Not applied to any items.
+              </p>
             )}
 
-            {/* Reversibility */}
-            <div className="p-3 bg-amber-900/15 border border-amber-800/40 rounded text-sm">
-              <p className="text-amber-300 font-medium text-xs uppercase tracking-wider mb-1">
-                This action cannot be automatically reversed.
-              </p>
-              <p className="text-amber-400/70 text-xs">
-                The aspect definition and its parameter structure are recorded
-                in the transaction log, but cascade-deleted parameter values on
-                individual items are not. To recover, you would need to
-                re-create the aspect, re-attach its parameters, re-apply it to
-                each item, and manually re-enter every parameter value.
-              </p>
-            </div>
+            <p className="text-xs text-slate-500">
+              This cannot be undone. You would need to re-create the aspect
+              and re-enter all values manually.
+            </p>
           </div>
 
           {/* Type-to-confirm */}
