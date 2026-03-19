@@ -517,33 +517,12 @@
     <!-- ===================== TEMPLATE DETAIL ===================== -->
     <div class="view" id="view-template-detail">
       <div class="tpl-form-layout">
-        <div class="tpl-form-left">
+        <div class="tpl-form-left" style="max-width:460px;">
           <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;">
             <h2 style="font-size:16px;font-weight:600;">Plano 3600 Stowaway</h2>
             <span class="badge badge-fixed">fixed</span>
           </div>
           <p style="color:#94a3b8;font-size:12px;margin-bottom:20px;">4-row × 6-column organizer with removable dividers. Standard Plano Stowaway form factor.</p>
-
-          <h3 style="font-size:11px;font-weight:600;color:#94a3b8;text-transform:uppercase;letter-spacing:0.05em;margin-bottom:10px;">Current Version (v2) Properties</h3>
-          <div style="background:#0f172a;border:1px solid #334155;border-radius:8px;padding:12px 16px;margin-bottom:20px;font-size:12px;">
-            <div style="display:grid;grid-template-columns:120px 1fr;gap:8px 12px;">
-              <span style="color:#64748b;">Dimensions</span>
-              <span>4 rows × 6 columns</span>
-              <span style="color:#64748b;">Row labels</span>
-              <span>Alpha (A, B, C, D)</span>
-              <span style="color:#64748b;">Column labels</span>
-              <span>Numeric (1–6)</span>
-              <span style="color:#64748b;">Origin</span>
-              <span>Top-left (A1)</span>
-              <span style="color:#64748b;">Merge axis</span>
-              <span style="color:#fbbf24;">Columns only <span style="color:#64748b;">— row dividers are permanent</span></span>
-              <span style="color:#64748b;">Unit system</span>
-              <span>Imperial</span>
-            </div>
-            <div style="margin-top:10px;padding-top:10px;border-top:1px solid #334155;">
-              <button class="btn btn-ghost" style="font-size:11px;padding:4px 10px;">Edit → Publish as v3</button>
-            </div>
-          </div>
 
           <h3 style="font-size:11px;font-weight:600;color:#94a3b8;text-transform:uppercase;letter-spacing:0.05em;margin-bottom:10px;">Version History</h3>
           <table style="width:100%;font-size:12px;border-collapse:collapse;margin-bottom:20px;">
@@ -555,10 +534,7 @@
           </table>
           <button class="btn btn-secondary" style="margin-bottom:24px;">Publish New Version</button>
 
-          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
-            <h3 style="font-size:11px;font-weight:600;color:#94a3b8;text-transform:uppercase;letter-spacing:0.05em;">Instances</h3>
-            <button class="btn btn-secondary" style="font-size:10px;" onclick="showToast('2 instances upgraded to v2')">Upgrade Selected</button>
-          </div>
+          <h3 style="font-size:11px;font-weight:600;color:#94a3b8;text-transform:uppercase;letter-spacing:0.05em;margin-bottom:10px;">Instances</h3>
           <div style="font-size:12px;">
             <div style="padding:6px 0;border-bottom:1px solid #1e293b;display:flex;align-items:center;gap:8px;">
               <input type="checkbox" disabled>
@@ -597,9 +573,32 @@
               <span class="badge badge-active" style="font-size:9px;">v2</span>
             </div>
           </div>
+          <div style="margin-top:12px;">
+            <button class="btn btn-secondary" style="font-size:11px;" onclick="showToast('2 instances upgraded to v2')">Upgrade Selected to v2</button>
+          </div>
         </div>
-        <div class="tpl-form-right">
-          <div id="tpl-detail-preview"></div>
+        <div class="panel-right" style="border-left:1px solid #334155;">
+          <div class="grid-panel">
+            <h3 style="margin-bottom:4px;">v2 Layout</h3>
+            <div id="tpl-detail-preview"></div>
+
+            <div style="margin-top:24px;width:100%;max-width:380px;">
+              <h3 style="font-size:11px;font-weight:600;color:#94a3b8;text-transform:uppercase;letter-spacing:0.05em;margin-bottom:10px;">Properties</h3>
+              <div style="background:#1e293b;border:1px solid #334155;border-radius:8px;padding:12px 16px;font-size:12px;">
+                <div style="display:grid;grid-template-columns:110px 1fr;gap:6px 12px;">
+                  <span style="color:#64748b;">Dimensions</span>
+                  <span>4 rows × 6 columns</span>
+                  <span style="color:#64748b;">Merge axis</span>
+                  <span style="color:#fbbf24;">Columns only <span style="color:#64748b;">— row dividers permanent</span></span>
+                  <span style="color:#64748b;">Unit system</span>
+                  <span>Imperial</span>
+                </div>
+                <div style="margin-top:10px;padding-top:10px;border-top:1px solid #334155;">
+                  <button class="btn btn-ghost" style="font-size:11px;padding:4px 10px;">Edit → Publish as v3</button>
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
     </div>
@@ -826,6 +825,23 @@
         }
       }
     }
+    // Permanent row dividers (merge axis = columns only → rows are permanent)
+    // Draw thick lines between rows to indicate non-mergeable boundaries
+    const showPermanentRows = (mode === 'plano' || mode === 'plano-merged' || mode === 'empty-tpl');
+    if (showPermanentRows && rows > 1) {
+      for (let r = 1; r < rows; r++) {
+        const y = labelH + r * (cellSize + gap) - gap / 2;
+        const x1 = labelW;
+        const x2 = labelW + cols * (cellSize + gap) - gap;
+        html += `<line x1="${x1}" y1="${y}" x2="${x2}" y2="${y}" stroke="#94a3b8" stroke-width="2.5" stroke-linecap="round" opacity="0.7"/>`;
+      }
+    }
+
+    // Origin marker — small accent triangle at top-left of A1
+    const originX = labelW + 2;
+    const originY = labelH + 2;
+    html += `<polygon points="${originX},${originY} ${originX + 8},${originY} ${originX},${originY + 8}" fill="#ff6600" opacity="0.7"/>`;
+
     html += `</svg></div>`;
 
     if (showActions && mode !== 'empty-tpl') {
