@@ -7,6 +7,7 @@ import { categoryRepository } from "../repositories/categoryRepository";
 import { parameterDefinitionRepository } from "../repositories/parameterDefinitionRepository";
 import { aspectRepository } from "../repositories/aspectRepository";
 import { itemRepository } from "../repositories/itemRepository";
+import { templateRepository } from "../repositories/templateRepository";
 import { categories, parameterDefinitions, aspects } from "./schema";
 
 async function seed() {
@@ -383,7 +384,97 @@ async function seed() {
   await itemRepository.setParameterValue({ itemId: wire2.id, parameterDefinitionId: pdColor.id, value: "black" });
   await itemRepository.setParameterValue({ itemId: wire2.id, parameterDefinitionId: pdVoltage.id, value: 300 });
 
-  console.log("Seeded 16 items across 6 categories with aspects and parameters.");
+  // --- Templates ---
+
+  // Plano 3600 Stowaway — classic tackle box tray
+  const tplPlano3600 = await templateRepository.create({
+    name: "Plano 3600 Stowaway",
+    description: "4-row adjustable compartment box, removable column dividers",
+    rows: 4,
+    columns: 6,
+    rowLabelScheme: "alpha",
+    columnLabelScheme: "numeric",
+    originPosition: "top-left",
+    rowDividersFixed: true,
+    columnDividersFixed: false,
+    metadata: { unitSystem: "imperial", manufacturer: "Plano", productNumber: "2-3600" },
+  });
+
+  // Publish a v2 with different column count
+  await templateRepository.publishVersion({
+    templateId: tplPlano3600.id,
+    rows: 4,
+    columns: 4,
+    rowLabelScheme: "alpha",
+    columnLabelScheme: "numeric",
+    originPosition: "top-left",
+    rowDividersFixed: true,
+    columnDividersFixed: false,
+  });
+
+  // Plano 3700 Stowaway — deeper, fewer rows
+  await templateRepository.create({
+    name: "Plano 3700 Stowaway",
+    description: "3-row deep compartment box, removable dividers",
+    rows: 3,
+    columns: 6,
+    rowLabelScheme: "alpha",
+    columnLabelScheme: "numeric",
+    originPosition: "top-left",
+    rowDividersFixed: true,
+    columnDividersFixed: false,
+    metadata: { unitSystem: "imperial", manufacturer: "Plano", productNumber: "2-3700" },
+  });
+
+  // Gridfinity baseplate — parametric
+  await templateRepository.create({
+    name: "Gridfinity Baseplate",
+    description: "42mm modular grid system, parametric sizing",
+    isParametric: true,
+    rows: 4,
+    columns: 4,
+    minRows: 1,
+    maxRows: 10,
+    minColumns: 1,
+    maxColumns: 10,
+    rowLabelScheme: "numeric",
+    columnLabelScheme: "alpha",
+    originPosition: "bottom-left",
+    rowDividersFixed: false,
+    columnDividersFixed: false,
+    unitSize: "42mm",
+    metadata: { unitSystem: "metric" },
+  });
+
+  // Small parts drawer — simple 2x3
+  await templateRepository.create({
+    name: "Small Parts Drawer",
+    description: "Simple 2×3 compartment drawer insert",
+    rows: 2,
+    columns: 3,
+    rowLabelScheme: "alpha",
+    columnLabelScheme: "numeric",
+    originPosition: "top-left",
+    rowDividersFixed: true,
+    columnDividersFixed: true,
+    metadata: { unitSystem: "metric" },
+  });
+
+  // ALEX drawer divider — IKEA drawer organizer
+  await templateRepository.create({
+    name: "ALEX Drawer Divider",
+    description: "IKEA ALEX drawer compartment layout",
+    rows: 3,
+    columns: 4,
+    rowLabelScheme: "alpha",
+    columnLabelScheme: "numeric",
+    originPosition: "top-left",
+    rowDividersFixed: false,
+    columnDividersFixed: false,
+    metadata: { unitSystem: "metric", manufacturer: "IKEA", productNumber: "ALEX" },
+  });
+
+  console.log("Seeded 16 items across 6 categories, 5 templates with aspects and parameters.");
   process.exit(0);
 }
 
