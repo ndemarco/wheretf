@@ -154,6 +154,10 @@
   .toast .undo:hover { text-decoration: underline; }
   @keyframes slideIn { from { transform: translateY(10px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
 
+  /* Version rows */
+  .version-row:hover { background: #1e293b; }
+  .version-row.selected-version { background: rgba(255, 102, 0, 0.08); }
+
   /* Place insert modal */
   .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.6); z-index: 50; display: flex; align-items: center; justify-content: center; }
   .modal { background: #1e293b; border: 1px solid #334155; border-radius: 10px; width: 680px; max-height: 80vh; display: flex; flex-direction: column; }
@@ -526,10 +530,10 @@
 
           <h3 style="font-size:11px;font-weight:600;color:#94a3b8;text-transform:uppercase;letter-spacing:0.05em;margin-bottom:10px;">Version History</h3>
           <table style="width:100%;font-size:12px;border-collapse:collapse;margin-bottom:20px;">
-            <thead><tr><th style="text-align:left;padding:6px 0;color:#64748b;font-size:11px;border-bottom:1px solid #334155;">Version</th><th style="text-align:left;padding:6px 0;color:#64748b;font-size:11px;border-bottom:1px solid #334155;">Dims</th><th style="text-align:left;padding:6px 0;color:#64748b;font-size:11px;border-bottom:1px solid #334155;">Published</th><th style="text-align:left;padding:6px 0;color:#64748b;font-size:11px;border-bottom:1px solid #334155;">Instances</th></tr></thead>
+            <thead><tr><th style="text-align:left;padding:6px 0;color:#64748b;font-size:11px;border-bottom:1px solid #334155;">Version</th><th style="text-align:left;padding:6px 0;color:#64748b;font-size:11px;border-bottom:1px solid #334155;">Dims</th><th style="text-align:left;padding:6px 0;color:#64748b;font-size:11px;border-bottom:1px solid #334155;">Published</th><th style="text-align:left;padding:6px 0;color:#64748b;font-size:11px;border-bottom:1px solid #334155;">Instances</th><th style="text-align:left;padding:6px 0;color:#64748b;font-size:11px;border-bottom:1px solid #334155;"></th></tr></thead>
             <tbody>
-              <tr><td style="padding:6px 0;color:#ff6600;font-weight:500;">v2</td><td style="padding:6px 0;">4 × 6</td><td style="padding:6px 0;color:#64748b;">Mar 15, 2026</td><td style="padding:6px 0;">5</td></tr>
-              <tr><td style="padding:6px 0;">v1</td><td style="padding:6px 0;">4 × 6</td><td style="padding:6px 0;color:#64748b;">Mar 1, 2026</td><td style="padding:6px 0;">2</td></tr>
+              <tr class="version-row selected-version" data-version="2" onclick="selectVersion(2)" style="cursor:pointer;"><td style="padding:6px 0;color:#ff6600;font-weight:500;">v2</td><td style="padding:6px 0;">4 × 6</td><td style="padding:6px 0;color:#64748b;">Mar 15, 2026</td><td style="padding:6px 0;">5</td><td style="padding:6px 0;"><span class="badge badge-active" style="font-size:9px;">active</span></td></tr>
+              <tr class="version-row" data-version="1" onclick="selectVersion(1)" style="cursor:pointer;"><td style="padding:6px 0;">v1</td><td style="padding:6px 0;">4 × 6</td><td style="padding:6px 0;color:#64748b;">Mar 1, 2026</td><td style="padding:6px 0;">2</td><td style="padding:6px 0;"></td></tr>
             </tbody>
           </table>
           <button class="btn btn-secondary" style="margin-bottom:24px;">Publish New Version</button>
@@ -573,28 +577,38 @@
               <span class="badge badge-active" style="font-size:9px;">v2</span>
             </div>
           </div>
-          <div style="margin-top:12px;">
-            <button class="btn btn-secondary" style="font-size:11px;" onclick="showToast('2 instances upgraded to v2')">Upgrade Selected to v2</button>
+          <div style="margin-top:12px;" id="apply-version-btn">
+            <button class="btn btn-secondary" style="font-size:11px;" onclick="applyVersionToSelected()">Apply v2 to Selected</button>
           </div>
         </div>
         <div class="panel-right" style="border-left:1px solid #334155;">
-          <div class="grid-panel">
-            <h3 style="margin-bottom:4px;">v2 Layout</h3>
-            <div id="tpl-detail-preview"></div>
-
-            <div style="margin-top:24px;width:100%;max-width:380px;">
-              <h3 style="font-size:11px;font-weight:600;color:#94a3b8;text-transform:uppercase;letter-spacing:0.05em;margin-bottom:10px;">Properties</h3>
-              <div style="background:#1e293b;border:1px solid #334155;border-radius:8px;padding:12px 16px;font-size:12px;">
-                <div style="display:grid;grid-template-columns:110px 1fr;gap:6px 12px;">
-                  <span style="color:#64748b;">Dimensions</span>
-                  <span>4 rows × 6 columns</span>
-                  <span style="color:#64748b;">Merge axis</span>
-                  <span style="color:#fbbf24;">Columns only <span style="color:#64748b;">— row dividers permanent</span></span>
-                  <span style="color:#64748b;">Unit system</span>
-                  <span>Imperial</span>
+          <div style="display:flex;flex:1;min-height:0;">
+            <div class="grid-panel" style="flex:1;">
+              <h3 style="margin-bottom:4px;" id="tpl-version-title">v2 Layout</h3>
+              <div id="tpl-detail-preview"></div>
+            </div>
+            <div style="width:220px;padding:20px 16px;border-left:1px solid #334155;flex-shrink:0;overflow-y:auto;">
+              <h3 style="font-size:11px;font-weight:600;color:#94a3b8;text-transform:uppercase;letter-spacing:0.05em;margin-bottom:12px;">Properties</h3>
+              <div style="font-size:12px;">
+                <div style="display:grid;grid-template-columns:1fr;gap:10px;">
+                  <div>
+                    <div style="color:#64748b;font-size:10px;margin-bottom:2px;">Dimensions</div>
+                    <div id="tpl-prop-dims">4 rows × 6 columns</div>
+                  </div>
+                  <div>
+                    <div style="color:#64748b;font-size:10px;margin-bottom:2px;">Merge axis</div>
+                    <div id="tpl-prop-merge" style="color:#fbbf24;">Columns only <span style="color:#64748b;">— row dividers permanent</span></div>
+                  </div>
+                  <div>
+                    <div style="color:#64748b;font-size:10px;margin-bottom:2px;">Unit system</div>
+                    <div id="tpl-prop-unit">Imperial</div>
+                  </div>
                 </div>
-                <div style="margin-top:10px;padding-top:10px;border-top:1px solid #334155;">
-                  <button class="btn btn-ghost" style="font-size:11px;padding:4px 10px;">Edit → Publish as v3</button>
+                <div style="margin-top:16px;padding-top:12px;border-top:1px solid #334155;">
+                  <button class="btn btn-ghost" style="font-size:11px;padding:4px 10px;" id="tpl-edit-btn">Edit → Publish as v3</button>
+                </div>
+                <div id="tpl-set-active-container" style="margin-top:12px;display:none;">
+                  <button class="btn btn-secondary" style="font-size:11px;padding:4px 10px;" onclick="setActiveVersion()">Set as Active</button>
                 </div>
               </div>
             </div>
@@ -902,6 +916,69 @@
     toast.innerHTML = `<span>${msg}</span><span class="undo" onclick="this.parentElement.remove()">Undo</span>`;
     container.appendChild(toast);
     setTimeout(() => toast.remove(), 6000);
+  }
+
+  // Template version selection
+  let selectedVersion = 2;
+  let activeVersion = 2;
+
+  const versionData = {
+    1: { dims: '4 rows × 4 columns', rows: 4, cols: 4, merge: 'Both <span style="color:#64748b;">— all dividers removable</span>', mergeColor: '#86efac', unit: 'Imperial', date: 'Mar 1, 2026', instances: 2 },
+    2: { dims: '4 rows × 6 columns', rows: 4, cols: 6, merge: 'Columns only <span style="color:#64748b;">— row dividers permanent</span>', mergeColor: '#fbbf24', unit: 'Imperial', date: 'Mar 15, 2026', instances: 5 }
+  };
+
+  function selectVersion(v) {
+    selectedVersion = v;
+    document.querySelectorAll('.version-row').forEach(r => r.classList.remove('selected-version'));
+    document.querySelector(`.version-row[data-version="${v}"]`).classList.add('selected-version');
+
+    const data = versionData[v];
+    document.getElementById('tpl-version-title').textContent = `v${v} Layout`;
+    document.getElementById('tpl-prop-dims').textContent = data.dims;
+    document.getElementById('tpl-prop-merge').innerHTML = data.merge;
+    document.getElementById('tpl-prop-merge').style.color = data.mergeColor;
+    document.getElementById('tpl-prop-unit').textContent = data.unit;
+
+    // Update edit button
+    const nextV = Math.max(...Object.keys(versionData).map(Number)) + 1;
+    document.getElementById('tpl-edit-btn').textContent = `Edit → Publish as v${nextV}`;
+
+    // Show/hide "Set as Active" button
+    const setActiveContainer = document.getElementById('tpl-set-active-container');
+    setActiveContainer.style.display = (v === activeVersion) ? 'none' : 'block';
+
+    // Update apply button text
+    const applyBtn = document.querySelector('#apply-version-btn button');
+    applyBtn.textContent = `Apply v${v} to Selected`;
+    applyBtn.onclick = () => applyVersionToSelected();
+
+    // Re-render grid for this version
+    renderGrid('tpl-detail-preview', data.rows, data.cols, 'empty-tpl');
+  }
+
+  function setActiveVersion() {
+    const oldActive = activeVersion;
+    activeVersion = selectedVersion;
+
+    // Update badges in version table
+    document.querySelectorAll('.version-row').forEach(r => {
+      const v = parseInt(r.dataset.version);
+      const badgeCell = r.querySelector('td:last-child');
+      badgeCell.innerHTML = (v === activeVersion) ? '<span class="badge badge-active" style="font-size:9px;">active</span>' : '';
+    });
+
+    document.getElementById('tpl-set-active-container').style.display = 'none';
+    showToast(`v${activeVersion} set as active version`);
+  }
+
+  function applyVersionToSelected() {
+    const checked = document.querySelectorAll('#view-template-detail .tpl-form-left input[type="checkbox"]:checked');
+    const count = checked.length;
+    if (count === 0) {
+      showToast('No instances selected');
+      return;
+    }
+    showToast(`${count} instance${count > 1 ? 's' : ''} updated to v${selectedVersion}`);
   }
 
   // Init
