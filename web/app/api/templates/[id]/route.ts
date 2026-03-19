@@ -21,13 +21,21 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
   try {
     const { id } = await params;
     const body = await request.json();
-    const { name, description, metadata } = body;
+    const { name, description, metadata, activeVersion } = body;
+
+    // Set active version if requested
+    if (activeVersion !== undefined) {
+      await templateRepository.setActiveVersion({
+        templateId: id,
+        version: activeVersion,
+      });
+    }
 
     const template = await templateRepository.update({
       id,
-      name,
-      description,
-      metadata,
+      ...(name !== undefined && { name }),
+      ...(description !== undefined && { description }),
+      ...(metadata !== undefined && { metadata }),
     });
 
     return NextResponse.json({ template });

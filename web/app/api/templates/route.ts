@@ -14,7 +14,7 @@ export async function GET() {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { name, description, metadata, version } = body;
+    const { name, description, metadata, ...versionFields } = body;
 
     if (!name) {
       return NextResponse.json({ error: "name is required" }, { status: 400 });
@@ -24,16 +24,8 @@ export async function POST(request: NextRequest) {
       name,
       description,
       metadata,
+      ...versionFields,
     });
-
-    // If version fields were provided, publish them as a new version
-    // (version 1 is auto-created with defaults by the repository)
-    if (version && Object.keys(version).length > 0) {
-      await templateRepository.publishVersion({
-        templateId: template.id,
-        ...version,
-      });
-    }
 
     return NextResponse.json({ template }, { status: 201 });
   } catch (err) {

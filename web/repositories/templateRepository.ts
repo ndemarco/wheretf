@@ -8,10 +8,44 @@ export const templateRepository = {
     name,
     description,
     metadata,
+    rows,
+    columns,
+    isParametric,
+    minRows,
+    maxRows,
+    minColumns,
+    maxColumns,
+    unitSize,
+    rowLabelScheme,
+    columnLabelScheme,
+    originPosition,
+    rowDividersFixed,
+    columnDividersFixed,
+    interfaceTypeProvided,
+    interfaceTypeAccepted,
+    subdivisionOptions,
+    physicalConstraints,
   }: {
     name: string;
     description?: string;
     metadata?: Record<string, unknown>;
+    rows?: number;
+    columns?: number;
+    isParametric?: boolean;
+    minRows?: number | null;
+    maxRows?: number | null;
+    minColumns?: number | null;
+    maxColumns?: number | null;
+    unitSize?: string | null;
+    rowLabelScheme?: string;
+    columnLabelScheme?: string;
+    originPosition?: string;
+    rowDividersFixed?: boolean;
+    columnDividersFixed?: boolean;
+    interfaceTypeProvided?: string | null;
+    interfaceTypeAccepted?: string | null;
+    subdivisionOptions?: Record<string, unknown> | null;
+    physicalConstraints?: Record<string, unknown> | null;
   }) {
     const [template] = await db
       .insert(templates)
@@ -20,22 +54,34 @@ export const templateRepository = {
         description,
         metadata,
         currentVersion: 1,
+        activeVersion: 1,
       })
       .returning();
 
-    // Auto-create version 1 with sensible defaults (fixed, not parametric)
+    // Auto-create version 1 with provided or default values
     const [version] = await db
       .insert(templateVersions)
       .values({
         templateId: template.id,
         version: 1,
-        isParametric: false,
-        rows: 1,
-        columns: 1,
-        rowLabelScheme: "alpha",
-        columnLabelScheme: "numeric",
-        originPosition: "top-left",
+        isParametric: isParametric ?? false,
+        rows: rows ?? 1,
+        columns: columns ?? 1,
+        minRows: minRows ?? null,
+        maxRows: maxRows ?? null,
+        minColumns: minColumns ?? null,
+        maxColumns: maxColumns ?? null,
+        unitSize: unitSize ?? null,
+        rowLabelScheme: rowLabelScheme ?? "alpha",
+        columnLabelScheme: columnLabelScheme ?? "numeric",
+        originPosition: originPosition ?? "top-left",
         primaryAxis: "row",
+        rowDividersFixed: rowDividersFixed ?? false,
+        columnDividersFixed: columnDividersFixed ?? false,
+        interfaceTypeProvided: interfaceTypeProvided ?? null,
+        interfaceTypeAccepted: interfaceTypeAccepted ?? null,
+        subdivisionOptions: subdivisionOptions ?? null,
+        physicalConstraints: physicalConstraints ?? null,
       })
       .returning();
 
@@ -133,10 +179,10 @@ export const templateRepository = {
     rowLabelScheme,
     columnLabelScheme,
     originPosition,
-    primaryAxis,
+    rowDividersFixed,
+    columnDividersFixed,
     interfaceTypeProvided,
     interfaceTypeAccepted,
-    mergeConstraints,
     subdivisionOptions,
     physicalConstraints,
   }: {
@@ -152,10 +198,10 @@ export const templateRepository = {
     rowLabelScheme?: string;
     columnLabelScheme?: string;
     originPosition?: string;
-    primaryAxis?: string;
+    rowDividersFixed?: boolean;
+    columnDividersFixed?: boolean;
     interfaceTypeProvided?: string | null;
     interfaceTypeAccepted?: string | null;
-    mergeConstraints?: Record<string, unknown> | null;
     subdivisionOptions?: Record<string, unknown> | null;
     physicalConstraints?: Record<string, unknown> | null;
   }) {
@@ -180,10 +226,11 @@ export const templateRepository = {
         rowLabelScheme: rowLabelScheme ?? "alpha",
         columnLabelScheme: columnLabelScheme ?? "numeric",
         originPosition: originPosition ?? "top-left",
-        primaryAxis: primaryAxis ?? "row",
+        primaryAxis: "row",
+        rowDividersFixed: rowDividersFixed ?? false,
+        columnDividersFixed: columnDividersFixed ?? false,
         interfaceTypeProvided: interfaceTypeProvided ?? null,
         interfaceTypeAccepted: interfaceTypeAccepted ?? null,
-        mergeConstraints: mergeConstraints ?? null,
         subdivisionOptions: subdivisionOptions ?? null,
         physicalConstraints: physicalConstraints ?? null,
       })
@@ -230,5 +277,35 @@ export const templateRepository = {
       .select()
       .from(templateVersions)
       .where(eq(templateVersions.templateId, templateId));
+  },
+
+  async setActiveVersion({
+    templateId,
+    version,
+  }: {
+    templateId: string;
+    version: number;
+  }) {
+    const template = await templateRepository.findById({ id: templateId });
+    if (!template) throw new Error(`Template ${templateId} not found`);
+
+    const versionRecord = await templateRepository.getVersion({ templateId, version });
+    if (!versionRecord) throw new Error(`Version ${version} not found for template ${templateId}`);
+
+    const [updated] = await db
+      .update(templates)
+      .set({ activeVersion: version, updatedAt: new Date() })
+      .where(eq(templates.id, templateId))
+      .returning();
+
+    await transactionRepository.log({
+      actionType: "template.setActiveVersion",
+      entityType: "template",
+      entityId: templateId,
+      beforeState: { activeVersion: template.activeVersion },
+      afterState: { activeVersion: version },
+    });
+
+    return updated;
   },
 };

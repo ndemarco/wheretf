@@ -13,6 +13,7 @@ export const templates = pgTable("templates", {
   name: text("name").notNull(),
   description: text("description"),
   currentVersion: integer("current_version").notNull().default(1),
+  activeVersion: integer("active_version").notNull().default(1),
   metadata: jsonb("metadata"), // manufacturer, product number, photos, etc.
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
@@ -45,8 +46,11 @@ export const templateVersions = pgTable("template_versions", {
   interfaceTypeProvided: text("interface_type_provided"), // what this fits into (insert side)
   interfaceTypeAccepted: text("interface_type_accepted"), // what this accepts (receptacle side)
 
+  // Dividers
+  rowDividersFixed: boolean("row_dividers_fixed").notNull().default(false),
+  columnDividersFixed: boolean("column_dividers_fixed").notNull().default(false),
+
   // Constraints
-  mergeConstraints: jsonb("merge_constraints"), // e.g., { allowedAxes: ["column"] }
   subdivisionOptions: jsonb("subdivision_options"), // available subdivision configurations
   physicalConstraints: jsonb("physical_constraints"), // soft/hard limits
 
