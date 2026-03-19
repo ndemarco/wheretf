@@ -530,10 +530,10 @@
 
           <h3 style="font-size:11px;font-weight:600;color:#94a3b8;text-transform:uppercase;letter-spacing:0.05em;margin-bottom:10px;">Version History</h3>
           <table style="width:100%;font-size:12px;border-collapse:collapse;margin-bottom:20px;">
-            <thead><tr><th style="text-align:left;padding:6px 0;color:#64748b;font-size:11px;border-bottom:1px solid #334155;">Version</th><th style="text-align:left;padding:6px 0;color:#64748b;font-size:11px;border-bottom:1px solid #334155;">Dims</th><th style="text-align:left;padding:6px 0;color:#64748b;font-size:11px;border-bottom:1px solid #334155;">Published</th><th style="text-align:left;padding:6px 0;color:#64748b;font-size:11px;border-bottom:1px solid #334155;">Instances</th><th style="text-align:left;padding:6px 0;color:#64748b;font-size:11px;border-bottom:1px solid #334155;"></th></tr></thead>
-            <tbody>
-              <tr class="version-row selected-version" data-version="2" onclick="selectVersion(2)" style="cursor:pointer;"><td style="padding:6px 0;color:#ff6600;font-weight:500;">v2</td><td style="padding:6px 0;">4 × 6</td><td style="padding:6px 0;color:#64748b;">Mar 15, 2026</td><td style="padding:6px 0;">5</td><td style="padding:6px 0;"><span class="badge badge-active" style="font-size:9px;">active</span></td></tr>
-              <tr class="version-row" data-version="1" onclick="selectVersion(1)" style="cursor:pointer;"><td style="padding:6px 0;">v1</td><td style="padding:6px 0;">4 × 6</td><td style="padding:6px 0;color:#64748b;">Mar 1, 2026</td><td style="padding:6px 0;">2</td><td style="padding:6px 0;"></td></tr>
+            <thead><tr><th style="text-align:left;padding:6px 0;color:#64748b;font-size:11px;border-bottom:1px solid #334155;">Version</th><th style="text-align:left;padding:6px 0;color:#64748b;font-size:11px;border-bottom:1px solid #334155;">Dims</th><th style="text-align:left;padding:6px 0;color:#64748b;font-size:11px;border-bottom:1px solid #334155;">Published</th><th style="text-align:left;padding:6px 0;color:#64748b;font-size:11px;border-bottom:1px solid #334155;">Instances</th><th style="text-align:left;padding:6px 0;color:#64748b;font-size:11px;border-bottom:1px solid #334155;"></th><th style="width:24px;border-bottom:1px solid #334155;"></th></tr></thead>
+            <tbody id="version-table-body">
+              <tr class="version-row selected-version" data-version="2" onclick="selectVersion(2)" style="cursor:pointer;"><td style="padding:6px 0;color:#ff6600;font-weight:500;">v2</td><td style="padding:6px 0;">4 × 6</td><td style="padding:6px 0;color:#64748b;">Mar 15, 2026</td><td style="padding:6px 0;" class="instance-count">5</td><td style="padding:6px 0;"><span class="badge badge-active" style="font-size:9px;">active</span></td><td style="padding:6px 0;"></td></tr>
+              <tr class="version-row" data-version="1" onclick="selectVersion(1)" style="cursor:pointer;"><td style="padding:6px 0;">v1</td><td style="padding:6px 0;">4 × 4</td><td style="padding:6px 0;color:#64748b;">Mar 1, 2026</td><td style="padding:6px 0;" class="instance-count">2</td><td style="padding:6px 0;"></td><td style="padding:6px 0;"><span class="version-remove" onclick="event.stopPropagation();removeVersion(1)" style="color:#64748b;cursor:pointer;font-size:14px;display:none;" title="Hide version (0 instances)">×</span></td></tr>
             </tbody>
           </table>
           <button class="btn btn-secondary" style="margin-bottom:24px;">Publish New Version</button>
@@ -583,32 +583,55 @@
         </div>
         <div class="panel-right" style="border-left:1px solid #334155;">
           <div style="display:flex;flex:1;min-height:0;">
-            <div class="grid-panel" style="flex:1;">
-              <h3 style="margin-bottom:4px;" id="tpl-version-title">v2 Layout</h3>
-              <div id="tpl-detail-preview"></div>
+            <div class="grid-panel" style="flex:1;align-items:stretch;padding:24px;">
+              <h3 style="margin-bottom:8px;font-size:14px;" id="tpl-version-title">v2 Layout</h3>
+              <div id="tpl-detail-preview" style="flex:1;display:flex;align-items:center;justify-content:center;"></div>
             </div>
-            <div style="width:220px;padding:20px 16px;border-left:1px solid #334155;flex-shrink:0;overflow-y:auto;">
-              <h3 style="font-size:11px;font-weight:600;color:#94a3b8;text-transform:uppercase;letter-spacing:0.05em;margin-bottom:12px;">Properties</h3>
-              <div style="font-size:12px;">
-                <div style="display:grid;grid-template-columns:1fr;gap:10px;">
+            <div style="width:260px;padding:20px;border-left:1px solid #334155;flex-shrink:0;overflow-y:auto;">
+              <h3 style="font-size:11px;font-weight:600;color:#94a3b8;text-transform:uppercase;letter-spacing:0.05em;margin-bottom:14px;">Properties</h3>
+              <div style="font-size:13px;">
+                <div style="display:grid;grid-template-columns:1fr;gap:14px;">
                   <div>
-                    <div style="color:#64748b;font-size:10px;margin-bottom:2px;">Dimensions</div>
-                    <div id="tpl-prop-dims">4 rows × 6 columns</div>
+                    <div style="color:#64748b;font-size:11px;margin-bottom:3px;">Dimensions</div>
+                    <div id="tpl-prop-dims-display">4 rows × 6 columns</div>
+                    <div id="tpl-prop-dims-edit" style="display:none;margin-top:4px;">
+                      <div style="display:flex;gap:8px;align-items:center;">
+                        <input type="number" id="tpl-edit-rows" value="4" min="1" max="26" style="width:56px;padding:4px 8px;background:#0f172a;border:1px solid #334155;border-radius:4px;color:#e2e8f0;font-size:12px;" onchange="onPropEdit()">
+                        <span style="color:#64748b;">×</span>
+                        <input type="number" id="tpl-edit-cols" value="6" min="1" max="26" style="width:56px;padding:4px 8px;background:#0f172a;border:1px solid #334155;border-radius:4px;color:#e2e8f0;font-size:12px;" onchange="onPropEdit()">
+                      </div>
+                    </div>
                   </div>
                   <div>
-                    <div style="color:#64748b;font-size:10px;margin-bottom:2px;">Merge axis</div>
-                    <div id="tpl-prop-merge" style="color:#fbbf24;">Columns only <span style="color:#64748b;">— row dividers permanent</span></div>
+                    <div style="color:#64748b;font-size:11px;margin-bottom:3px;">Merge axis</div>
+                    <div id="tpl-prop-merge-display" style="color:#fbbf24;">Columns only <span style="color:#64748b;">— row dividers permanent</span></div>
+                    <div id="tpl-prop-merge-edit" style="display:none;margin-top:4px;">
+                      <select id="tpl-edit-merge" style="width:100%;padding:4px 8px;background:#0f172a;border:1px solid #334155;border-radius:4px;color:#e2e8f0;font-size:12px;" onchange="onPropEdit()">
+                        <option value="both">Both</option>
+                        <option value="columns">Columns only</option>
+                        <option value="rows">Rows only</option>
+                        <option value="none">None</option>
+                      </select>
+                    </div>
                   </div>
                   <div>
-                    <div style="color:#64748b;font-size:10px;margin-bottom:2px;">Unit system</div>
-                    <div id="tpl-prop-unit">Imperial</div>
+                    <div style="color:#64748b;font-size:11px;margin-bottom:3px;">Unit system</div>
+                    <div id="tpl-prop-unit-display">Imperial</div>
+                    <div id="tpl-prop-unit-edit" style="display:none;margin-top:4px;">
+                      <select id="tpl-edit-unit" style="width:100%;padding:4px 8px;background:#0f172a;border:1px solid #334155;border-radius:4px;color:#e2e8f0;font-size:12px;" onchange="onPropEdit()">
+                        <option value="Imperial">Imperial</option>
+                        <option value="Metric">Metric</option>
+                      </select>
+                    </div>
                   </div>
                 </div>
-                <div style="margin-top:16px;padding-top:12px;border-top:1px solid #334155;">
-                  <button class="btn btn-ghost" style="font-size:11px;padding:4px 10px;" id="tpl-edit-btn">Edit → Publish as v3</button>
+                <div style="margin-top:18px;padding-top:14px;border-top:1px solid #334155;display:flex;flex-direction:column;gap:8px;">
+                  <button class="btn btn-ghost" style="font-size:12px;padding:5px 10px;" id="tpl-edit-toggle-btn" onclick="togglePropEdit()">Edit Properties</button>
+                  <button class="btn btn-primary" style="font-size:12px;padding:5px 10px;display:none;" id="tpl-publish-btn" onclick="publishNewVersion()">Publish as v3</button>
+                  <button class="btn btn-ghost" style="font-size:12px;padding:5px 10px;display:none;" id="tpl-cancel-edit-btn" onclick="cancelPropEdit()">Cancel</button>
                 </div>
                 <div id="tpl-set-active-container" style="margin-top:12px;display:none;">
-                  <button class="btn btn-secondary" style="font-size:11px;padding:4px 10px;" onclick="setActiveVersion()">Set as Active</button>
+                  <button class="btn btn-secondary" style="font-size:12px;padding:5px 10px;" onclick="setActiveVersion()">Set as Active</button>
                 </div>
               </div>
             </div>
@@ -759,10 +782,13 @@
   // SVG Grid renderer
   function renderGrid(containerId, rows, cols, mode) {
     const container = document.getElementById(containerId);
-    const cellSize = 52;
-    const gap = 2;
-    const labelW = 28;
-    const labelH = 24;
+    const isTemplateDetail = (containerId === 'tpl-detail-preview');
+    const cellSize = isTemplateDetail ? 72 : 52;
+    const gap = isTemplateDetail ? 3 : 2;
+    const labelW = isTemplateDetail ? 36 : 28;
+    const labelH = isTemplateDetail ? 32 : 24;
+    const axisFont = isTemplateDetail ? 14 : 11;
+    const cellFont = isTemplateDetail ? 12 : 9;
     const w = labelW + cols * (cellSize + gap);
     const h = labelH + rows * (cellSize + gap);
 
@@ -799,13 +825,13 @@
     // Column labels
     for (let c = 0; c < cols; c++) {
       const x = labelW + c * (cellSize + gap) + cellSize / 2;
-      html += `<text class="axis-label" x="${x}" y="${labelH / 2}">${c + 1}</text>`;
+      html += `<text class="axis-label" x="${x}" y="${labelH / 2}" style="font-size:${axisFont}px">${c + 1}</text>`;
     }
     // Row labels
     const rowLabels = 'ABCDEFGHIJKLMNOP';
     for (let r = 0; r < rows; r++) {
       const y = labelH + r * (cellSize + gap) + cellSize / 2;
-      html += `<text class="axis-label" x="${labelW / 2}" y="${y}">${rowLabels[r]}</text>`;
+      html += `<text class="axis-label" x="${labelW / 2}" y="${y}" style="font-size:${axisFont}px">${rowLabels[r]}</text>`;
     }
     // Cells
     for (let r = 0; r < rows; r++) {
@@ -821,21 +847,21 @@
           const mw = m.spanCols * (cellSize + gap) - gap;
           const cls = occupied.has(cellId) ? 'cell merged occupied' : 'cell merged';
           html += `<rect class="${cls}" x="${x}" y="${y}" width="${mw}" height="${cellSize}" rx="3"/>`;
-          html += `<text class="cell-text" x="${x + mw/2}" y="${y + cellSize/2}">${m.label}</text>`;
+          html += `<text class="cell-text" x="${x + mw/2}" y="${y + cellSize/2}" style="font-size:${cellFont}px">${m.label}</text>`;
         } else if (divided[cellId]) {
           const parts = divided[cellId];
           const partW = (cellSize - 1) / parts.length;
           for (let p = 0; p < parts.length; p++) {
             const px = x + p * partW + (p > 0 ? 1 : 0);
             html += `<rect class="cell occupied" x="${px}" y="${y}" width="${partW}" height="${cellSize}" rx="2"/>`;
-            html += `<text class="cell-text" x="${px + partW/2}" y="${y + cellSize/2}" style="font-size:8px;">${parts[p]}</text>`;
+            html += `<text class="cell-text" x="${px + partW/2}" y="${y + cellSize/2}" style="font-size:${Math.max(cellFont - 2, 8)}px">${parts[p]}</text>`;
           }
         } else {
           let cls = 'cell';
           if (disabled.has(cellId)) cls += ' disabled';
           else if (occupied.has(cellId)) cls += ' occupied';
           html += `<rect class="${cls}" x="${x}" y="${y}" width="${cellSize}" height="${cellSize}" rx="3"/>`;
-          html += `<text class="cell-text" x="${x + cellSize/2}" y="${y + cellSize/2}">${cellId}</text>`;
+          html += `<text class="cell-text" x="${x + cellSize/2}" y="${y + cellSize/2}" style="font-size:${cellFont}px">${cellId}</text>`;
         }
       }
     }
@@ -929,19 +955,18 @@
 
   function selectVersion(v) {
     selectedVersion = v;
+    // Cancel any in-progress edit
+    cancelPropEdit();
+
     document.querySelectorAll('.version-row').forEach(r => r.classList.remove('selected-version'));
     document.querySelector(`.version-row[data-version="${v}"]`).classList.add('selected-version');
 
     const data = versionData[v];
     document.getElementById('tpl-version-title').textContent = `v${v} Layout`;
-    document.getElementById('tpl-prop-dims').textContent = data.dims;
-    document.getElementById('tpl-prop-merge').innerHTML = data.merge;
-    document.getElementById('tpl-prop-merge').style.color = data.mergeColor;
-    document.getElementById('tpl-prop-unit').textContent = data.unit;
-
-    // Update edit button
-    const nextV = Math.max(...Object.keys(versionData).map(Number)) + 1;
-    document.getElementById('tpl-edit-btn').textContent = `Edit → Publish as v${nextV}`;
+    document.getElementById('tpl-prop-dims-display').innerHTML = data.dims;
+    document.getElementById('tpl-prop-merge-display').innerHTML = data.merge;
+    document.getElementById('tpl-prop-merge-display').style.color = data.mergeColor;
+    document.getElementById('tpl-prop-unit-display').textContent = data.unit;
 
     // Show/hide "Set as Active" button
     const setActiveContainer = document.getElementById('tpl-set-active-container');
@@ -969,6 +994,96 @@
 
     document.getElementById('tpl-set-active-container').style.display = 'none';
     showToast(`v${activeVersion} set as active version`);
+  }
+
+  // Property editing
+  let editingProps = false;
+
+  function togglePropEdit() {
+    editingProps = true;
+    const data = versionData[selectedVersion];
+    // Populate edit fields from current version
+    document.getElementById('tpl-edit-rows').value = data.rows;
+    document.getElementById('tpl-edit-cols').value = data.cols;
+    const mergeMap = {
+      'Columns only': 'columns', 'Rows only': 'rows', 'Both': 'both', 'None': 'none'
+    };
+    const mergeKey = data.merge.split('<')[0].trim();
+    document.getElementById('tpl-edit-merge').value = mergeMap[mergeKey] || 'both';
+    document.getElementById('tpl-edit-unit').value = data.unit;
+
+    // Show edit fields, hide display values
+    document.getElementById('tpl-prop-dims-display').style.display = 'none';
+    document.getElementById('tpl-prop-dims-edit').style.display = 'block';
+    document.getElementById('tpl-prop-merge-display').style.display = 'none';
+    document.getElementById('tpl-prop-merge-edit').style.display = 'block';
+    document.getElementById('tpl-prop-unit-display').style.display = 'none';
+    document.getElementById('tpl-prop-unit-edit').style.display = 'block';
+
+    // Show publish/cancel, hide edit button
+    document.getElementById('tpl-edit-toggle-btn').style.display = 'none';
+    document.getElementById('tpl-publish-btn').style.display = 'inline-flex';
+    document.getElementById('tpl-cancel-edit-btn').style.display = 'inline-flex';
+
+    const nextV = Math.max(...Object.keys(versionData).map(Number)) + 1;
+    document.getElementById('tpl-publish-btn').textContent = `Publish as v${nextV}`;
+
+    onPropEdit();
+  }
+
+  function cancelPropEdit() {
+    editingProps = false;
+    document.getElementById('tpl-prop-dims-display').style.display = '';
+    document.getElementById('tpl-prop-dims-edit').style.display = 'none';
+    document.getElementById('tpl-prop-merge-display').style.display = '';
+    document.getElementById('tpl-prop-merge-edit').style.display = 'none';
+    document.getElementById('tpl-prop-unit-display').style.display = '';
+    document.getElementById('tpl-prop-unit-edit').style.display = 'none';
+
+    document.getElementById('tpl-edit-toggle-btn').style.display = '';
+    document.getElementById('tpl-publish-btn').style.display = 'none';
+    document.getElementById('tpl-cancel-edit-btn').style.display = 'none';
+
+    // Restore grid to selected version
+    const data = versionData[selectedVersion];
+    if (data) renderGrid('tpl-detail-preview', data.rows, data.cols, 'empty-tpl');
+  }
+
+  function onPropEdit() {
+    // Live-update the grid preview as the user edits dimensions
+    const rows = parseInt(document.getElementById('tpl-edit-rows').value) || 1;
+    const cols = parseInt(document.getElementById('tpl-edit-cols').value) || 1;
+    renderGrid('tpl-detail-preview', Math.min(rows, 16), Math.min(cols, 16), 'empty-tpl');
+  }
+
+  function publishNewVersion() {
+    const nextV = Math.max(...Object.keys(versionData).map(Number)) + 1;
+    const rows = parseInt(document.getElementById('tpl-edit-rows').value) || 1;
+    const cols = parseInt(document.getElementById('tpl-edit-cols').value) || 1;
+    const mergeVal = document.getElementById('tpl-edit-merge').value;
+    const unitVal = document.getElementById('tpl-edit-unit').value;
+
+    const mergeLabels = {
+      'both': 'Both <span style="color:#64748b;">— all dividers removable</span>',
+      'columns': 'Columns only <span style="color:#64748b;">— row dividers permanent</span>',
+      'rows': 'Rows only <span style="color:#64748b;">— column dividers permanent</span>',
+      'none': 'None <span style="color:#64748b;">— all dividers permanent</span>'
+    };
+    const mergeColors = { 'both': '#86efac', 'columns': '#fbbf24', 'rows': '#fbbf24', 'none': '#f87171' };
+
+    cancelPropEdit();
+    showToast(`v${nextV} published`);
+  }
+
+  function removeVersion(v) {
+    // Only allow removing versions with 0 instances and not the active version
+    if (v === activeVersion) return;
+    const row = document.querySelector(`.version-row[data-version="${v}"]`);
+    if (row) row.remove();
+    if (selectedVersion === v) {
+      selectVersion(activeVersion);
+    }
+    showToast(`v${v} hidden from list`);
   }
 
   function applyVersionToSelected() {
