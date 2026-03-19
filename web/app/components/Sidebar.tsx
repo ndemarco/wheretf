@@ -36,6 +36,15 @@ const navItems = [
     ),
   },
   {
+    href: "/taxonomy",
+    title: "Taxonomy",
+    icon: (
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="w-5 h-5">
+        <path d="M4 6h16M4 12h10M4 18h6" />
+      </svg>
+    ),
+  },
+  {
     href: "/activity",
     title: "Activity",
     icon: (

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 
 interface RichItem {
   id: string;
@@ -173,6 +173,34 @@ export default function ItemDetail({
   const [editingDesc, setEditingDesc] = useState(false);
   const [descValue, setDescValue] = useState("");
 
+  // Aspect picker
+  const [showAspectPicker, setShowAspectPicker] = useState(false);
+  const [allAspects, setAllAspects] = useState<{ id: string; name: string; description: string | null }[]>([]);
+
+  // Category picker
+  const [showCategoryPicker, setShowCategoryPicker] = useState(false);
+  const [allCategories, setAllCategories] = useState<{ id: string; name: string; icon: string | null; color: string | null }[]>([]);
+
+  const fetchAllAspects = useCallback(async () => {
+    try {
+      const res = await fetch("/api/aspects");
+      const data = await res.json();
+      setAllAspects(data.aspects || []);
+    } catch (err) {
+      console.error(err);
+    }
+  }, []);
+
+  const fetchAllCategories = useCallback(async () => {
+    try {
+      const res = await fetch("/api/categories");
+      const data = await res.json();
+      setAllCategories(data.categories || []);
+    } catch (err) {
+      console.error(err);
+    }
+  }, []);
+
   if (!item) {
     return (
       <div className="w-80 bg-slate-800 border-l border-slate-700 shrink-0 flex items-center justify-center">
@@ -231,6 +259,65 @@ export default function ItemDetail({
       console.error("Failed to delete item:", err);
     }
   };
+
+  const addAspect = async (aspectId: string) => {
+    try {
+      await fetch(`/api/items/${item.id}/aspects`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ aspectId }),
+      });
+      setShowAspectPicker(false);
+      onRefresh();
+    } catch (err) {
+      console.error("Failed to add aspect:", err);
+    }
+  };
+
+  const removeAspect = async (aspectId: string) => {
+    try {
+      await fetch(`/api/items/${item.id}/aspects`, {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ aspectId }),
+      });
+      onRefresh();
+    } catch (err) {
+      console.error("Failed to remove aspect:", err);
+    }
+  };
+
+  const addCategory = async (categoryId: string) => {
+    try {
+      await fetch(`/api/items/${item.id}/categories`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ categoryId, isPrimary: item.categories.length === 0 }),
+      });
+      setShowCategoryPicker(false);
+      onRefresh();
+    } catch (err) {
+      console.error("Failed to add category:", err);
+    }
+  };
+
+  const removeCategory = async (categoryId: string) => {
+    try {
+      await fetch(`/api/items/${item.id}/categories`, {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ categoryId }),
+      });
+      onRefresh();
+    } catch (err) {
+      console.error("Failed to remove category:", err);
+    }
+  };
+
+  const appliedAspectIds = new Set(item.aspects.map((a) => a.aspectId));
+  const appliedCategoryIds = new Set(item.categories.map((c) => c.categoryId));
+  const availableAspects = allAspects.filter((a) => !appliedAspectIds.has(a.id));
+  const availableCategories = allCategories.filter((c) => !appliedCategoryIds.has(c.id));
 
   const primaryCat = item.categories.find((c) => c.isPrimary);
 
@@ -295,14 +382,25 @@ export default function ItemDetail({
 
         {/* Categories */}
         <div>
-          <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1.5">
-            Categories
-          </h3>
+          <div className="flex items-center justify-between mb-1.5">
+            <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wider">
+              Categories
+            </h3>
+            <button
+              onClick={() => {
+                setShowCategoryPicker(!showCategoryPicker);
+                if (!showCategoryPicker) fetchAllCategories();
+              }}
+              className="text-[10px] text-accent hover:brightness-110"
+            >
+              {showCategoryPicker ? "Done" : "+ Add"}
+            </button>
+          </div>
           <div className="flex flex-wrap gap-1.5">
             {item.categories.map((cat) => (
               <span
                 key={cat.categoryId}
-                className="inline-flex items-center gap-1 px-2 py-0.5 bg-slate-900 border border-slate-600 rounded-full text-xs"
+                className="inline-flex items-center gap-1 px-2 py-0.5 bg-slate-900 border border-slate-600 rounded-full text-xs group"
               >
                 {cat.icon && <span>{cat.icon}</span>}
                 <span className={cat.isPrimary ? "text-accent" : "text-slate-300"}>
@@ -311,70 +409,138 @@ export default function ItemDetail({
                 {cat.isPrimary && (
                   <span className="text-accent text-[10px]">★</span>
                 )}
+                <button
+                  onClick={() => removeCategory(cat.categoryId)}
+                  className="opacity-0 group-hover:opacity-100 text-red-400 hover:text-red-300 text-[10px] ml-0.5 transition-opacity"
+                >
+                  ×
+                </button>
               </span>
             ))}
-            {item.categories.length === 0 && (
+            {item.categories.length === 0 && !showCategoryPicker && (
               <span className="text-xs text-slate-600 italic">None</span>
             )}
           </div>
+          {showCategoryPicker && (
+            <div className="mt-2 space-y-1 max-h-32 overflow-y-auto">
+              {availableCategories.length === 0 ? (
+                <p className="text-xs text-slate-500">No more categories available.</p>
+              ) : (
+                availableCategories.map((cat) => (
+                  <button
+                    key={cat.id}
+                    onClick={() => addCategory(cat.id)}
+                    className="w-full text-left flex items-center gap-2 px-2 py-1 rounded hover:bg-slate-700/50 transition-colors"
+                  >
+                    {cat.icon && <span>{cat.icon}</span>}
+                    <span className="text-xs text-slate-300">{cat.name}</span>
+                  </button>
+                ))
+              )}
+            </div>
+          )}
         </div>
 
         {/* Aspects */}
-        {item.aspects.length > 0 && (
-          <div>
-            <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1.5">
+        <div>
+          <div className="flex items-center justify-between mb-1.5">
+            <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wider">
               Aspects
             </h3>
-            <div className="space-y-1">
-              {item.aspects.map((aspect) => {
-                const isCollapsed = collapsedAspects.has(aspect.aspectId);
-                const filled = aspect.parameters.filter(
-                  (p) => p.value !== null && p.value !== undefined
-                ).length;
-                const total = aspect.parameters.length;
-
-                return (
-                  <div
-                    key={aspect.itemAspectId}
-                    className="bg-slate-900/50 rounded border border-slate-700"
+            <button
+              onClick={() => {
+                setShowAspectPicker(!showAspectPicker);
+                if (!showAspectPicker) fetchAllAspects();
+              }}
+              className="text-[10px] text-accent hover:brightness-110"
+            >
+              {showAspectPicker ? "Done" : "+ Add"}
+            </button>
+          </div>
+          {showAspectPicker && (
+            <div className="mb-2 space-y-1 max-h-32 overflow-y-auto">
+              {availableAspects.length === 0 ? (
+                <p className="text-xs text-slate-500">No more aspects available.</p>
+              ) : (
+                availableAspects.map((a) => (
+                  <button
+                    key={a.id}
+                    onClick={() => addAspect(a.id)}
+                    className="w-full text-left flex items-center justify-between px-2 py-1 rounded hover:bg-slate-700/50 transition-colors"
                   >
+                    <div>
+                      <span className="text-xs text-slate-300">{a.name}</span>
+                      {a.description && (
+                        <span className="text-[10px] text-slate-500 ml-2">
+                          {a.description}
+                        </span>
+                      )}
+                    </div>
+                    <span className="text-[10px] text-accent">+ Add</span>
+                  </button>
+                ))
+              )}
+            </div>
+          )}
+          {item.aspects.length === 0 && !showAspectPicker && (
+            <p className="text-xs text-slate-600 italic">No aspects applied.</p>
+          )}
+          <div className="space-y-1">
+            {item.aspects.map((aspect) => {
+              const isCollapsed = collapsedAspects.has(aspect.aspectId);
+              const filled = aspect.parameters.filter(
+                (p) => p.value !== null && p.value !== undefined
+              ).length;
+              const total = aspect.parameters.length;
+
+              return (
+                <div
+                  key={aspect.itemAspectId}
+                  className="bg-slate-900/50 rounded border border-slate-700"
+                >
+                  <div className="flex items-center justify-between px-3 py-1.5 text-xs">
                     <button
                       onClick={() => toggleAspect(aspect.aspectId)}
-                      className="w-full flex items-center justify-between px-3 py-1.5 text-xs"
+                      className="flex items-center gap-2"
                     >
-                      <span className="flex items-center gap-2">
-                        <span className="text-slate-400 text-[10px]">
-                          {isCollapsed ? "▶" : "▼"}
-                        </span>
-                        <span className="font-medium text-slate-200">
-                          {aspect.name}
-                        </span>
-                        <CompletenessIndicator filled={filled} total={total} />
+                      <span className="text-slate-400 text-[10px]">
+                        {isCollapsed ? "▶" : "▼"}
                       </span>
+                      <span className="font-medium text-slate-200">
+                        {aspect.name}
+                      </span>
+                      <CompletenessIndicator filled={filled} total={total} />
                     </button>
-                    {!isCollapsed && (
-                      <div className="px-3 pb-2 border-t border-slate-700/50">
-                        {aspect.parameters.map((param) => (
-                          <ParamRow
-                            key={param.parameterDefinitionId}
-                            parameterName={param.parameterName}
-                            value={param.value}
-                            unit={param.unit}
-                            parameterDefinitionId={param.parameterDefinitionId}
-                            dataType={param.dataType}
-                            itemId={item.id}
-                            onAddFilter={onAddFilter}
-                            onRefresh={onRefresh}
-                          />
-                        ))}
-                      </div>
-                    )}
+                    <button
+                      onClick={() => removeAspect(aspect.aspectId)}
+                      className="text-red-400 hover:text-red-300 text-[10px] opacity-0 hover:opacity-100 transition-opacity"
+                      title="Remove aspect"
+                    >
+                      ×
+                    </button>
                   </div>
-                );
-              })}
-            </div>
+                  {!isCollapsed && (
+                    <div className="px-3 pb-2 border-t border-slate-700/50">
+                      {aspect.parameters.map((param) => (
+                        <ParamRow
+                          key={param.parameterDefinitionId}
+                          parameterName={param.parameterName}
+                          value={param.value}
+                          unit={param.unit}
+                          parameterDefinitionId={param.parameterDefinitionId}
+                          dataType={param.dataType}
+                          itemId={item.id}
+                          onAddFilter={onAddFilter}
+                          onRefresh={onRefresh}
+                        />
+                      ))}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
           </div>
-        )}
+        </div>
 
         {/* Standalone Parameters */}
         {item.standaloneParameters.length > 0 && (
