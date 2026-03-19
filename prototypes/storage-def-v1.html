@@ -158,9 +158,8 @@
   .version-row:hover { background: #1e293b; }
   .version-row.selected-version { background: rgba(255, 102, 0, 0.08); }
 
-  /* Origin picker */
-  .origin-btn.active { background: #ff6600 !important; color: white !important; border-color: #ff6600 !important; font-weight: 600; }
-  .origin-btn:hover:not(.active) { border-color: #64748b !important; color: #e2e8f0 !important; }
+  /* Radio/checkbox styling */
+  input[type="radio"], input[type="checkbox"] { accent-color: #ff6600; }
 
   /* Place insert modal */
   .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.6); z-index: 50; display: flex; align-items: center; justify-content: center; }
@@ -642,47 +641,48 @@
                   </div>
                   <div>
                     <div style="color:#64748b;font-size:11px;margin-bottom:4px;">Row labels</div>
-                    <select id="tpl-edit-rowlabel" style="width:100%;padding:5px 8px;background:#0f172a;border:1px solid #334155;border-radius:4px;color:#e2e8f0;font-size:13px;" onchange="onPropEdit()">
-                      <option value="alpha">Alpha (A, B, C…)</option>
-                      <option value="numeric">Numeric (1, 2, 3…)</option>
-                    </select>
-                  </div>
-                  <div>
-                    <div style="color:#64748b;font-size:11px;margin-bottom:4px;">Column labels</div>
-                    <select id="tpl-edit-collabel" style="width:100%;padding:5px 8px;background:#0f172a;border:1px solid #334155;border-radius:4px;color:#e2e8f0;font-size:13px;" onchange="onPropEdit()">
-                      <option value="numeric">Numeric (1, 2, 3…)</option>
-                      <option value="alpha">Alpha (A, B, C…)</option>
-                    </select>
-                  </div>
-                  <div>
-                    <div style="color:#64748b;font-size:11px;margin-bottom:4px;">Origin</div>
-                    <div id="origin-picker" style="display:inline-grid;grid-template-columns:1fr 1fr;gap:4px;background:#0f172a;border:1px solid #334155;border-radius:6px;padding:6px;">
-                      <button class="origin-btn active" data-origin="tl" onclick="setOrigin('tl')" style="width:36px;height:28px;border:1px solid #334155;border-radius:3px;background:transparent;color:#94a3b8;font-size:10px;cursor:pointer;">TL</button>
-                      <button class="origin-btn" data-origin="tr" onclick="setOrigin('tr')" style="width:36px;height:28px;border:1px solid #334155;border-radius:3px;background:transparent;color:#94a3b8;font-size:10px;cursor:pointer;">TR</button>
-                      <button class="origin-btn" data-origin="bl" onclick="setOrigin('bl')" style="width:36px;height:28px;border:1px solid #334155;border-radius:3px;background:transparent;color:#94a3b8;font-size:10px;cursor:pointer;">BL</button>
-                      <button class="origin-btn" data-origin="br" onclick="setOrigin('br')" style="width:36px;height:28px;border:1px solid #334155;border-radius:3px;background:transparent;color:#94a3b8;font-size:10px;cursor:pointer;">BR</button>
+                    <div style="display:flex;gap:12px;">
+                      <label style="display:flex;align-items:center;gap:5px;cursor:pointer;"><input type="radio" name="tpl-edit-rowlabel" value="alpha" checked onchange="onLabelChange('row')"> <span>Alpha</span></label>
+                      <label style="display:flex;align-items:center;gap:5px;cursor:pointer;"><input type="radio" name="tpl-edit-rowlabel" value="numeric" onchange="onLabelChange('row')"> <span>Numeric</span></label>
                     </div>
                   </div>
                   <div>
-                    <div style="color:#64748b;font-size:11px;margin-bottom:4px;">Row dividers</div>
-                    <select id="tpl-edit-rowdiv" style="width:100%;padding:5px 8px;background:#0f172a;border:1px solid #334155;border-radius:4px;color:#e2e8f0;font-size:13px;" onchange="onPropEdit()">
-                      <option value="fixed">Fixed — permanent</option>
-                      <option value="removable">Removable — can merge</option>
+                    <div style="color:#64748b;font-size:11px;margin-bottom:4px;">Column labels</div>
+                    <div style="display:flex;gap:12px;">
+                      <label style="display:flex;align-items:center;gap:5px;cursor:pointer;"><input type="radio" name="tpl-edit-collabel" value="numeric" checked onchange="onLabelChange('col')"> <span>Numeric</span></label>
+                      <label style="display:flex;align-items:center;gap:5px;cursor:pointer;"><input type="radio" name="tpl-edit-collabel" value="alpha" onchange="onLabelChange('col')"> <span>Alpha</span></label>
+                    </div>
+                    <div id="label-conflict-msg" style="color:#f59e0b;font-size:11px;margin-top:4px;display:none;">Rows and columns can't both use the same label type.</div>
+                  </div>
+                  <div>
+                    <div style="color:#64748b;font-size:11px;margin-bottom:4px;">Origin</div>
+                    <select id="tpl-edit-origin" style="width:100%;padding:5px 8px;background:#0f172a;border:1px solid #334155;border-radius:4px;color:#e2e8f0;font-size:13px;" onchange="onPropEdit()">
+                      <option value="tl">Top-left</option>
+                      <option value="tr">Top-right</option>
+                      <option value="bl">Bottom-left</option>
+                      <option value="br">Bottom-right</option>
                     </select>
+                  </div>
+                  <div>
+                    <div style="color:#64748b;font-size:11px;margin-bottom:4px;">Row dividers</div>
+                    <label style="display:flex;align-items:center;gap:8px;cursor:pointer;">
+                      <input type="checkbox" id="tpl-edit-rowdiv" onchange="onPropEdit()">
+                      <span>Fixed <span style="color:#64748b;">— permanent, no merging across rows</span></span>
+                    </label>
                   </div>
                   <div>
                     <div style="color:#64748b;font-size:11px;margin-bottom:4px;">Column dividers</div>
-                    <select id="tpl-edit-coldiv" style="width:100%;padding:5px 8px;background:#0f172a;border:1px solid #334155;border-radius:4px;color:#e2e8f0;font-size:13px;" onchange="onPropEdit()">
-                      <option value="removable">Removable — can merge</option>
-                      <option value="fixed">Fixed — permanent</option>
-                    </select>
+                    <label style="display:flex;align-items:center;gap:8px;cursor:pointer;">
+                      <input type="checkbox" id="tpl-edit-coldiv" onchange="onPropEdit()">
+                      <span>Fixed <span style="color:#64748b;">— permanent, no merging within rows</span></span>
+                    </label>
                   </div>
                   <div>
                     <div style="color:#64748b;font-size:11px;margin-bottom:4px;">Unit system</div>
-                    <select id="tpl-edit-unit" style="width:100%;padding:5px 8px;background:#0f172a;border:1px solid #334155;border-radius:4px;color:#e2e8f0;font-size:13px;" onchange="onPropEdit()">
-                      <option value="Imperial">Imperial</option>
-                      <option value="Metric">Metric</option>
-                    </select>
+                    <div style="display:flex;gap:12px;">
+                      <label style="display:flex;align-items:center;gap:5px;cursor:pointer;"><input type="radio" name="tpl-edit-unit" value="Imperial" checked onchange="onPropEdit()"> <span>Imperial</span></label>
+                      <label style="display:flex;align-items:center;gap:5px;cursor:pointer;"><input type="radio" name="tpl-edit-unit" value="Metric" onchange="onPropEdit()"> <span>Metric</span></label>
+                    </div>
                   </div>
                 </div>
                 <div style="margin-top:18px;padding-top:14px;border-top:1px solid #334155;display:flex;flex-direction:column;gap:8px;">
@@ -882,21 +882,25 @@
     html += `<div class="svg-grid-container"><svg class="svg-grid" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}">`;
     html += `<defs><pattern id="stripe-pattern" patternUnits="userSpaceOnUse" width="6" height="6" patternTransform="rotate(45)"><line x1="0" y1="0" x2="0" y2="6" stroke="#f87171" stroke-width="1.5" stroke-opacity="0.4"/></pattern></defs>`;
 
+    // Label settings
+    const labelSettings = getLabelSettings(mode);
+
     // Column labels
     for (let c = 0; c < cols; c++) {
       const x = labelW + c * (cellSize + gap) + cellSize / 2;
-      html += `<text class="axis-label" x="${x}" y="${labelH / 2}" style="font-size:${axisFont}px">${c + 1}</text>`;
+      html += `<text class="axis-label" x="${x}" y="${labelH / 2}" style="font-size:${axisFont}px">${getLabel(labelSettings.colLabel, c)}</text>`;
     }
     // Row labels
-    const rowLabels = 'ABCDEFGHIJKLMNOP';
     for (let r = 0; r < rows; r++) {
       const y = labelH + r * (cellSize + gap) + cellSize / 2;
-      html += `<text class="axis-label" x="${labelW / 2}" y="${y}" style="font-size:${axisFont}px">${rowLabels[r]}</text>`;
+      html += `<text class="axis-label" x="${labelW / 2}" y="${y}" style="font-size:${axisFont}px">${getLabel(labelSettings.rowLabel, r)}</text>`;
     }
     // Cells
+    const rowLabelsStr = 'ABCDEFGHIJKLMNOP';
     for (let r = 0; r < rows; r++) {
       for (let c = 0; c < cols; c++) {
-        const cellId = rowLabels[r] + (c + 1);
+        const cellId = rowLabelsStr[r] + (c + 1); // internal ID for mock data lookups
+        const cellLabel = getLabel(labelSettings.rowLabel, r) + getLabel(labelSettings.colLabel, c);
         if (skipCells.has(cellId)) continue;
 
         const x = labelW + c * (cellSize + gap);
@@ -921,7 +925,7 @@
           if (disabled.has(cellId)) cls += ' disabled';
           else if (occupied.has(cellId)) cls += ' occupied';
           html += `<rect class="${cls}" x="${x}" y="${y}" width="${cellSize}" height="${cellSize}" rx="3"/>`;
-          html += `<text class="cell-text" x="${x + cellSize/2}" y="${y + cellSize/2}" style="font-size:${cellFont}px">${cellId}</text>`;
+          html += `<text class="cell-text" x="${x + cellSize/2}" y="${y + cellSize/2}" style="font-size:${cellFont}px">${cellLabel}</text>`;
         }
       }
     }
@@ -1038,8 +1042,8 @@
   function getDividerSettings(mode) {
     if (mode === 'empty-tpl' && editingProps) {
       return {
-        rowFixed: document.getElementById('tpl-edit-rowdiv')?.value === 'fixed',
-        colFixed: document.getElementById('tpl-edit-coldiv')?.value === 'fixed'
+        rowFixed: document.getElementById('tpl-edit-rowdiv')?.checked || false,
+        colFixed: document.getElementById('tpl-edit-coldiv')?.checked || false
       };
     }
     if (mode === 'empty-tpl' && selectedVersion && versionData[selectedVersion]) {
@@ -1066,6 +1070,27 @@
   }
 
   let currentEditOrigin = 'tl';
+
+  function getLabelSettings(mode) {
+    if (mode === 'empty-tpl' && editingProps) {
+      return {
+        rowLabel: document.querySelector('input[name="tpl-edit-rowlabel"]:checked')?.value || 'alpha',
+        colLabel: document.querySelector('input[name="tpl-edit-collabel"]:checked')?.value || 'numeric'
+      };
+    }
+    if (mode === 'empty-tpl' && selectedVersion && versionData[selectedVersion]) {
+      return {
+        rowLabel: versionData[selectedVersion].rowLabel || 'alpha',
+        colLabel: versionData[selectedVersion].colLabel || 'numeric'
+      };
+    }
+    return { rowLabel: 'alpha', colLabel: 'numeric' };
+  }
+
+  function getLabel(type, index) {
+    if (type === 'alpha') return 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'[index] || '';
+    return String(index + 1);
+  }
 
   const labelNames = { alpha: 'Alpha (A, B, C…)', numeric: 'Numeric (1, 2, 3…)' };
   const originNames = { tl: 'Top-left', tr: 'Top-right', bl: 'Bottom-left', br: 'Bottom-right' };
@@ -1137,16 +1162,24 @@
     // Populate edit fields from current version
     document.getElementById('tpl-edit-rows').value = data.rows;
     document.getElementById('tpl-edit-cols').value = data.cols;
-    document.getElementById('tpl-edit-rowlabel').value = data.rowLabel;
-    document.getElementById('tpl-edit-collabel').value = data.colLabel;
-    document.getElementById('tpl-edit-rowdiv').value = data.rowDiv;
-    document.getElementById('tpl-edit-coldiv').value = data.colDiv;
-    document.getElementById('tpl-edit-unit').value = data.unit;
+
+    // Radio buttons for labels
+    document.querySelector(`input[name="tpl-edit-rowlabel"][value="${data.rowLabel}"]`).checked = true;
+    document.querySelector(`input[name="tpl-edit-collabel"][value="${data.colLabel}"]`).checked = true;
+
+    // Origin dropdown
+    document.getElementById('tpl-edit-origin').value = data.origin;
     currentEditOrigin = data.origin;
 
-    // Set origin picker
-    document.querySelectorAll('.origin-btn').forEach(b => b.classList.remove('active'));
-    document.querySelector(`.origin-btn[data-origin="${data.origin}"]`).classList.add('active');
+    // Divider checkboxes (checked = fixed)
+    document.getElementById('tpl-edit-rowdiv').checked = (data.rowDiv === 'fixed');
+    document.getElementById('tpl-edit-coldiv').checked = (data.colDiv === 'fixed');
+
+    // Unit radio
+    document.querySelector(`input[name="tpl-edit-unit"][value="${data.unit}"]`).checked = true;
+
+    // Hide conflict message
+    document.getElementById('label-conflict-msg').style.display = 'none';
 
     // Toggle panels
     document.getElementById('tpl-props-display').style.display = 'none';
@@ -1168,14 +1201,18 @@
     if (data) renderGrid('tpl-detail-preview', data.rows, data.cols, 'empty-tpl');
   }
 
-  function setOrigin(corner) {
-    currentEditOrigin = corner;
-    document.querySelectorAll('.origin-btn').forEach(b => b.classList.remove('active'));
-    document.querySelector(`.origin-btn[data-origin="${corner}"]`).classList.add('active');
+  function onLabelChange(axis) {
+    const rowVal = document.querySelector('input[name="tpl-edit-rowlabel"]:checked').value;
+    const colVal = document.querySelector('input[name="tpl-edit-collabel"]:checked').value;
+    const conflict = (rowVal === colVal);
+    document.getElementById('label-conflict-msg').style.display = conflict ? 'block' : 'none';
+    document.getElementById('tpl-publish-btn').disabled = conflict;
     onPropEdit();
   }
 
   function onPropEdit() {
+    // Update origin from dropdown
+    currentEditOrigin = document.getElementById('tpl-edit-origin')?.value || 'tl';
     // Live-update the grid preview as the user edits
     const rows = parseInt(document.getElementById('tpl-edit-rows').value) || 1;
     const cols = parseInt(document.getElementById('tpl-edit-cols').value) || 1;
