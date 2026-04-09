@@ -36,6 +36,20 @@
       "when": 1774137600000,
       "tag": "0004_insert_uid",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1774224000000,
+      "tag": "0005_standards_designations",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1744310400000,
+      "tag": "0006_aspect_standards_m2m",
+      "breakpoints": true
     }
   ]
 }

@@ -722,7 +722,7 @@ body {
 <script>
 // ─── Data ───
 const aspects = [
-  { id: 'mst', name: 'Machine Screw Threading', desc: 'Thread parameters for machine screws and bolts', items: 24, standards: 3, hidden: false,
+  { id: 'mst', name: 'Machine Screw Threading', desc: 'Thread parameters for machine screws and bolts', items: 24, hidden: false,
     params: [
       { name: 'pitch', role: 'key' },
       { name: 'major_dia', role: 'key' },
@@ -730,13 +730,8 @@ const aspects = [
       { name: 'thread_angle', role: 'info' },
       { name: 'class_of_fit', role: 'info' },
     ],
-    standardsList: [
-      { id: 'iso-metric', name: 'ISO Metric (ISO 261)', domainTag: 'Metric Thread', designationCount: 28 },
-      { id: 'unc', name: 'Unified Coarse (UNC)', domainTag: 'Unified Thread Standard', designationCount: 22 },
-      { id: 'unf', name: 'Unified Fine (UNF)', domainTag: 'Unified Thread Standard', designationCount: 18 },
-    ]
   },
-  { id: 'pt', name: 'Pipe Threading', desc: 'Thread parameters for pipe fittings', items: 8, standards: 2, hidden: false,
+  { id: 'pt', name: 'Pipe Threading', desc: 'Thread parameters for pipe fittings', items: 8, hidden: false,
     params: [
       { name: 'pitch', role: 'key' },
       { name: 'major_dia', role: 'key' },
@@ -744,54 +739,102 @@ const aspects = [
       { name: 'thread_angle', role: 'info' },
       { name: 'tapered', role: 'info' },
     ],
-    standardsList: [
-      { id: 'npt', name: 'NPT', domainTag: null, designationCount: 14 },
-      { id: 'bspt', name: 'BSPT', domainTag: null, designationCount: 10 },
-    ]
   },
-  { id: 'smd', name: 'SMD Package', desc: 'Surface mount device package dimensions', items: 31, standards: 2, hidden: false,
+  { id: 'smd', name: 'SMD Package', desc: 'Surface mount device package dimensions', items: 31, hidden: false,
     params: [
       { name: 'length', role: 'key' },
       { name: 'width', role: 'key' },
       { name: 'height', role: 'derived' },
       { name: 'lead_count', role: 'info' },
     ],
-    standardsList: [
-      { id: 'jedec', name: 'JEDEC Standard', domainTag: null, designationCount: 12 },
-      { id: 'ipc', name: 'IPC Naming', domainTag: null, designationCount: 8 },
-    ]
   },
-  { id: 'fd', name: 'Fastener Drive', desc: 'Drive type, system, and size for fasteners', items: 16, standards: 3, hidden: false,
+  { id: 'fd', name: 'Fastener Drive', desc: 'Drive type, system, and size for fasteners', items: 16, hidden: false,
     params: [
       { name: 'drive_type', role: 'key' },
       { name: 'drive_system', role: 'key' },
       { name: 'drive_size', role: 'derived' },
     ],
-    standardsList: [
-      { id: 'phillips', name: 'Phillips', domainTag: 'Cross Drive', designationCount: 5 },
-      { id: 'torx', name: 'Torx', domainTag: 'Star Drive', designationCount: 12 },
-      { id: 'hex-socket', name: 'Hex Socket (Allen)', domainTag: 'Hex Drive', designationCount: 8 },
-    ]
   },
-  { id: 'wg', name: 'Wire Gauge', desc: 'Wire diameter, cross-section, and resistance', items: 5, standards: 1, hidden: false,
+  { id: 'wg', name: 'Wire Gauge', desc: 'Wire diameter, cross-section, and resistance', items: 5, hidden: false,
     params: [
       { name: 'diameter', role: 'key' },
       { name: 'cross_section', role: 'derived' },
       { name: 'resistance_per_km', role: 'derived' },
     ],
-    standardsList: [
-      { id: 'awg', name: 'AWG', domainTag: null, designationCount: 40 },
-    ]
   },
-  { id: 'er', name: 'Electrical Rating', desc: 'Voltage and current ratings', items: 2, standards: 0, hidden: true,
+  { id: 'er', name: 'Electrical Rating', desc: 'Voltage and current ratings', items: 2, hidden: true,
     params: [
       { name: 'voltage_rating', role: 'key' },
       { name: 'current_rating', role: 'key' },
       { name: 'power_rating', role: 'derived' },
     ],
-    standardsList: []
   },
 ];
+
+// Top-level standards — each may link to one or more aspects
+const standards = [
+  { id: 'iso-4762', name: 'ISO 4762 Cap Screw', domainTag: 'Cap Screw', designationCount: 12,
+    aspectIds: ['mst', 'fd'] },  // spans both threading AND drive aspects
+  { id: 'iso-metric', name: 'ISO Metric (ISO 261)', domainTag: 'Metric Thread', designationCount: 28,
+    aspectIds: ['mst'] },
+  { id: 'unc', name: 'Unified Coarse (UNC)', domainTag: 'Unified Thread Standard', designationCount: 22,
+    aspectIds: ['mst'] },
+  { id: 'unf', name: 'Unified Fine (UNF)', domainTag: 'Unified Thread Standard', designationCount: 18,
+    aspectIds: ['mst'] },
+  { id: 'npt', name: 'NPT', domainTag: null, designationCount: 14,
+    aspectIds: ['pt'] },
+  { id: 'bspt', name: 'BSPT', domainTag: null, designationCount: 10,
+    aspectIds: ['pt'] },
+  { id: 'jedec', name: 'JEDEC Standard', domainTag: null, designationCount: 12,
+    aspectIds: ['smd'] },
+  { id: 'ipc', name: 'IPC Naming', domainTag: null, designationCount: 8,
+    aspectIds: ['smd'] },
+  { id: 'phillips', name: 'Phillips', domainTag: 'Cross Drive', designationCount: 5,
+    aspectIds: ['fd'] },
+  { id: 'torx', name: 'Torx', domainTag: 'Star Drive', designationCount: 12,
+    aspectIds: ['fd'] },
+  { id: 'hex-socket', name: 'Hex Socket (Allen)', domainTag: 'Hex Drive', designationCount: 8,
+    aspectIds: ['fd'] },
+  { id: 'awg', name: 'AWG', domainTag: null, designationCount: 40,
+    aspectIds: ['wg'] },
+];
+
+// Coverage map: which param names each standard covers per aspect
+// standardCoverage[stdId][aspectId] = [paramName, ...]
+const standardCoverage = {
+  'iso-4762': {
+    'mst': ['pitch', 'major_dia'],
+    'fd':  ['drive_type', 'drive_size'],
+  },
+  'iso-metric': { 'mst': ['pitch', 'major_dia', 'minor_dia'] },
+  'unc':        { 'mst': ['pitch', 'major_dia', 'minor_dia'] },
+  'unf':        { 'mst': ['pitch', 'major_dia', 'minor_dia'] },
+  'npt':        { 'pt':  ['pitch', 'major_dia', 'minor_dia', 'tapered'] },
+  'bspt':       { 'pt':  ['pitch', 'major_dia', 'minor_dia', 'tapered'] },
+  'jedec':      { 'smd': ['length', 'width', 'height'] },
+  'ipc':        { 'smd': ['length', 'width'] },
+  'phillips':   { 'fd':  ['drive_type', 'drive_system', 'drive_size'] },
+  'torx':       { 'fd':  ['drive_type', 'drive_system', 'drive_size'] },
+  'hex-socket': { 'fd':  ['drive_type', 'drive_system', 'drive_size'] },
+  'awg':        { 'wg':  ['diameter', 'cross_section', 'resistance_per_km'] },
+};
+
+// Helper: get standards linked to an aspect
+function getStandardsForAspect(aspId) {
+  return standards.filter(s => s.aspectIds.includes(aspId));
+}
+
+// Helper: render coverage dots for a standard within an aspect context
+function renderCoverageDots(std, asp) {
+  const covered = (standardCoverage[std.id] || {})[asp.id] || [];
+  const total = asp.params.length;
+  const coveredCount = asp.params.filter(ap => covered.includes(ap.name)).length;
+  const dots = asp.params.map(ap => {
+    const hit = covered.includes(ap.name);
+    return `<span title="${ap.name}" style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${hit ? '#ff6600' : '#1e293b'};border:1px solid ${hit ? '#ff6600' : '#475569'};margin-right:2px;"></span>`;
+  }).join('');
+  return `<span style="display:inline-flex;align-items:center;gap:0;" title="${coveredCount}/${total} parameters covered">${dots}</span>`;
+}
 
 const paramDefs = [
   { name: 'pitch', type: 'numeric', unit: 'mm', aspects: ['Machine Screw Threading', 'Pipe Threading'] },
@@ -876,11 +919,12 @@ function renderLeftPanel() {
     const isActive = selectedType === 'aspect' && selectedId === asp.id;
     const hiddenClass = asp.hidden ? ' hidden-entity' : '';
     const expandedClass = isExpanded ? ' expanded' : '';
+    const aspStdCount = getStandardsForAspect(asp.id).length;
     aspectHtml += `<div class="entity-item${isActive ? ' active' : ''}${hiddenClass}${expandedClass}" onclick="toggleAspectExpand('${asp.id}')">
       <span class="entity-chevron${isExpanded ? ' open' : ''}">&#9654;</span>
       <span class="entity-name">${esc(asp.name)}</span>
       ${asp.hidden ? '<span class="hidden-badge">Hidden</span>' : ''}
-      <span class="entity-badge">${asp.params.length}p</span>
+      <span class="entity-badge">${asp.params.length}p · ${aspStdCount}s</span>
     </div>`;
     // Render child parameters if expanded
     if (isExpanded) {
@@ -897,14 +941,17 @@ function renderLeftPanel() {
         </div>`;
       }
       // Standards sub-section within expanded aspect
-      if (asp.standardsList.length > 0) {
+      const aspStandards = getStandardsForAspect(asp.id);
+      if (aspStandards.length > 0) {
         aspectHtml += `<div style="padding:4px 12px 2px 20px;font-size:9px;text-transform:uppercase;letter-spacing:0.06em;color:#475569;margin-top:2px;">Standards</div>`;
-        for (const std of asp.standardsList) {
+        for (const std of aspStandards) {
           const isStdActive = selectedType === 'standard' && selectedId === std.id;
+          const covered = (standardCoverage[std.id] || {})[asp.id] || [];
+          const coverageRatio = `${covered.length}/${asp.params.length}`;
           aspectHtml += `<div class="child-param-item${isStdActive ? ' active' : ''}" onclick="event.stopPropagation(); selectStandard('${asp.id}', '${std.id}')" style="padding-left:20px;">
             <span style="color:#64748b;font-size:11px;">&#9671;</span>
             <span class="entity-name">${esc(std.name)}</span>
-            <span style="font-size:9px;color:#475569;">${std.designationCount}</span>
+            <span style="font-size:9px;color:#475569;">${coverageRatio}</span>
           </div>`;
         }
       }
@@ -977,7 +1024,7 @@ function selectParamInContext(aspectId, paramIdx) {
   // Breadcrumb
   if (asp && p) {
     document.getElementById('breadcrumb').innerHTML = `<a onclick="clearSelection()">Taxonomy</a><span class="sep">/</span><a onclick="toggleAspectExpand('${asp.id}')">${esc(asp.name)}</a><span class="sep">/</span><span>${esc(p.name)}</span>`;
-    document.getElementById('center-count').textContent = `${asp.params.length} parameters · ${asp.standardsList.length} standards`;
+    document.getElementById('center-count').textContent = `${asp.params.length} parameters · ${getStandardsForAspect(asp.id).length} standards`;
   }
 
   // Center: aspect detail on top (re-render to update selected row highlight)
@@ -1019,7 +1066,7 @@ function renderCenterAspect(id) {
   document.getElementById('center-aspect-view').style.display = '';
 
   document.getElementById('breadcrumb').innerHTML = `<a onclick="clearSelection()">Taxonomy</a><span class="sep">/</span><span>${esc(asp.name)}</span>`;
-  document.getElementById('center-count').textContent = `${asp.params.length} parameters · ${asp.standardsList.length} standards`;
+  document.getElementById('center-count').textContent = `${asp.params.length} parameters · ${getStandardsForAspect(asp.id).length} standards`;
 
   let html = '';
   // Description
@@ -1049,20 +1096,31 @@ function renderCenterAspect(id) {
   }
   html += `</tbody></table></div>`;
 
-  // Standards
+  // Standards — coverage table
+  const aspStds = getStandardsForAspect(asp.id);
   html += `<div class="center-detail-section">`;
-  html += `<div class="center-section-label"><span>Standards</span><button class="add-btn" style="font-size:11px;">+ Add</button></div>`;
-  if (asp.standardsList.length === 0) {
-    html += `<div style="color:#475569;font-size:12px;padding:8px 0;">No standards. Standards provide lookup tables that map designations to parameter values.</div>`;
+  html += `<div class="center-section-label"><span>Standards</span><button class="add-btn" style="font-size:11px;" onclick="showToast('Link Standard — coming soon')">+ Link</button></div>`;
+  if (aspStds.length === 0) {
+    html += `<div style="color:#475569;font-size:12px;padding:8px 0;">No standards linked. Standards provide lookup tables mapping designations to parameter values.</div>`;
   } else {
-    for (const std of asp.standardsList) {
-      html += `<div class="center-standard-row" onclick="selectStandard('${asp.id}', '${std.id}')">
-        <span style="color:#64748b;">&#9671;</span>
-        <span class="std-name">${esc(std.name)}</span>
-        ${std.domainTag ? `<span class="std-domain">${esc(std.domainTag)}</span>` : ''}
-        <span class="std-meta">${std.designationCount} desig.</span>
-      </div>`;
+    html += `<table class="data-table" style="margin-top:2px;"><thead><tr>
+      <th style="width:40%;">Name</th>
+      <th>Domain</th>
+      <th>Coverage</th>
+      <th style="text-align:right;">Desig.</th>
+    </tr></thead><tbody>`;
+    for (const std of aspStds) {
+      const isSelected = selectedType === 'standard' && selectedId === std.id;
+      const coveredNames = (standardCoverage[std.id] || {})[asp.id] || [];
+      const coverageTitle = asp.params.map(ap => ap.name + (coveredNames.includes(ap.name) ? ' ✓' : ' ✗')).join(', ');
+      html += `<tr onclick="selectStandard('${asp.id}', '${std.id}')" class="${isSelected ? 'selected' : ''}">
+        <td style="font-weight:500;">${esc(std.name)}${std.aspectIds.length > 1 ? ' <span style="font-size:9px;color:#64748b;" title="Spans multiple aspects">↔</span>' : ''}</td>
+        <td style="color:#64748b;">${std.domainTag ? esc(std.domainTag) : '—'}</td>
+        <td><span title="${coverageTitle}">${renderCoverageDots(std, asp)}</span> <span style="font-size:10px;color:#64748b;">${coveredNames.length}/${asp.params.length}</span></td>
+        <td style="text-align:right;color:#64748b;">${std.designationCount}</td>
+      </tr>`;
     }
+    html += `</tbody></table>`;
   }
   html += `</div>`;
 
@@ -1298,28 +1356,40 @@ function renderRightParam(idx) {
 }
 
 // ─── Select Standard (drill into designations) ───
-function selectStandard(aspectId, standardId) {
-  const asp = aspects.find(a => a.id === aspectId);
-  if (!asp) return;
-  const std = asp.standardsList.find(s => s.id === standardId);
+function selectStandard(fromAspectId, standardId) {
+  const std = standards.find(s => s.id === standardId);
   if (!std) return;
+  const fromAsp = aspects.find(a => a.id === fromAspectId);
 
   selectedType = 'standard';
   selectedId = standardId;
-  selectedStandardAspect = aspectId;
-  expandedAspect = aspectId;
+  selectedStandardAspect = fromAspectId;
+  expandedAspect = fromAspectId;
 
   hideCenterViews();
   document.getElementById('center-standard-view').style.display = '';
 
-  document.getElementById('breadcrumb').innerHTML = `<a onclick="clearSelection()">Taxonomy</a><span class="sep">/</span><a onclick="selectAspect('${asp.id}')">${esc(asp.name)}</a><span class="sep">/</span><span>${esc(std.name)}</span>`;
+  const breadcrumbAsp = fromAsp
+    ? `<a onclick="selectAspect('${fromAsp.id}')">${esc(fromAsp.name)}</a><span class="sep">/</span>`
+    : '';
+  document.getElementById('breadcrumb').innerHTML =
+    `<a onclick="clearSelection()">Taxonomy</a><span class="sep">/</span>${breadcrumbAsp}<span>${esc(std.name)}</span>`;
 
-  // Build designation table
+  // Build designation table — filter to fromAspect's params if arrived via aspect
   const desigs = designations[standardId] || [];
   document.getElementById('center-count').textContent = `${desigs.length} designations`;
 
-  // Header: designation + one column per param value
-  const paramKeys = desigs.length > 0 ? Object.keys(desigs[0].values) : [];
+  let paramKeys = desigs.length > 0 ? Object.keys(desigs[0].values) : [];
+
+  // If we have an aspect context, reorder/filter columns: aspect params first, then others
+  let otherKeys = [];
+  if (fromAsp) {
+    const coveredForAsp = (standardCoverage[std.id] || {})[fromAsp.id] || [];
+    const aspKeys = paramKeys.filter(k => coveredForAsp.includes(k));
+    otherKeys = paramKeys.filter(k => !coveredForAsp.includes(k));
+    paramKeys = aspKeys; // show only aspect-relevant columns (others shown via note)
+  }
+
   let theadHtml = '<th>Designation</th>';
   for (const key of paramKeys) {
     const pd = paramDefs.find(p => p.name === key);
@@ -1334,7 +1404,6 @@ function selectStandard(aspectId, standardId) {
     for (const key of paramKeys) {
       const val = d.values[key];
       let display = val != null ? String(val) : '\u2014';
-      // Show source value if different
       if (d.source && key === 'pitch' && d.source.pitch_unit === 'TPI') {
         display += ` <span style="color:#475569;font-size:11px;">(${d.source.pitch_val} TPI)</span>`;
       }
@@ -1344,12 +1413,25 @@ function selectStandard(aspectId, standardId) {
   }
   document.getElementById('standard-desig-tbody').innerHTML = tbodyHtml;
 
-  // Right panel: standard properties
-  renderRightStandard(asp, std);
+  // Context note below table if columns were filtered
+  const noteEl = document.getElementById('standard-context-note');
+  if (noteEl) noteEl.remove();
+  if (fromAsp && otherKeys.length > 0) {
+    const otherAspects = std.aspectIds.filter(id => id !== fromAspectId)
+      .map(id => aspects.find(a => a.id === id)?.name).filter(Boolean).join(', ');
+    const note = document.createElement('div');
+    note.id = 'standard-context-note';
+    note.style.cssText = 'padding:6px 16px;font-size:11px;color:#475569;border-top:1px solid #1e293b;';
+    note.innerHTML = `Showing ${paramKeys.length} of ${paramKeys.length + otherKeys.length} parameters relevant to ${esc(fromAsp.name)}. ` +
+      `<span style="color:#64748b;">▸ +${otherKeys.length} params from ${esc(otherAspects)}</span>`;
+    document.getElementById('center-standard-view').appendChild(note);
+  }
+
+  renderRightStandard(std, fromAspectId);
   renderLeftPanel();
 }
 
-function renderRightStandard(asp, std) {
+function renderRightStandard(std, fromAspectId) {
   document.getElementById('detailEmpty').style.display = 'none';
   const dc = document.getElementById('detailContent');
   dc.style.display = 'block';
@@ -1362,22 +1444,45 @@ function renderRightStandard(asp, std) {
     html += `<div class="detail-desc empty-val">No domain tag</div>`;
   }
 
-  // Properties
-  html += `<div class="detail-section"><div class="detail-section-header"><span class="section-title">Properties</span></div>`;
-  html += `<div class="prop-row"><span class="prop-label">Aspect</span><span class="prop-value"><a style="color:#ff6600;cursor:pointer;" onclick="selectAspect('${asp.id}')">${esc(asp.name)}</a></span></div>`;
-  html += `<div class="prop-row"><span class="prop-label">Designations</span><span class="prop-value">${std.designationCount}</span></div>`;
+  // Aspects section — all linked aspects with coverage fractions
+  html += `<div class="detail-section"><div class="detail-section-header"><span class="section-title">Aspects (${std.aspectIds.length})</span></div>`;
+  for (const aspId of std.aspectIds) {
+    const asp = aspects.find(a => a.id === aspId);
+    if (!asp) continue;
+    const covered = (standardCoverage[std.id] || {})[aspId] || [];
+    const isCurrent = aspId === fromAspectId;
+    html += `<div class="prop-row" style="cursor:pointer;" onclick="selectAspect('${asp.id}')">
+      <span class="prop-label" style="width:auto;flex:1;${isCurrent ? 'color:#ff6600;' : ''}">${esc(asp.name)}</span>
+      <span style="font-size:11px;${isCurrent ? 'color:#ff6600;' : 'color:#64748b;'}">${covered.length}/${asp.params.length}</span>
+    </div>`;
+  }
+  html += `<button class="add-btn" style="margin-top:4px;font-size:11px;" onclick="showToast('Link Aspect — coming soon')">+ Link Aspect</button>`;
   html += `</div>`;
 
-  // Parameters covered
+  // Designations count
+  html += `<div class="detail-section"><div class="detail-section-header"><span class="section-title">Designations</span></div>`;
+  html += `<div style="font-size:13px;color:#94a3b8;">${std.designationCount} entries</div>`;
+  html += `</div>`;
+
+  // Parameters covered (all params across all aspects)
+  const allCoveredParams = new Set();
+  for (const aspId of std.aspectIds) {
+    const covered = (standardCoverage[std.id] || {})[aspId] || [];
+    covered.forEach(p => allCoveredParams.add(p));
+  }
   html += `<div class="detail-section"><div class="detail-section-header"><span class="section-title">Parameters Covered</span></div>`;
-  const desigs = designations[std.id] || [];
-  const coveredParams = desigs.length > 0 ? Object.keys(desigs[0].values) : [];
-  for (const key of coveredParams) {
-    const pd = paramDefs.find(p => p.name === key);
-    const ap = asp.params.find(p => p.name === key);
+  for (const paramName of allCoveredParams) {
+    const pd = paramDefs.find(p => p.name === paramName);
+    // Find role from a linked aspect's params
+    let role = 'info';
+    for (const aspId of std.aspectIds) {
+      const asp = aspects.find(a => a.id === aspId);
+      const ap = asp?.params.find(p => p.name === paramName);
+      if (ap) { role = ap.role; break; }
+    }
     html += `<div class="prop-row">
-      <span class="prop-label" style="width:auto;flex:1;">${pd ? esc(pd.name) : esc(key)}</span>
-      <span class="badge role-${ap ? ap.role : 'info'}" style="flex-shrink:0;">${ap ? ap.role : 'info'}</span>
+      <span class="prop-label" style="width:auto;flex:1;">${pd ? esc(pd.name) : esc(paramName)}</span>
+      <span class="badge role-${role}" style="flex-shrink:0;">${role}</span>
     </div>`;
   }
   html += `</div>`;
