@@ -3,15 +3,26 @@ import { insertRepository } from "@/repositories/insertRepository";
 
 export async function GET(request: NextRequest) {
   try {
-    const unplaced = request.nextUrl.searchParams.get("unplaced");
-    if (unplaced === "true") {
+    const params = request.nextUrl.searchParams;
+
+    // Legacy: ?unplaced=true returns raw list without joins.
+    if (params.get("unplaced") === "true") {
       const inserts = await insertRepository.listUnplaced();
       return NextResponse.json({ inserts });
     }
-    return NextResponse.json(
-      { error: "Use ?unplaced=true to list unplaced inserts" },
-      { status: 400 },
-    );
+
+    const placementParam = params.get("placement");
+    const placement: "placed" | "unplaced" | "all" =
+      placementParam === "placed" || placementParam === "unplaced"
+        ? placementParam
+        : "all";
+
+    const inserts = await insertRepository.listWithDetails({
+      templateId: params.get("templateId") ?? undefined,
+      interfaceType: params.get("interfaceType") ?? undefined,
+      placement,
+    });
+    return NextResponse.json({ inserts });
   } catch (err) {
     return NextResponse.json(
       { error: err instanceof Error ? err.message : "Unexpected error" },

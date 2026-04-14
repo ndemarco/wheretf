@@ -317,7 +317,8 @@ export default function PlaceInsertPage() {
   return (
     <div className="flex-1 flex min-w-0 h-full overflow-hidden">
       {/* Left: Template selection / configuration */}
-      <div className="flex-1 flex flex-col min-w-0 overflow-y-auto p-6 max-w-xl">
+      <div className="flex-1 flex flex-col min-w-0 max-w-xl">
+        <div className="flex-1 overflow-y-auto p-6">
         <button
           onClick={() => router.push(`/modules/${moduleId}`)}
           className="text-sm text-slate-400 hover:text-slate-200 transition-colors mb-4 self-start"
@@ -395,13 +396,6 @@ export default function PlaceInsertPage() {
               </div>
             )}
 
-            <button
-              onClick={goToStep2}
-              disabled={!selectedVersion}
-              className="px-5 py-2 bg-accent text-white rounded-md hover:brightness-110 transition-all disabled:opacity-50 disabled:cursor-not-allowed self-start mt-2"
-            >
-              Next
-            </button>
           </div>
         )}
 
@@ -454,20 +448,6 @@ export default function PlaceInsertPage() {
               </label>
             </div>
 
-            <div className="flex gap-3 mt-2">
-              <button
-                onClick={() => setStep(1)}
-                className="px-5 py-2 bg-slate-700 text-slate-300 rounded-md hover:bg-slate-600 transition-all"
-              >
-                Back
-              </button>
-              <button
-                onClick={() => setStep(3)}
-                className="px-5 py-2 bg-accent text-white rounded-md hover:brightness-110 transition-all"
-              >
-                Next
-              </button>
-            </div>
           </div>
         )}
 
@@ -503,7 +483,39 @@ export default function PlaceInsertPage() {
               </p>
             </div>
 
-            <div className="flex gap-3 mt-2">
+          </div>
+        )}
+        </div>
+
+        {/* Sticky footer: primary action for the current step (PI-1) */}
+        <div className="border-t border-slate-700 bg-slate-900/80 backdrop-blur px-6 py-3 flex items-center gap-3 shrink-0">
+          {step === 1 && (
+            <button
+              onClick={goToStep2}
+              disabled={!selectedVersion}
+              className="px-5 py-2 bg-accent text-white rounded-md hover:brightness-110 transition-all disabled:opacity-50 disabled:cursor-not-allowed ml-auto"
+            >
+              Next
+            </button>
+          )}
+          {step === 2 && selectedVersion && (
+            <>
+              <button
+                onClick={() => setStep(1)}
+                className="px-5 py-2 bg-slate-700 text-slate-300 rounded-md hover:bg-slate-600 transition-all"
+              >
+                Back
+              </button>
+              <button
+                onClick={() => setStep(3)}
+                className="px-5 py-2 bg-accent text-white rounded-md hover:brightness-110 transition-all ml-auto"
+              >
+                Next
+              </button>
+            </>
+          )}
+          {step === 3 && selectedVersion && (
+            <>
               <button
                 onClick={() =>
                   setStep(selectedVersion.isParametric ? 2 : 1)
@@ -515,13 +527,13 @@ export default function PlaceInsertPage() {
               <button
                 onClick={handlePlace}
                 disabled={saving}
-                className="px-5 py-2 bg-accent text-white rounded-md hover:brightness-110 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                className="px-5 py-2 bg-accent text-white rounded-md hover:brightness-110 transition-all disabled:opacity-50 disabled:cursor-not-allowed ml-auto"
               >
                 {saving ? "Placing..." : "Place Insert"}
               </button>
-            </div>
-          </div>
-        )}
+            </>
+          )}
+        </div>
       </div>
 
       {/* Right: Grid preview */}

@@ -1,6 +1,12 @@
-import { eq, isNull } from "drizzle-orm";
+import { and, eq, isNull, isNotNull, sql, type SQL } from "drizzle-orm";
 import { db } from "@/db/connection";
-import { inserts, locations } from "@/db/schema";
+import {
+  inserts,
+  locations,
+  templates,
+  templateVersions,
+  modules,
+} from "@/db/schema";
 import { transactionRepository } from "./transactionRepository";
 
 function generateUid(): string {
@@ -78,6 +84,71 @@ export const insertRepository = {
 
   async listUnplaced() {
     return db.select().from(inserts).where(isNull(inserts.locationId));
+  },
+
+  /**
+   * Rich list of inserts for the /inserts page. Joins template name,
+   * current location path, and host module. Filters:
+   *   - templateId: restrict to one template
+   *   - interfaceType: match insert.interfaceTypeProvided OR the template's
+   *     current version's interfaceTypeProvided
+   *   - placement: 'placed' | 'unplaced' | 'all' (default 'all')
+   */
+  async listWithDetails({
+    templateId,
+    interfaceType,
+    placement = "all",
+  }: {
+    templateId?: string;
+    interfaceType?: string;
+    placement?: "placed" | "unplaced" | "all";
+  } = {}) {
+    const conditions: SQL[] = [];
+
+    if (templateId) conditions.push(eq(inserts.templateId, templateId));
+    if (placement === "placed") conditions.push(isNotNull(inserts.locationId));
+    if (placement === "unplaced") conditions.push(isNull(inserts.locationId));
+
+    if (interfaceType) {
+      conditions.push(
+        sql`(
+          ${inserts.interfaceTypeProvided} = ${interfaceType}
+          OR ${templateVersions.interfaceTypeProvided} = ${interfaceType}
+        )`
+      );
+    }
+
+    const where = conditions.length
+      ? and(...conditions)
+      : undefined;
+
+    const rows = await db
+      .select({
+        insert: inserts,
+        templateName: templates.name,
+        templateInterfaceProvided: templateVersions.interfaceTypeProvided,
+        locationPath: locations.path,
+        moduleName: modules.name,
+      })
+      .from(inserts)
+      .leftJoin(templates, eq(inserts.templateId, templates.id))
+      .leftJoin(
+        templateVersions,
+        eq(inserts.templateVersionId, templateVersions.id)
+      )
+      .leftJoin(locations, eq(inserts.locationId, locations.id))
+      .leftJoin(modules, eq(locations.moduleId, modules.id))
+      .where(where);
+
+    return rows.map((r) => ({
+      ...r.insert,
+      templateName: r.templateName,
+      // effective interface type: insert-override first, else template default
+      interfaceType:
+        r.insert.interfaceTypeProvided ?? r.templateInterfaceProvided ?? null,
+      locationPath: r.locationPath,
+      moduleName: r.moduleName,
+    }));
   },
 
   async place({ id, locationId }: { id: string; locationId: string }) {

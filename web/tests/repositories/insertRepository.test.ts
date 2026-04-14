@@ -1,6 +1,7 @@
 import { insertRepository } from "@/repositories/insertRepository";
 import { locationRepository } from "@/repositories/locationRepository";
 import { moduleRepository } from "@/repositories/moduleRepository";
+import { templateRepository } from "@/repositories/templateRepository";
 import { transactionRepository } from "@/repositories/transactionRepository";
 
 async function createTestModule() {
@@ -404,6 +405,65 @@ describe("insertRepository", () => {
           id: "00000000-0000-0000-0000-000000000000",
         })
       ).rejects.toThrow("not found");
+    });
+  });
+
+  describe("listWithDetails", () => {
+    it("returns inserts with template + location + module joined", async () => {
+      const template = await templateRepository.create({
+        name: "Plano 3600",
+      });
+      const version = await templateRepository.getVersion({
+        templateId: template.id,
+        version: 1,
+      });
+      const mod = await moduleRepository.create({
+        name: "MUSE",
+        primaryDimensionLabel: "level",
+        primaryDimensionCount: 3,
+      });
+      const level = await locationRepository.create({
+        moduleId: mod.id,
+        label: "1",
+        pathSegments: ["MUSE", "1"],
+        locationType: "receptacle",
+      });
+      const placed = await insertRepository.create({
+        name: "Plano #1",
+        templateId: template.id,
+        templateVersionId: version!.id,
+      });
+      await insertRepository.place({ id: placed.id, locationId: level.id });
+
+      await insertRepository.create({
+        name: "Plano #2 (on shelf)",
+        templateId: template.id,
+        templateVersionId: version!.id,
+      });
+
+      const all = await insertRepository.listWithDetails();
+      expect(all).toHaveLength(2);
+      const p1 = all.find((i) => i.name === "Plano #1")!;
+      expect(p1.templateName).toBe("Plano 3600");
+      expect(p1.locationPath).toBe("MUSE:1");
+      expect(p1.moduleName).toBe("MUSE");
+
+      const unplacedList = await insertRepository.listWithDetails({
+        placement: "unplaced",
+      });
+      expect(unplacedList).toHaveLength(1);
+      expect(unplacedList[0].name).toBe("Plano #2 (on shelf)");
+
+      const placedList = await insertRepository.listWithDetails({
+        placement: "placed",
+      });
+      expect(placedList).toHaveLength(1);
+      expect(placedList[0].name).toBe("Plano #1");
+
+      const filteredByTemplate = await insertRepository.listWithDetails({
+        templateId: template.id,
+      });
+      expect(filteredByTemplate).toHaveLength(2);
     });
   });
 });
