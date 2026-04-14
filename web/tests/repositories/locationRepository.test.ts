@@ -666,6 +666,103 @@ describe("locationRepository", () => {
     });
   });
 
+  describe("divide / undivide", () => {
+    it("splits a leaf into named children", async () => {
+      const module = await createTestModule();
+      const parent = await locationRepository.create({
+        moduleId: module.id,
+        label: "drawer 1",
+        pathSegments: ["MUSE", "drawer 1"],
+        locationType: "leaf",
+      });
+      const children = await locationRepository.divide({
+        parentId: parent.id,
+        labels: ["front", "rear"],
+      });
+      expect(children).toHaveLength(2);
+      expect(children.map((c) => c.label).sort()).toEqual(["front", "rear"]);
+      const after = await locationRepository.findById({ id: parent.id });
+      expect(after?.locationType).toBe("fixed");
+      expect(after?.subdivisionSource).toBe("ad_hoc");
+    });
+
+    it("refuses divide with fewer than 2 labels", async () => {
+      const module = await createTestModule();
+      const parent = await locationRepository.create({
+        moduleId: module.id,
+        label: "d",
+        pathSegments: ["MUSE", "d"],
+        locationType: "leaf",
+      });
+      await expect(
+        locationRepository.divide({ parentId: parent.id, labels: ["only"] })
+      ).rejects.toThrow(/at least two/);
+    });
+
+    it("refuses divide with duplicate labels", async () => {
+      const module = await createTestModule();
+      const parent = await locationRepository.create({
+        moduleId: module.id,
+        label: "d",
+        pathSegments: ["MUSE", "d"],
+        locationType: "leaf",
+      });
+      await expect(
+        locationRepository.divide({
+          parentId: parent.id,
+          labels: ["a", "a"],
+        })
+      ).rejects.toThrow(/unique/);
+    });
+
+    it("refuses divide when parent has active assignments", async () => {
+      const { assignmentRepository } = await import(
+        "@/repositories/assignmentRepository"
+      );
+      const { itemRepository } = await import(
+        "@/repositories/itemRepository"
+      );
+      const module = await createTestModule();
+      const parent = await locationRepository.create({
+        moduleId: module.id,
+        label: "d",
+        pathSegments: ["MUSE", "d"],
+        locationType: "leaf",
+      });
+      const item = await itemRepository.create({ name: "x" });
+      await assignmentRepository.create({
+        itemId: item.id,
+        locationId: parent.id,
+        assignmentType: "placed",
+      });
+      await expect(
+        locationRepository.divide({
+          parentId: parent.id,
+          labels: ["a", "b"],
+        })
+      ).rejects.toThrow(/active assignments/);
+    });
+
+    it("undivide removes children and restores parent to leaf", async () => {
+      const module = await createTestModule();
+      const parent = await locationRepository.create({
+        moduleId: module.id,
+        label: "d",
+        pathSegments: ["MUSE", "d"],
+        locationType: "leaf",
+      });
+      await locationRepository.divide({
+        parentId: parent.id,
+        labels: ["a", "b"],
+      });
+      const res = await locationRepository.undivide({ parentId: parent.id });
+      expect(res.removed).toBe(2);
+      const after = await locationRepository.findById({ id: parent.id });
+      expect(after?.locationType).toBe("leaf");
+      expect(after?.subdivisionSource).toBeNull();
+    });
+  });
+
   describe("merge alias", () => {
     it("sets a merge alias", async () => {
       const module = await createTestModule();

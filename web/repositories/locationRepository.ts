@@ -428,6 +428,163 @@ export const locationRepository = {
     return { originId, aliasIds };
   },
 
+  /**
+   * Split a leaf location into named child locations.
+   * Prerequisite: no active assignments on the parent.
+   * Children inherit insertId and moduleId; paths extend the parent path.
+   * Parent becomes non-leaf (no longer valid assignment target).
+   */
+  async divide({
+    parentId,
+    labels,
+    source,
+  }: {
+    parentId: string;
+    labels: string[];
+    source?: string; // 'ad_hoc' | 'template_option:<id>' | 'insert_template:<id>'
+  }) {
+    const parent = await locationRepository.findById({ id: parentId });
+    if (!parent) throw new Error(`Location ${parentId} not found`);
+
+    if (labels.length < 2) {
+      throw new Error("Divide requires at least two child labels");
+    }
+    const trimmed = labels.map((l) => l.trim()).filter((l) => l.length > 0);
+    if (trimmed.length !== labels.length) {
+      throw new Error("Child labels must be non-empty");
+    }
+    if (new Set(trimmed).size !== trimmed.length) {
+      throw new Error("Child labels must be unique");
+    }
+
+    // Active assignments check
+    const [asgRow] = await db
+      .select({ c: sql<number>`COUNT(*)` })
+      .from(assignments)
+      .where(eq(assignments.locationId, parentId));
+    if (Number(asgRow?.c ?? 0) > 0) {
+      throw new Error(
+        "Cannot divide a location with active assignments. Unassign items first."
+      );
+    }
+
+    // Already divided?
+    const existingChildren = await db
+      .select({ id: locations.id })
+      .from(locations)
+      .where(eq(locations.parentId, parentId));
+    if (existingChildren.length > 0) {
+      throw new Error("Location is already divided");
+    }
+
+    const parentSegments = (parent.pathSegments as string[]) ?? [
+      parent.label,
+    ];
+
+    const children = await db.transaction(async (tx) => {
+      const created: Array<{ id: string; label: string; path: string }> = [];
+      for (const label of trimmed) {
+        const segments = [...parentSegments, label];
+        const [row] = await tx
+          .insert(locations)
+          .values({
+            moduleId: parent.moduleId,
+            parentId,
+            label,
+            path: segments.join(":"),
+            pathSegments: segments,
+            locationType: "leaf",
+            templateVersionId: parent.templateVersionId,
+            insertId: parent.insertId,
+          })
+          .returning();
+        created.push({ id: row.id, label: row.label, path: row.path });
+      }
+
+      await tx
+        .update(locations)
+        .set({
+          locationType: "fixed", // parent no longer a leaf
+          subdivisionSource: source ?? "ad_hoc",
+          updatedAt: new Date(),
+        })
+        .where(eq(locations.id, parentId));
+
+      return created;
+    });
+
+    await transactionRepository.log({
+      actionType: "location.divide",
+      entityType: "location",
+      entityId: parentId,
+      beforeState: { parentId },
+      afterState: { children },
+    });
+
+    return children;
+  },
+
+  /**
+   * Collapse a divided parent back to a leaf. Refuses if any child
+   * has assignments or has been divided itself.
+   */
+  async undivide({ parentId }: { parentId: string }) {
+    const parent = await locationRepository.findById({ id: parentId });
+    if (!parent) throw new Error(`Location ${parentId} not found`);
+
+    const children = await db
+      .select()
+      .from(locations)
+      .where(eq(locations.parentId, parentId));
+    if (children.length === 0) {
+      throw new Error("Location is not divided");
+    }
+
+    const childIds = children.map((c) => c.id);
+
+    const [asgRow] = await db
+      .select({ c: sql<number>`COUNT(*)` })
+      .from(assignments)
+      .where(inArray(assignments.locationId, childIds));
+    if (Number(asgRow?.c ?? 0) > 0) {
+      throw new Error(
+        "Cannot undivide: children have active assignments. Unassign first."
+      );
+    }
+
+    const [grandRow] = await db
+      .select({ c: sql<number>`COUNT(*)` })
+      .from(locations)
+      .where(inArray(locations.parentId, childIds));
+    if (Number(grandRow?.c ?? 0) > 0) {
+      throw new Error(
+        "Cannot undivide: children have been subdivided themselves. Undivide them first."
+      );
+    }
+
+    await db.transaction(async (tx) => {
+      await tx.delete(locations).where(eq(locations.parentId, parentId));
+      await tx
+        .update(locations)
+        .set({
+          locationType: "leaf",
+          subdivisionSource: null,
+          updatedAt: new Date(),
+        })
+        .where(eq(locations.id, parentId));
+    });
+
+    await transactionRepository.log({
+      actionType: "location.undivide",
+      entityType: "location",
+      entityId: parentId,
+      beforeState: { childIds },
+      afterState: null,
+    });
+
+    return { parentId, removed: childIds.length };
+  },
+
   async unmerge({ originId }: { originId: string }) {
     const aliases = await db
       .select()

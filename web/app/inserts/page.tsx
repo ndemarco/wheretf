@@ -23,6 +23,8 @@ interface CellRow {
   id: string;
   label: string;
   path: string;
+  parentId: string | null;
+  locationType: string;
   gridRow: number | null;
   gridColumn: number | null;
   isDisabled: boolean;
@@ -32,6 +34,7 @@ interface CellRow {
   maxDepthMm: string | null;
   restrictReason: string | null;
   mergedIntoId: string | null;
+  subdivisionSource: string | null;
 }
 
 interface TemplateOption {
@@ -314,6 +317,10 @@ function InsertDetail({
     reason: "",
   });
 
+  // Divide editor
+  const [dividingOpen, setDividingOpen] = useState(false);
+  const [divideLabels, setDivideLabels] = useState("");
+
   const loadAll = useCallback(async () => {
     try {
       const locRes = await fetch(`/api/locations?insertId=${insert.id}`);
@@ -494,6 +501,57 @@ function InsertDetail({
       }
       setMultiSelect(new Set());
       setSelectedCellId(origin.id);
+      await loadAll();
+    } catch (err) {
+      console.error(err);
+    }
+  }
+
+  async function submitDivide() {
+    if (!selectedCell) return;
+    const labels = divideLabels
+      .split(",")
+      .map((s) => s.trim())
+      .filter((s) => s.length > 0);
+    if (labels.length < 2) {
+      alert("Provide at least two comma-separated labels.");
+      return;
+    }
+    try {
+      const r = await fetch(
+        `/api/locations/${selectedCell.id}/divide`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ labels, source: "ad_hoc" }),
+        }
+      );
+      if (!r.ok) {
+        const d = await r.json();
+        alert(d.error || "Divide failed");
+        return;
+      }
+      setDividingOpen(false);
+      setDivideLabels("");
+      await loadAll();
+    } catch (err) {
+      console.error(err);
+    }
+  }
+
+  async function undivideCell() {
+    if (!selectedCell) return;
+    if (!confirm("Collapse this cell's subdivisions? All children lose assignments.")) return;
+    try {
+      const r = await fetch(
+        `/api/locations/${selectedCell.id}/divide`,
+        { method: "DELETE" }
+      );
+      if (!r.ok) {
+        const d = await r.json();
+        alert(d.error || "Undivide failed");
+        return;
+      }
       await loadAll();
     } catch (err) {
       console.error(err);
@@ -972,6 +1030,63 @@ function InsertDetail({
                     className="w-full px-3 py-1.5 border border-accent/60 text-accent rounded text-xs hover:bg-accent/10"
                   >
                     Unmerge
+                  </button>
+                )}
+
+                {/* Divide / Undivide */}
+                {cells.some((c) => c.parentId === selectedCell.id) ? (
+                  <button
+                    onClick={undivideCell}
+                    className="w-full px-3 py-1.5 border border-slate-600 text-slate-300 rounded text-xs hover:bg-slate-700/50"
+                  >
+                    Undivide
+                  </button>
+                ) : dividingOpen ? (
+                  <div className="space-y-2 p-2 rounded bg-slate-800/60 border border-slate-700">
+                    <div className="text-xs text-slate-400">
+                      Child labels, comma-separated (e.g. <code className="text-slate-300">front, rear</code>)
+                    </div>
+                    <input
+                      type="text"
+                      value={divideLabels}
+                      onChange={(e) => setDivideLabels(e.target.value)}
+                      placeholder="front, rear"
+                      autoFocus
+                      className="w-full px-2 py-1 bg-slate-900 border border-slate-600 rounded text-xs text-slate-200 focus:border-accent focus:outline-none"
+                    />
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={submitDivide}
+                        className="px-2.5 py-1 bg-accent text-white rounded text-xs hover:brightness-110"
+                      >
+                        Divide
+                      </button>
+                      <button
+                        onClick={() => {
+                          setDividingOpen(false);
+                          setDivideLabels("");
+                        }}
+                        className="px-2.5 py-1 border border-slate-600 text-slate-300 rounded text-xs hover:bg-slate-700/50"
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <button
+                    onClick={() => setDividingOpen(true)}
+                    disabled={
+                      selectedCell.isDisabled ||
+                      selectedAssignments.length > 0
+                    }
+                    title={
+                      selectedAssignments.length > 0
+                        ? "Unassign items before dividing this cell"
+                        : undefined
+                    }
+                    className="w-full px-3 py-1.5 border border-slate-600 text-slate-300 rounded text-xs hover:bg-slate-700/50 disabled:opacity-40 disabled:cursor-not-allowed"
+                  >
+                    Divide…
                   </button>
                 )}
 
