@@ -393,8 +393,34 @@ export default function ModuleDetailPage() {
     );
   }
 
+  // Breadcrumb segments in brief display form (storage-model.md §Display Formats)
+  // e.g. Modules › MUSE 3 / A1
+  const breadcrumbTail = [
+    module_.name + (selectedLevel ? ` ${selectedLevel.label}` : ""),
+    selectedCell?.label,
+  ].filter(Boolean) as string[];
+
   return (
-    <div className="flex-1 flex min-w-0 h-full overflow-hidden">
+    <div className="flex-1 flex flex-col min-w-0 h-full overflow-hidden">
+      {/* Breadcrumb (GN-2) */}
+      <div className="flex items-center gap-1.5 px-4 py-2 border-b border-slate-700 bg-slate-800/30 text-xs text-slate-400 shrink-0">
+        <Link
+          href="/modules"
+          className="hover:text-accent transition-colors"
+        >
+          Modules
+        </Link>
+        {breadcrumbTail.length > 0 && (
+          <>
+            <span className="text-slate-600">›</span>
+            <span className="text-slate-200">
+              {breadcrumbTail.join(" / ")}
+            </span>
+          </>
+        )}
+      </div>
+
+      <div className="flex-1 flex min-w-0 overflow-hidden">
       {/* Left Panel — Module Header (read-only) + Level Table */}
       <div className="w-72 flex flex-col min-w-0 overflow-y-auto border-r border-slate-700 shrink-0">
         <div className="p-4 border-b border-slate-700">
@@ -743,6 +769,7 @@ export default function ModuleDetailPage() {
           onCancel={cancelModuleEdit}
         />
       )}
+      </div>
       </div>
     </div>
   );
