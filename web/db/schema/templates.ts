@@ -6,6 +6,7 @@ import {
   jsonb,
   integer,
   boolean,
+  numeric,
 } from "drizzle-orm/pg-core";
 
 export const templates = pgTable("templates", {
@@ -14,6 +15,7 @@ export const templates = pgTable("templates", {
   description: text("description"),
   currentVersion: integer("current_version").notNull().default(1),
   activeVersion: integer("active_version").notNull().default(1),
+  scope: text("scope").notNull().default("shared"), // 'shared' | 'single_instance'
   metadata: jsonb("metadata"), // manufacturer, product number, photos, etc.
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
@@ -49,6 +51,16 @@ export const templateVersions = pgTable("template_versions", {
   // Dividers
   rowDividersFixed: boolean("row_dividers_fixed").notNull().default(false),
   columnDividersFixed: boolean("column_dividers_fixed").notNull().default(false),
+
+  // Continuous-dimension capacity (null for discrete-grid templates)
+  isContinuous: boolean("is_continuous").notNull().default(false),
+  widthMm: numeric("width_mm"),
+  heightMm: numeric("height_mm"),
+  depthMm: numeric("depth_mm"),
+  rowPitchMm: numeric("row_pitch_mm"), // for rail-style locations
+  overflowDirection: text("overflow_direction"), // 'up' | 'down' | null
+  bufferMm: numeric("buffer_mm"), // insert-side clearance added to fit computation
+  unitSystem: text("unit_system").notNull().default("metric"), // display-only; storage is mm
 
   // Constraints
   subdivisionOptions: jsonb("subdivision_options"), // available subdivision configurations

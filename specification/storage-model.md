@@ -22,7 +22,7 @@ Examples: a red cabinet (MUSE), an IKEA ALEX drawer unit, a shelving unit.
 An abstract blueprint representing a real storage product, including a user's custom design. Defines positions, their arrangement, and physical constraints. Templates are never modified by instance data — they remain pristine reference definitions.
 
 A template defines:
-- **Unit system** — metric or imperial. All dimensions on the template are stored in the declared unit system. The UI allows entry in non-native units with autoconversion (e.g., entering "25.4 mm" into an imperial template stores "1 in").
+- **Unit system (display)** — metric or imperial. Declares how dimensions are presented and entered in the UI. Canonical storage is always millimeters (SI). The UI converts on read/write (e.g., an imperial template displays "1 in" for a stored value of 25.4).
 - **Origin** — which position is the reference point
 - **Primary axis** — orientation for insert compatibility and labeling direction
 - **Labeling scheme** — how positions are named (numeric, alpha, row-col, custom)
@@ -33,6 +33,10 @@ A template defines:
 - **Interface types provided** — what receptacle types this template fits into (for insert templates). An insert template may provide multiple interface types (e.g., an Akro bin provides both a louver-hang interface and an open-surface interface).
 
 Templates carry a fixed structural core plus extensible metadata with no prescribed shape. Photos, manufacturer details, product numbers, physical dimensions, weight capacity, material — whatever is useful.
+
+Every location resolves its dimensions through a template version. Templates have a **scope**:
+- **Shared** (default) — represents a real product or reusable user design. Appears in template pickers.
+- **Single-instance** — auto-created to back an ad-hoc location (e.g., a custom shelf the user defines once). Hidden from pickers. This lets the system have one capacity-resolution path without a separate ad-hoc code path.
 
 There are three kinds of templates:
 - **Fixed templates** — represent a specific product with a fixed layout. A Plano 3600 Stowaway is always 4 rows × 6 columns. An Akro-Mils 30220 AkroBin is a fixed single-compartment bin with known dimensions.
@@ -179,7 +183,7 @@ In both cases, the original location becomes a parent and is no longer a valid a
 
 ## Override Types
 
-Overrides are structural modifications that deviate from a template's default layout. There are three types: Merge, Divide, and Disable.
+Overrides are structural modifications or capacity clamps that deviate from a template's default layout. There are four types: Merge, Divide, Disable, and Restrict.
 
 Overrides can apply to:
 - **An insert** — describes the physical state of that specific object. Moves with the insert when relocated. (e.g., "this Plano box has cells 3 and 4 merged")
@@ -211,6 +215,16 @@ Mark a location as unavailable for assignment.
 - The location still exists in the structure but cannot hold assignments
 - Reversible — enable restores availability
 - Prerequisite: existing assignment must be reassigned or unassigned. Strictly enforced.
+
+### Restrict
+Clamp a location's usable capacity below its template's nominal capacity. Does not change structure — reduces the usable envelope.
+
+- Applies independently to width, height, or depth (any subset)
+- Reason is optional (descriptive text: "must slide under shelf above", "finger groove at front")
+- Effective dimension at placement time is `min(template.dim, location.maxDim)` for each axis
+- Examples: a drawer whose nominal height is 80 mm but only 60 mm of that is clear under an obstruction; a shelf cell that must leave 15 mm at the front for finger access
+- Reversible — clearing the clamp restores full capacity
+- Prerequisite: assignments that no longer fit must be resolved before the clamp is applied. Strictly enforced.
 
 ---
 
@@ -454,8 +468,8 @@ Each module location independently references its template. Batch operations ("a
 ### Discrete vs. continuous-dimension locations
 Not all storage fits a grid. Louver panels, open shelves, and similar storage define locations by physical dimensions. Inserts consume measurable space rather than occupying discrete positions. Both modes coexist in the same model — a module can have discrete-position locations (Gridfinity baseplates) and continuous-dimension locations (open shelves) in different parts of its structure.
 
-### Unit system is per-template
-Different storage products use different measurement systems. An Akro-Mils panel is natively imperial; a European shelving system is metric. The template declares its unit system, and all dimensions are stored in native units. The UI supports entry in non-native units with autoconversion. No mixed units within a single template.
+### Unit system is per-template (display only)
+Different storage products use different measurement systems. An Akro-Mils panel is natively imperial; a European shelving system is metric. The template declares its display unit system; all dimensions are canonically stored in millimeters. The UI converts on entry and presentation. A single canonical unit avoids mixed-unit aggregation bugs when computing utilization across heterogeneous locations.
 
 ### Overflow direction is a location property
 The same bin can hang on a louver rail (overflow down) or sit on a shelf (overflow up). The physical context — the location — determines which direction excess height extends, not the insert.

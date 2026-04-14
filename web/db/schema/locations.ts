@@ -6,6 +6,7 @@ import {
   jsonb,
   boolean,
   integer,
+  numeric,
   type AnyPgColumn,
 } from "drizzle-orm/pg-core";
 import { modules } from "./modules";
@@ -25,14 +26,18 @@ export const locations = pgTable("locations", {
   locationType: text("location_type").notNull(), // "receptacle" | "fixed" | "leaf"
   interfaceTypeAccepted: text("interface_type_accepted"), // for receptacles
 
-  // Structure source
-  templateVersionId: uuid("template_version_id").references(
-    () => templateVersions.id
-  ),
+  // Structure source — every location resolves dimensions through a template version
+  templateVersionId: uuid("template_version_id")
+    .notNull()
+    .references(() => templateVersions.id),
 
   // Grid position (if this location is within a grid)
   gridRow: integer("grid_row"),
   gridColumn: integer("grid_column"),
+
+  // Subdivision origin
+  subdivisionSource: text("subdivision_source"),
+  // values: null | 'template_option:<id>' | 'insert_template:<id>' | 'ad_hoc'
 
   // Override state
   isDisabled: boolean("is_disabled").notNull().default(false),
@@ -40,6 +45,12 @@ export const locations = pgTable("locations", {
   mergedIntoId: uuid("merged_into_id").references(
     (): AnyPgColumn => locations.id
   ), // alias target for merged positions
+
+  // Capacity clamps (height-restricted overrides, finger grooves, etc.)
+  maxWidthMm: numeric("max_width_mm"),
+  maxHeightMm: numeric("max_height_mm"),
+  maxDepthMm: numeric("max_depth_mm"),
+  restrictReason: text("restrict_reason"),
 
   metadata: jsonb("metadata"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
