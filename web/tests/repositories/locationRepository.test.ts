@@ -528,6 +528,144 @@ describe("locationRepository", () => {
     });
   });
 
+  describe("merge / unmerge", () => {
+    async function createGridCells(
+      moduleId: string,
+      parentId: string,
+      rc: Array<[number, number, string]>,
+      insertId?: string
+    ) {
+      const out = [];
+      for (const [r, c, label] of rc) {
+        out.push(
+          await locationRepository.create({
+            moduleId,
+            parentId,
+            label,
+            pathSegments: ["MUSE", "1", label],
+            locationType: "leaf",
+            gridRow: r,
+            gridColumn: c,
+            insertId,
+          })
+        );
+      }
+      return out;
+    }
+
+    it("merges 2 adjacent cells under same parent", async () => {
+      const module = await createTestModule();
+      const parent = await locationRepository.create({
+        moduleId: module.id,
+        label: "1",
+        pathSegments: ["MUSE", "1"],
+        locationType: "receptacle",
+      });
+      const [a, b] = await createGridCells(module.id, parent.id, [
+        [0, 0, "A1"],
+        [0, 1, "A2"],
+      ]);
+
+      await locationRepository.merge({
+        originId: a.id,
+        aliasIds: [b.id],
+      });
+
+      const after = await locationRepository.findById({ id: b.id });
+      expect(after?.mergedIntoId).toBe(a.id);
+    });
+
+    it("refuses non-adjacent merge", async () => {
+      const module = await createTestModule();
+      const parent = await locationRepository.create({
+        moduleId: module.id,
+        label: "1",
+        pathSegments: ["MUSE", "1"],
+        locationType: "receptacle",
+      });
+      const [a, b] = await createGridCells(module.id, parent.id, [
+        [0, 0, "A1"],
+        [0, 2, "A3"],
+      ]);
+      await expect(
+        locationRepository.merge({ originId: a.id, aliasIds: [b.id] })
+      ).rejects.toThrow(/contiguous/);
+    });
+
+    it("refuses merge across different parents", async () => {
+      const module = await createTestModule();
+      const p1 = await locationRepository.create({
+        moduleId: module.id,
+        label: "1",
+        pathSegments: ["MUSE", "1"],
+        locationType: "receptacle",
+      });
+      const p2 = await locationRepository.create({
+        moduleId: module.id,
+        label: "2",
+        pathSegments: ["MUSE", "2"],
+        locationType: "receptacle",
+      });
+      const [a] = await createGridCells(module.id, p1.id, [[0, 0, "A1"]]);
+      const [b] = await createGridCells(module.id, p2.id, [[0, 0, "A1"]]);
+      await expect(
+        locationRepository.merge({ originId: a.id, aliasIds: [b.id] })
+      ).rejects.toThrow(/same parent/);
+    });
+
+    it("refuses merge with active assignments", async () => {
+      const { assignmentRepository } = await import(
+        "@/repositories/assignmentRepository"
+      );
+      const { itemRepository } = await import(
+        "@/repositories/itemRepository"
+      );
+      const module = await createTestModule();
+      const parent = await locationRepository.create({
+        moduleId: module.id,
+        label: "1",
+        pathSegments: ["MUSE", "1"],
+        locationType: "receptacle",
+      });
+      const [a, b] = await createGridCells(module.id, parent.id, [
+        [0, 0, "A1"],
+        [0, 1, "A2"],
+      ]);
+      const item = await itemRepository.create({ name: "x" });
+      await assignmentRepository.create({
+        itemId: item.id,
+        locationId: b.id,
+        assignmentType: "placed",
+      });
+      await expect(
+        locationRepository.merge({ originId: a.id, aliasIds: [b.id] })
+      ).rejects.toThrow(/assignments/);
+    });
+
+    it("unmerge clears all aliases", async () => {
+      const module = await createTestModule();
+      const parent = await locationRepository.create({
+        moduleId: module.id,
+        label: "1",
+        pathSegments: ["MUSE", "1"],
+        locationType: "receptacle",
+      });
+      const [a, b, c] = await createGridCells(module.id, parent.id, [
+        [0, 0, "A1"],
+        [0, 1, "A2"],
+        [0, 2, "A3"],
+      ]);
+      await locationRepository.merge({
+        originId: a.id,
+        aliasIds: [b.id, c.id],
+      });
+      const res = await locationRepository.unmerge({ originId: a.id });
+      expect(res.aliasCount).toBe(2);
+      const after = await locationRepository.findById({ id: b.id });
+      expect(after?.mergedIntoId).toBeNull();
+    });
+  });
+
   describe("merge alias", () => {
     it("sets a merge alias", async () => {
       const module = await createTestModule();

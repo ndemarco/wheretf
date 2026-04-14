@@ -1,4 +1,4 @@
-import { eq, sql } from "drizzle-orm";
+import { eq, inArray, sql } from "drizzle-orm";
 import { db } from "@/db/connection";
 import {
   locations,
@@ -290,6 +290,167 @@ export const locationRepository = {
     });
 
     return updated;
+  },
+
+  /**
+   * Merge a contiguous set of cells into one. Origin cell keeps its row;
+   * each other cell becomes an alias pointing to origin via mergedIntoId.
+   * Validation:
+   *   - all cells exist and share the same parent
+   *   - all cells belong to the same insert (or all none)
+   *   - all cells are adjacent (form a contiguous grid region)
+   *   - no active assignments on any cell
+   *   - template's dividersFixed constraints not violated (if applicable)
+   */
+  async merge({
+    originId,
+    aliasIds,
+  }: {
+    originId: string;
+    aliasIds: string[];
+  }) {
+    if (aliasIds.length === 0) {
+      throw new Error("Merge requires at least one alias cell");
+    }
+    const allIds = [originId, ...aliasIds.filter((a) => a !== originId)];
+
+    const rows = await db
+      .select()
+      .from(locations)
+      .where(inArray(locations.id, allIds));
+
+    if (rows.length !== allIds.length) {
+      throw new Error("One or more cells not found");
+    }
+
+    const origin = rows.find((r) => r.id === originId)!;
+    const others = rows.filter((r) => r.id !== originId);
+
+    // Same parent
+    if (others.some((r) => r.parentId !== origin.parentId)) {
+      throw new Error("Cells must share the same parent to be merged");
+    }
+    // Same insert (or all null)
+    if (others.some((r) => r.insertId !== origin.insertId)) {
+      throw new Error("Cells must belong to the same insert to be merged");
+    }
+
+    // Assignments check
+    const [asgRow] = await db
+      .select({ c: sql<number>`COUNT(*)` })
+      .from(assignments)
+      .where(inArray(assignments.locationId, allIds));
+    if (Number(asgRow?.c ?? 0) > 0) {
+      throw new Error(
+        "Cannot merge cells with active assignments. Unassign items first."
+      );
+    }
+
+    // Already-merged check
+    if (rows.some((r) => r.mergedIntoId)) {
+      throw new Error("One or more cells are already merged");
+    }
+
+    // Adjacency: every cell must be reachable from origin via 4-neighbor
+    // adjacency within the selected set.
+    const grid = new Map<string, typeof rows[number]>();
+    for (const r of rows) {
+      if (r.gridRow == null || r.gridColumn == null) {
+        throw new Error(
+          "Merge supports grid cells only (gridRow/gridColumn required)"
+        );
+      }
+      grid.set(`${r.gridRow},${r.gridColumn}`, r);
+    }
+    const visited = new Set<string>([origin.id]);
+    const queue: Array<typeof origin> = [origin];
+    while (queue.length > 0) {
+      const cur = queue.shift()!;
+      const neighbors = [
+        [cur.gridRow! - 1, cur.gridColumn!],
+        [cur.gridRow! + 1, cur.gridColumn!],
+        [cur.gridRow!, cur.gridColumn! - 1],
+        [cur.gridRow!, cur.gridColumn! + 1],
+      ];
+      for (const [nr, nc] of neighbors) {
+        const n = grid.get(`${nr},${nc}`);
+        if (n && !visited.has(n.id)) {
+          visited.add(n.id);
+          queue.push(n);
+        }
+      }
+    }
+    if (visited.size !== rows.length) {
+      throw new Error("Cells must be contiguous (4-connected) to be merged");
+    }
+
+    // Divider axis constraint (only enforced when all cells share a templateVersion).
+    // If all on same version and it says rowDividersFixed / columnDividersFixed,
+    // refuse merges that span that axis.
+    if (origin.templateVersionId) {
+      const [tv] = await db
+        .select()
+        .from(templateVersions)
+        .where(eq(templateVersions.id, origin.templateVersionId));
+      if (tv) {
+        const rowsSpanned = new Set(rows.map((r) => r.gridRow));
+        const colsSpanned = new Set(rows.map((r) => r.gridColumn));
+        if (tv.rowDividersFixed && rowsSpanned.size > 1) {
+          throw new Error(
+            "Template has fixed row dividers; merge cannot span rows"
+          );
+        }
+        if (tv.columnDividersFixed && colsSpanned.size > 1) {
+          throw new Error(
+            "Template has fixed column dividers; merge cannot span columns"
+          );
+        }
+      }
+    }
+
+    await db.transaction(async (tx) => {
+      for (const r of others) {
+        await tx
+          .update(locations)
+          .set({ mergedIntoId: originId, updatedAt: new Date() })
+          .where(eq(locations.id, r.id));
+      }
+    });
+
+    await transactionRepository.log({
+      actionType: "location.merge",
+      entityType: "location",
+      entityId: originId,
+      beforeState: { originId, aliasIds },
+      afterState: null,
+    });
+
+    return { originId, aliasIds };
+  },
+
+  async unmerge({ originId }: { originId: string }) {
+    const aliases = await db
+      .select()
+      .from(locations)
+      .where(eq(locations.mergedIntoId, originId));
+    if (aliases.length === 0) {
+      throw new Error("No merged cells for this origin");
+    }
+
+    await db
+      .update(locations)
+      .set({ mergedIntoId: null, updatedAt: new Date() })
+      .where(eq(locations.mergedIntoId, originId));
+
+    await transactionRepository.log({
+      actionType: "location.unmerge",
+      entityType: "location",
+      entityId: originId,
+      beforeState: { aliasIds: aliases.map((a) => a.id) },
+      afterState: null,
+    });
+
+    return { originId, aliasCount: aliases.length };
   },
 
   async setMergeAlias({

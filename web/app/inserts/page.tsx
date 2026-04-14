@@ -282,6 +282,8 @@ function InsertDetail({
   // Cells (grid) — full type so we can show overrides
   const [cells, setCells] = useState<CellRow[]>([]);
   const [selectedCellId, setSelectedCellId] = useState<string | null>(null);
+  // Multi-select for merge
+  const [multiSelect, setMultiSelect] = useState<Set<string>>(new Set());
 
   // Assignments on this insert's cells
   const [assignments, setAssignments] = useState<
@@ -358,6 +360,7 @@ function InsertDetail({
     setEditing(false);
     setPickerOpen(false);
     setSelectedCellId(null);
+    setMultiSelect(new Set());
     setShowItemPicker(false);
     setEditingRestrict(false);
     loadAll();
@@ -447,10 +450,72 @@ function InsertDetail({
     [assignments, selectedCellId]
   );
 
-  function selectCell(id: string | null) {
+  function selectCell(id: string | null, additive = false) {
+    if (additive && id) {
+      // Ctrl/Cmd-click: toggle id in multi-select set (and seed with current single selection)
+      const next = new Set(multiSelect);
+      if (next.size === 0 && selectedCellId) next.add(selectedCellId);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      setMultiSelect(next);
+      setSelectedCellId(null);
+      setShowItemPicker(false);
+      setEditingRestrict(false);
+      return;
+    }
+    setMultiSelect(new Set());
     setSelectedCellId(id);
     setShowItemPicker(false);
     setEditingRestrict(false);
+  }
+
+  async function mergeSelected() {
+    const ids = [...multiSelect];
+    if (ids.length < 2) return;
+    // Origin = top-left-most cell
+    const picked = cells.filter((c) => ids.includes(c.id));
+    picked.sort(
+      (a, b) =>
+        (a.gridRow ?? 0) - (b.gridRow ?? 0) ||
+        (a.gridColumn ?? 0) - (b.gridColumn ?? 0)
+    );
+    const origin = picked[0];
+    const aliases = picked.slice(1).map((c) => c.id);
+    try {
+      const r = await fetch(`/api/locations/merge`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ originId: origin.id, aliasIds: aliases }),
+      });
+      if (!r.ok) {
+        const d = await r.json();
+        alert(d.error || "Merge failed");
+        return;
+      }
+      setMultiSelect(new Set());
+      setSelectedCellId(origin.id);
+      await loadAll();
+    } catch (err) {
+      console.error(err);
+    }
+  }
+
+  async function unmergeCell() {
+    if (!selectedCell) return;
+    try {
+      const r = await fetch(
+        `/api/locations/${selectedCell.id}/unmerge`,
+        { method: "POST" }
+      );
+      if (!r.ok) {
+        const d = await r.json();
+        alert(d.error || "Unmerge failed");
+        return;
+      }
+      await loadAll();
+    } catch (err) {
+      console.error(err);
+    }
   }
 
   async function searchItems(q: string) {
@@ -718,13 +783,38 @@ function InsertDetail({
               one.
             </div>
           ) : (
-            <InsertGrid
-              cells={cells}
-              assignments={assignments}
-              itemsById={itemsById}
-              selectedCellId={selectedCellId}
-              onCellClick={selectCell}
-            />
+            <>
+              {multiSelect.size >= 2 && (
+                <div className="mb-3 flex items-center gap-2 px-3 py-2 rounded bg-slate-800/60 border border-accent/40">
+                  <span className="text-sm text-slate-200">
+                    {multiSelect.size} cells selected
+                  </span>
+                  <button
+                    onClick={mergeSelected}
+                    className="ml-auto px-3 py-1 bg-accent text-white rounded text-xs hover:brightness-110"
+                  >
+                    Merge
+                  </button>
+                  <button
+                    onClick={() => setMultiSelect(new Set())}
+                    className="px-3 py-1 border border-slate-600 text-slate-300 rounded text-xs hover:bg-slate-700/50"
+                  >
+                    Clear
+                  </button>
+                </div>
+              )}
+              <InsertGrid
+                cells={cells}
+                assignments={assignments}
+                itemsById={itemsById}
+                selectedCellId={selectedCellId}
+                multiSelect={multiSelect}
+                onCellClick={selectCell}
+              />
+              <div className="mt-2 text-[11px] text-slate-500">
+                Ctrl/Cmd-click cells to multi-select for merge.
+              </div>
+            </>
           )}
         </div>
 
@@ -875,6 +965,15 @@ function InsertDetail({
                 <h4 className="text-xs font-medium text-slate-400 uppercase tracking-wider">
                   Overrides
                 </h4>
+
+                {cells.some((c) => c.mergedIntoId === selectedCell.id) && (
+                  <button
+                    onClick={unmergeCell}
+                    className="w-full px-3 py-1.5 border border-accent/60 text-accent rounded text-xs hover:bg-accent/10"
+                  >
+                    Unmerge
+                  </button>
+                )}
 
                 {selectedCell.isDisabled ? (
                   <button
@@ -1132,6 +1231,7 @@ function InsertGrid({
   assignments,
   itemsById,
   selectedCellId,
+  multiSelect,
   onCellClick,
 }: {
   cells: CellRow[];
@@ -1146,7 +1246,8 @@ function InsertGrid({
     { id: string; name: string; description: string | null }
   >;
   selectedCellId: string | null;
-  onCellClick: (id: string) => void;
+  multiSelect: Set<string>;
+  onCellClick: (id: string, additive?: boolean) => void;
 }) {
   const assignByLoc = new Map<
     string,
@@ -1223,11 +1324,28 @@ function InsertGrid({
         </text>
       ))}
       {gridCells.map((cell) => {
-        const x = labelPad + cell.gridColumn! * (cellSize + gap);
-        const y = labelPad + cell.gridRow! * (cellSize + gap);
+        // Skip aliases — the origin renders an expanded rect covering them.
+        if (cell.mergedIntoId) return null;
+
+        // Find all cells merged into this one (including itself)
+        const aliasChildren = gridCells.filter(
+          (c) => c.mergedIntoId === cell.id
+        );
+        const mergedGroup = [cell, ...aliasChildren];
+        const minR = Math.min(...mergedGroup.map((c) => c.gridRow!));
+        const maxR = Math.max(...mergedGroup.map((c) => c.gridRow!));
+        const minC = Math.min(...mergedGroup.map((c) => c.gridColumn!));
+        const maxC = Math.max(...mergedGroup.map((c) => c.gridColumn!));
+        const x = labelPad + minC * (cellSize + gap);
+        const y = labelPad + minR * (cellSize + gap);
+        const w = (maxC - minC + 1) * cellSize + (maxC - minC) * gap;
+        const h = (maxR - minR + 1) * cellSize + (maxR - minR) * gap;
+        const isMerged = aliasChildren.length > 0;
+
         const cellAssignments = assignByLoc.get(cell.id) ?? [];
         const occupied = cellAssignments.length > 0;
         const isSelected = cell.id === selectedCellId;
+        const isMulti = multiSelect.has(cell.id);
         const isProvisional =
           occupied && cellAssignments[0].assignmentType === "provisional";
         const isRestricted =
@@ -1236,6 +1354,7 @@ function InsertGrid({
         let fillColor = "transparent";
         let strokeColor = "#475569";
         let strokeWidth = 1;
+        let strokeDash: string | undefined;
 
         if (cell.isDisabled) {
           fillColor = "rgba(248,113,113,0.12)";
@@ -1244,74 +1363,84 @@ function InsertGrid({
           fillColor = "rgba(255,102,0,0.12)";
           strokeColor = "#ff6600";
           strokeWidth = 2;
+        } else if (isMulti) {
+          fillColor = "rgba(255,102,0,0.06)";
+          strokeColor = "#ff6600";
+          strokeWidth = 2;
+          strokeDash = "4 2";
         } else if (occupied) {
           fillColor = isProvisional
             ? "rgba(251,191,36,0.1)"
             : "rgba(96,165,250,0.12)";
           strokeColor = isProvisional ? "#92400e" : "#1e40af";
+        } else if (isMerged) {
+          fillColor = "rgba(59,130,246,0.06)";
+          strokeColor = "#334155";
         }
 
         const itemName = occupied
           ? itemsById.get(cellAssignments[0].itemId)?.name
           : null;
 
+        const displayLabel = isMerged
+          ? cell.label + "+" + aliasChildren.map((a) => a.label).join("+")
+          : cell.label;
+
         return (
           <g
             key={cell.id}
-            onClick={() => onCellClick(cell.id)}
+            onClick={(e) =>
+              onCellClick(cell.id, e.ctrlKey || e.metaKey)
+            }
             className="cursor-pointer"
           >
             <rect
               x={x}
               y={y}
-              width={cellSize}
-              height={cellSize}
+              width={w}
+              height={h}
               fill={fillColor}
               stroke={strokeColor}
               strokeWidth={strokeWidth}
+              strokeDasharray={strokeDash}
               rx={3}
             />
             <text
-              x={x + cellSize / 2}
-              y={occupied ? y + 14 : y + cellSize / 2}
+              x={x + w / 2}
+              y={occupied ? y + 14 : y + h / 2}
               textAnchor="middle"
               dominantBaseline={occupied ? "auto" : "central"}
               fill={cell.isDisabled ? "#f87171" : "#64748b"}
               fontSize={10}
               fontWeight={isSelected ? 600 : 400}
             >
-              {cell.label}
+              {displayLabel}
             </text>
             {itemName && (
               <text
-                x={x + cellSize / 2}
-                y={y + cellSize / 2 + 4}
+                x={x + w / 2}
+                y={y + h / 2 + 4}
                 textAnchor="middle"
                 dominantBaseline="central"
                 fill={isProvisional ? "#fbbf24" : "#93c5fd"}
                 fontSize={9}
                 className="select-none pointer-events-none"
               >
-                {itemName.length > 9
-                  ? itemName.substring(0, 8) + "…"
+                {itemName.length > 12
+                  ? itemName.substring(0, 11) + "…"
                   : itemName}
               </text>
             )}
             {occupied && (
               <circle
-                cx={x + cellSize - 6}
+                cx={x + w - 6}
                 cy={y + 6}
                 r={3}
                 fill={isProvisional ? "#fbbf24" : "#60a5fa"}
               />
             )}
             {isRestricted && !cell.isDisabled && (
-              <circle
-                cx={x + 6}
-                cy={y + 6}
-                r={3}
-                fill="#fbbf24"
-              />
+              <circle cx={x + 6} cy={y + 6} r={3} fill="#fbbf24" />
             )}
           </g>
         );
