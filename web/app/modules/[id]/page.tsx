@@ -445,6 +445,52 @@ export default function ModuleDetailPage() {
     }
   }
 
+  async function disableCell() {
+    if (!selectedCell) return;
+    const reason =
+      window.prompt(
+        "Disable this location. Reason (optional):",
+        selectedCell.disableReason ?? ""
+      );
+    if (reason === null) return; // cancelled
+    try {
+      const res = await fetch(
+        `/api/locations/${selectedCell.id}/disable`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ reason: reason.trim() || undefined }),
+        }
+      );
+      if (!res.ok) {
+        const data = await res.json();
+        alert(data.error || "Failed to disable location");
+        return;
+      }
+      await fetchData();
+    } catch (err) {
+      console.error(err);
+    }
+  }
+
+  async function enableCell() {
+    if (!selectedCell) return;
+    try {
+      const res = await fetch(
+        `/api/locations/${selectedCell.id}/disable`,
+        { method: "DELETE" }
+      );
+      if (!res.ok) {
+        const data = await res.json();
+        alert(data.error || "Failed to enable location");
+        return;
+      }
+      await fetchData();
+    } catch (err) {
+      console.error(err);
+    }
+  }
+
   async function unassignItem(assignmentId: string) {
     try {
       await fetch(`/api/assignments/${assignmentId}`, { method: "DELETE" });
@@ -760,6 +806,41 @@ export default function ModuleDetailPage() {
                 )}
               </div>
             )}
+
+            {/* Overrides */}
+            <div className="mt-4 pt-4 border-t border-slate-700">
+              <h4 className="text-xs font-medium text-slate-400 uppercase tracking-wider mb-2">
+                Overrides
+              </h4>
+              {selectedCell.isDisabled ? (
+                <div className="space-y-2">
+                  <div className="text-xs text-red-400">
+                    Disabled
+                    {selectedCell.disableReason &&
+                      `: ${selectedCell.disableReason}`}
+                  </div>
+                  <button
+                    onClick={enableCell}
+                    className="w-full px-3 py-1.5 border border-slate-600 text-slate-300 rounded text-xs hover:bg-slate-700/50 transition-colors"
+                  >
+                    Enable
+                  </button>
+                </div>
+              ) : (
+                <button
+                  onClick={disableCell}
+                  disabled={selectedCellAssignments.length > 0}
+                  title={
+                    selectedCellAssignments.length > 0
+                      ? "Unassign items before disabling this location"
+                      : undefined
+                  }
+                  className="w-full px-3 py-1.5 border border-slate-600 text-slate-300 rounded text-xs hover:bg-slate-700/50 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                >
+                  Disable…
+                </button>
+              )}
+            </div>
 
             {/* Item Picker */}
             {showItemPicker && (

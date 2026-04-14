@@ -1,6 +1,11 @@
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { db } from "@/db/connection";
-import { locations, templates, templateVersions } from "@/db/schema";
+import {
+  locations,
+  templates,
+  templateVersions,
+  assignments,
+} from "@/db/schema";
 import { transactionRepository } from "./transactionRepository";
 
 async function createSingleInstanceTemplateVersion(pathSegments: string[]) {
@@ -165,6 +170,17 @@ export const locationRepository = {
   async disable({ id, reason }: { id: string; reason?: string }) {
     const before = await locationRepository.findById({ id });
     if (!before) throw new Error(`Location ${id} not found`);
+
+    // Per spec: existing assignments must be resolved before disabling.
+    const [row] = await db
+      .select({ c: sql<number>`COUNT(*)` })
+      .from(assignments)
+      .where(eq(assignments.locationId, id));
+    if (Number(row?.c ?? 0) > 0) {
+      throw new Error(
+        "Cannot disable a location with active assignments. Unassign items first."
+      );
+    }
 
     const [updated] = await db
       .update(locations)

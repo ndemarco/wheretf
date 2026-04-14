@@ -18,6 +18,9 @@ export async function POST(
     if (message.includes("not found")) {
       return NextResponse.json({ error: message }, { status: 404 });
     }
+    if (message.includes("active assignments")) {
+      return NextResponse.json({ error: message }, { status: 409 });
+    }
     return NextResponse.json({ error: message }, { status: 400 });
   }
 }

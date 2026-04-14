@@ -403,6 +403,35 @@ describe("locationRepository", () => {
       expect(disabled.disableReason).toBe("Broken shelf");
     });
 
+    it("refuses to disable a location with active assignments", async () => {
+      const { assignmentRepository } = await import(
+        "@/repositories/assignmentRepository"
+      );
+      const { itemRepository } = await import(
+        "@/repositories/itemRepository"
+      );
+      const module = await createTestModule();
+      const loc = await locationRepository.create({
+        moduleId: module.id,
+        label: "A1",
+        pathSegments: ["MUSE", "3", "A1"],
+        locationType: "leaf",
+      });
+      const item = await itemRepository.create({ name: "Resistor" });
+      await assignmentRepository.create({
+        itemId: item.id,
+        locationId: loc.id,
+        assignmentType: "placed",
+      });
+
+      await expect(
+        locationRepository.disable({ id: loc.id })
+      ).rejects.toThrow(/active assignments/);
+
+      const after = await locationRepository.findById({ id: loc.id });
+      expect(after?.isDisabled).toBe(false);
+    });
+
     it("enables a previously disabled location", async () => {
       const module = await createTestModule();
       const created = await locationRepository.create({
