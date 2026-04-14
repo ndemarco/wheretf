@@ -187,6 +187,31 @@ export default function ModuleDetailPage() {
   const levels = locations.filter((l) => l.parentId === null);
   const selectedLevel = levels.find((l) => l.id === selectedLevelId) || null;
 
+  // MD-4: auto-select a level once data loads.
+  // Prefer the last-selected level for this module from localStorage,
+  // falling back to the first level.
+  useEffect(() => {
+    if (loading || levels.length === 0 || selectedLevelId) return;
+    const stored = localStorage.getItem(`wheretf.module.${id}.selectedLevel`);
+    const remembered = stored && levels.find((l) => l.id === stored);
+    const target = remembered ?? levels[0];
+    if (target) {
+      selectLevel(target);
+    }
+    // selectLevel is stable-enough within a render; intentionally omitted
+    // to avoid loops from its transitive dependencies.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loading, levels, selectedLevelId, id]);
+
+  // Persist selected level per module
+  useEffect(() => {
+    if (!selectedLevelId) return;
+    localStorage.setItem(
+      `wheretf.module.${id}.selectedLevel`,
+      selectedLevelId
+    );
+  }, [selectedLevelId, id]);
+
   // Child locations of selected level
   const childLocations = selectedLevel
     ? locations.filter((l) => l.parentId === selectedLevel.id)
