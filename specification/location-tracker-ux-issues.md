@@ -119,6 +119,33 @@ Running list of issues and decisions for the `/modules` and `/modules/[id]` area
   - Offer "Remove insert" and "Replace insert" at the receptacle level.
 - **Open:** For cells inside an insert we've been writing to `locations.{isDisabled,maxWidthMm,…}` which lives on the child location row. That works when the insert never moves, but the spec says overrides must travel with the insert. Needs the structured `inserts.overrides` JSONB format we deferred earlier. Punt to when we implement merge (which already has to deal with insert-scoped persistence).
 
+### IN-5 — "New insert" entry point
+- **Problem:** `/inserts` has no way to create a new, unplaced insert. Today the only way to get an insert is through the Place Insert wizard on a module level.
+- **Decision:** Add a `+ New` button on the `/inserts` list. Opens a small form (pick template, optional name) → creates an unplaced insert → auto-selects it in the master-detail pane.
+
+### IN-6 — Hide UID chrome on the inserts page
+- **Problem:** Insert UID is shown both in the list row and above the detail header. It's internal scaffolding — users don't want to see it in normal use.
+- **Decision:** Remove both. UID can resurface later as a dim footer detail on the insert page once RFID / label-printing workflows arrive.
+
+### IN-7 — Insert detail is the item↔insert central surface
+- **Problem:** The insert detail page currently shows metadata only. The user wants it to be the *primary* place to see an insert's layout, assign/unassign items to cells, and apply overrides (merge/unmerge/disable/restrict/divide). Module detail stays as a where-is-it view.
+- **Decision:**
+  - Insert detail renders the insert's cell grid (same renderer idea as module detail today).
+  - Click a cell → cell-detail side panel: assigned items CRUD, overrides (disable/restrict).
+  - Multi-select cells (Ctrl/Cmd-click) → Merge action in the selection summary.
+  - Single-cell actions on a merged cell → Unmerge.
+  - Single-cell "Divide…" → splits into named children.
+  - This supersedes the in-progress cell-edit affordances on the module detail page; module detail will eventually stay read-only on cells and link to the insert page for edits.
+- **Open — layout:**
+  - Current `/inserts` is master-detail (list + detail). Adding a full grid + cell detail means the detail pane needs more horizontal room.
+  - Options:
+    - (a) Keep master-detail; the right pane grows and the grid scrolls horizontally as needed
+    - (b) Full-page detail when a row is selected (collapse the list into a small drawer/header)
+    - (c) Hide the list on narrow screens, side-by-side on wide
+- **Open — module page overlap:**
+  - Keep the module detail's grid + cell controls, or strip cell interactions there and route users to the insert page for anything beyond viewing?
+- **Supersedes:** IN-2/3 Merge and IN-2/4 Divide now live here.
+
 ### IN-4 — Placement from the insert side
 - **Problem:** Today placement is receptacle-first (go to a level, pick a template). User also wants insert-first: "I'm holding this Plano, find somewhere it fits." And also wants to **kick an insert out** from either side.
 - **Direction:**
