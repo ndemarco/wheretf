@@ -109,6 +109,23 @@ Running list of issues and decisions for the `/modules` and `/modules/[id]` area
 - **Decision:** Add a left-menu item **Inserts** → `/inserts`. List should be filterable **by type** (template) and **by interface type** (e.g. plano-3600, gridfinity-42mm) so the user can find "where does this bin fit?". Supports browsing placed + unplaced inventory.
 - **Open (secondary):** Master-detail layout like templates, or something else.
 
+### IN-3 — Module level UI conflates receptacle with its insert
+- **Problem:** On `/modules/[id]` a level like MUSE:1 shows grid cells (A1..D6) directly, hiding the fact that those cells belong to a specific **insert** (a physical instance of Plano 3600). User owns a *stack* of Plano 3600s; each is a distinct insert with its own name, overrides, and contents. The current UI doesn't name the insert in the level view and doesn't frame overrides as "on this insert" vs. "on this receptacle".
+- **Direction:**
+  - Module level header should read something like: **MUSE 1** · receptacle · holds *"construction screws"* (Plano 3600 Stowaway)
+  - Or show a breadcrumb on the grid: MUSE › 1 › *construction screws* (Plano 3600)
+  - Overrides (merge/divide/disable/restrict) applied to cells *inside an insert* are insert-scoped — should persist as `inserts.overrides`, not on the location. They travel with the insert when relocated.
+  - Renaming the insert in-context (e.g., click the insert name → rename).
+  - Offer "Remove insert" and "Replace insert" at the receptacle level.
+- **Open:** For cells inside an insert we've been writing to `locations.{isDisabled,maxWidthMm,…}` which lives on the child location row. That works when the insert never moves, but the spec says overrides must travel with the insert. Needs the structured `inserts.overrides` JSONB format we deferred earlier. Punt to when we implement merge (which already has to deal with insert-scoped persistence).
+
+### IN-4 — Placement from the insert side
+- **Problem:** Today placement is receptacle-first (go to a level, pick a template). User also wants insert-first: "I'm holding this Plano, find somewhere it fits."
+- **Direction:**
+  - On `/inserts` detail for an unplaced insert: a "Place in…" button that lists compatible receptacles (filter by interface type match + currently empty).
+  - If already placed, show "Move to…" offering same picker.
+- **Naming clarification (per user):** the compatibility name is the **interface type**. Insert template `interfaceTypeProvided` must match receptacle `interfaceTypeAccepted`.
+
 ### IN-2 — Where do I edit an insert's overrides (merge / divide / disable / restrict)?
 - **Problem:** No UI exists for any of the four override types (see storage-model.md §Override Types). Schema supports:
   - `locations.mergedIntoId` for merge aliasing on module-scoped locations
@@ -145,7 +162,6 @@ Running list of issues and decisions for the `/modules` and `/modules/[id]` area
 
 ## Cross-cutting open questions
 - **MD-1** add-level semantics (deferred)
-- **IN-1** inserts UI master-detail layout decision
-- **IN-2** override UX — 1 of 4 done (Disable); Restrict / Merge / Divide remain
-- **NV-1** admin grouping — route structure
-- **PI-1** place-insert Next button placement
+- **IN-2** override UX — 2 of 4 done (Disable, Restrict); Merge / Divide remain
+- **IN-3** module level header needs to surface the insert as a first-class object
+- **IN-4** insert-first placement (Place in… / Move to… from insert detail)
