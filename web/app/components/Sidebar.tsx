@@ -74,13 +74,47 @@ export default function Sidebar() {
     if (hydrated) localStorage.setItem(STORAGE_KEY, expanded ? "1" : "0");
   }, [expanded, hydrated]);
 
+  // Keyboard shortcut: Ctrl/Cmd + \
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key === "\\") {
+        e.preventDefault();
+        setExpanded((v) => !v);
+      }
+    };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, []);
+
   const width = expanded ? "w-48" : "w-14";
 
   return (
     <nav
-      className={`${width} bg-slate-800 border-r border-slate-700 flex flex-col py-3 shrink-0 transition-[width] duration-150`}
+      className={`${width} bg-slate-800 border-r border-slate-700 flex flex-col shrink-0 transition-[width] duration-150 group/sidebar`}
     >
-      <div className="flex flex-col flex-1 gap-1 px-2">
+      {/* Header row: brand space + collapse chevron (appears on hover) */}
+      <div className="h-10 flex items-center justify-end px-2 border-b border-slate-700/50 shrink-0">
+        <button
+          onClick={() => setExpanded((v) => !v)}
+          title={`${expanded ? "Collapse" : "Expand"} sidebar (Ctrl/Cmd + \\)`}
+          aria-label={expanded ? "Collapse sidebar" : "Expand sidebar"}
+          className="w-6 h-6 rounded flex items-center justify-center text-slate-500 hover:text-slate-200 hover:bg-slate-700/70 transition-all opacity-0 group-hover/sidebar:opacity-100 focus:opacity-100"
+        >
+          <svg
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth={2}
+            className={`w-4 h-4 transition-transform ${
+              expanded ? "" : "rotate-180"
+            }`}
+          >
+            <path d="M15 18l-6-6 6-6" strokeLinecap="round" strokeLinejoin="round" />
+          </svg>
+        </button>
+      </div>
+
+      <div className="flex flex-col flex-1 gap-1 px-2 py-3">
         {navItems.map((item) => {
           const isActive =
             item.href === "/"
@@ -108,25 +142,6 @@ export default function Sidebar() {
           );
         })}
       </div>
-
-      <button
-        onClick={() => setExpanded((v) => !v)}
-        title={expanded ? "Collapse" : "Expand"}
-        className="mx-2 mt-2 h-7 rounded-md flex items-center gap-2 px-2 text-slate-500 hover:text-slate-300 hover:bg-slate-700/50 transition-colors"
-      >
-        <svg
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth={2}
-          className={`w-4 h-4 shrink-0 transition-transform ${
-            expanded ? "" : "rotate-180"
-          }`}
-        >
-          <path d="M15 18l-6-6 6-6" />
-        </svg>
-        {expanded && <span className="text-xs">Collapse</span>}
-      </button>
     </nav>
   );
 }
