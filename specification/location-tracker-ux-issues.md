@@ -106,11 +106,8 @@ Running list of issues and decisions for the `/modules` and `/modules/[id]` area
 
 ### IN-1 — No `/inserts` page
 - **Problem:** Inserts are only manageable through the module that hosts them. No way to see all inserts across the system, no way to create an unplaced insert from the UI (API only).
-- **Direction (TBD):**
-  - **Option a** — add a full `/inserts` area (list + detail, master-detail like templates). Lets the user manage unplaced insert inventory, see all instances of a template, etc.
-  - **Option b** — keep inserts module-scoped. Add "inserts" sub-area on the module detail page listing what's in this module.
-  - **Option c** — both: a cross-module `/inserts` *and* a per-module list.
-- **Open:** Decide scope. Related to whether inserts count as "inventory" (global) or are always seen through their host location.
+- **Decision:** Add a left-menu item **Inserts** → `/inserts`. List should be filterable **by type** (template) and **by interface type** (e.g. plano-3600, gridfinity-42mm) so the user can find "where does this bin fit?". Supports browsing placed + unplaced inventory.
+- **Open (secondary):** Master-detail layout like templates, or something else.
 
 ### IN-2 — Where do I edit an insert's overrides (merge / divide / disable / restrict)?
 - **Problem:** No UI exists for any of the four override types (see storage-model.md §Override Types). Schema supports:
@@ -127,7 +124,28 @@ Running list of issues and decisions for the `/modules` and `/modules/[id]` area
 
 ---
 
+---
+
+## Navigation
+
+### NV-1 — Admin section in left menu
+- **Problem:** Operations that structurally change the workshop (creating/removing modules, creating/removing/hiding templates) are mixed in with everyday navigation.
+- **Decision:** Group admin-style entries in a distinct section (visually separated) in the left menu. At minimum: modules admin, templates admin. Maybe taxonomy admin belongs there too.
+- **Open:** Does this mean separate routes (`/admin/modules`, `/admin/templates`) or the same routes with read/admin modes? Probably same routes, just the menu grouping communicates intent.
+
+---
+
+## Place Insert flow
+
+### PI-1 — "Next" button is off-screen at bottom of template list
+- **Problem:** On `/modules/[id]/levels/[levelId]/place-insert`, the Next button lives at the bottom of the template list. With more than a handful of templates, it's below the fold and feels undiscoverable.
+- **Direction (likely):** Move primary action (Next / Place) to a sticky footer bar, or a fixed header action, independent of the scroll position of the list.
+
+---
+
 ## Cross-cutting open questions
 - **MD-1** add-level semantics (deferred)
-- **IN-1** inserts UI scope (cross-module vs. per-module vs. both)
-- **IN-2** override UX and missing API endpoints
+- **IN-1** inserts UI master-detail layout decision
+- **IN-2** override UX — 1 of 4 done (Disable); Restrict / Merge / Divide remain
+- **NV-1** admin grouping — route structure
+- **PI-1** place-insert Next button placement
