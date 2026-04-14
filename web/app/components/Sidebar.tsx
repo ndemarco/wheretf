@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useEffect, useState } from "react";
 
 const navItems = [
   {
@@ -56,32 +57,76 @@ const navItems = [
   },
 ];
 
+const STORAGE_KEY = "wheretf.sidebar.expanded";
+
 export default function Sidebar() {
   const pathname = usePathname();
+  const [expanded, setExpanded] = useState(true);
+  const [hydrated, setHydrated] = useState(false);
+
+  useEffect(() => {
+    const stored = localStorage.getItem(STORAGE_KEY);
+    if (stored != null) setExpanded(stored === "1");
+    setHydrated(true);
+  }, []);
+
+  useEffect(() => {
+    if (hydrated) localStorage.setItem(STORAGE_KEY, expanded ? "1" : "0");
+  }, [expanded, hydrated]);
+
+  const width = expanded ? "w-48" : "w-14";
 
   return (
-    <nav className="w-14 bg-slate-800 border-r border-slate-700 flex flex-col items-center py-3 gap-4 shrink-0">
-      {navItems.map((item) => {
-        const isActive =
-          item.href === "/"
-            ? pathname === "/"
-            : pathname.startsWith(item.href);
+    <nav
+      className={`${width} bg-slate-800 border-r border-slate-700 flex flex-col py-3 shrink-0 transition-[width] duration-150`}
+    >
+      <div className="flex flex-col flex-1 gap-1 px-2">
+        {navItems.map((item) => {
+          const isActive =
+            item.href === "/"
+              ? pathname === "/"
+              : pathname.startsWith(item.href);
 
-        return (
-          <Link
-            key={item.href}
-            href={item.href}
-            title={item.title}
-            className={`w-8 h-8 rounded-md flex items-center justify-center transition-all ${
-              isActive
-                ? "bg-slate-700 text-accent"
-                : "text-slate-400 hover:bg-slate-700 hover:text-accent"
-            }`}
-          >
-            {item.icon}
-          </Link>
-        );
-      })}
+          return (
+            <Link
+              key={item.href}
+              href={item.href}
+              title={expanded ? undefined : item.title}
+              className={`h-9 rounded-md flex items-center gap-3 transition-colors px-2 ${
+                isActive
+                  ? "bg-slate-700 text-accent"
+                  : "text-slate-400 hover:bg-slate-700 hover:text-accent"
+              }`}
+            >
+              <span className="shrink-0 flex items-center justify-center w-6">
+                {item.icon}
+              </span>
+              {expanded && (
+                <span className="text-sm truncate">{item.title}</span>
+              )}
+            </Link>
+          );
+        })}
+      </div>
+
+      <button
+        onClick={() => setExpanded((v) => !v)}
+        title={expanded ? "Collapse" : "Expand"}
+        className="mx-2 mt-2 h-7 rounded-md flex items-center gap-2 px-2 text-slate-500 hover:text-slate-300 hover:bg-slate-700/50 transition-colors"
+      >
+        <svg
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth={2}
+          className={`w-4 h-4 shrink-0 transition-transform ${
+            expanded ? "" : "rotate-180"
+          }`}
+        >
+          <path d="M15 18l-6-6 6-6" />
+        </svg>
+        {expanded && <span className="text-xs">Collapse</span>}
+      </button>
     </nav>
   );
 }
