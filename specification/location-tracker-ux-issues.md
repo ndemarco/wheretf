@@ -67,5 +67,37 @@ Running list of issues and decisions for the `/modules` and `/modules/[id]` area
 
 ---
 
+---
+
+## `/templates` and `/templates/[id]`
+
+### TP-1 — "New template" button missing
+- **Problem:** No entry point to create a template from the list page or detail page. `/templates/new` exists as a route.
+- **Status:** Capturing; needs clarification.
+
+### TP-2 — Delete a template missing
+- **Problem:** No affordance to delete a template.
+- **Status:** Capturing; same GitHub-repo deletion pattern likely applies (dialog + contents summary + type-to-confirm). Open: what are "contents" for a template — all inserts/locations referencing any of its versions?
+
+### TP-3 — No way back to templates list from detail
+- **Problem:** When viewing `/templates/[id]`, the only path back to the list is the sidebar menu button. Feels wrong.
+- **Direction (asked by user):** How do other UIs handle this?
+  - **Breadcrumb** (GitHub, GitLab, admin dashboards): `Templates › Plano 3600`. The crumb itself is the back-nav. This matches what we just added on `/modules/[id]` (GN-2).
+  - **Back arrow in page header** (iOS, Notion): explicit `← Templates` button at top-left of the detail page.
+  - **Sibling list kept visible** (master-detail on tablets / Notion sidebar / Finder): the list is a persistent left column, the detail fills the right. Click a different item, the right updates.
+- **Recommended MVP:** Breadcrumb (matches GN-2 and the conventions the user already agreed to). Add a back-arrow on narrow viewports as a bonus.
+- **Bigger picture (new from user):** Consider a "template editor" mode layered over the list — view the list, select/edit a template, return to the list. This is the *master-detail* / *stacked-navigation* pattern (Slack channels, Gmail labels, Xcode settings). Needs its own spec pass; deferred until TP-1/TP-2 land.
+
+### TP-4 — Template editor mode over list
+- **Problem:** Navigating away from the list to a dedicated detail page loses the user's place in the list and feels heavy.
+- **Direction:** A "template editor mode" logically applied on top of the list — select a template → inline detail view opens (could be right pane, drawer, or modal) → user edits → closes → returns to list with selection preserved.
+- **Status:** New idea. Defer full spec until we agree on which layout pattern fits best (pane vs. drawer vs. modal vs. full-page overlay).
+- **Open:** Does this pattern also apply to `/items/[id]` and `/modules/[id]`? If yes, it becomes a cross-cutting layout decision, not just templates.
+
+---
+
 ## Cross-cutting open questions
 - **MD-1** add-level semantics (deferred)
+- **TP-1/TP-2** template create/delete affordances
+- **TP-3** back-nav from template detail (recommend breadcrumb)
+- **TP-4** master-detail pattern — scope decision (templates only, or everywhere)
