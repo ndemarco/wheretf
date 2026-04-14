@@ -203,6 +203,60 @@ export const locationRepository = {
     return updated;
   },
 
+  async restrict({
+    id,
+    maxWidthMm,
+    maxHeightMm,
+    maxDepthMm,
+    reason,
+  }: {
+    id: string;
+    maxWidthMm?: number | null;
+    maxHeightMm?: number | null;
+    maxDepthMm?: number | null;
+    reason?: string | null;
+  }) {
+    const before = await locationRepository.findById({ id });
+    if (!before) throw new Error(`Location ${id} not found`);
+
+    // NOTE: spec requires refusing the clamp when existing assignments
+    // would no longer fit. Implementing that check needs a dimensional
+    // model for items, which doesn't exist yet. For MVP, the clamp
+    // is accepted unconditionally. Re-examine once item dimensions land.
+
+    const [updated] = await db
+      .update(locations)
+      .set({
+        maxWidthMm: maxWidthMm == null ? null : String(maxWidthMm),
+        maxHeightMm: maxHeightMm == null ? null : String(maxHeightMm),
+        maxDepthMm: maxDepthMm == null ? null : String(maxDepthMm),
+        restrictReason: reason ?? null,
+        updatedAt: new Date(),
+      })
+      .where(eq(locations.id, id))
+      .returning();
+
+    await transactionRepository.log({
+      actionType: "location.restrict",
+      entityType: "location",
+      entityId: id,
+      beforeState: before,
+      afterState: updated,
+    });
+
+    return updated;
+  },
+
+  async clearRestrict({ id }: { id: string }) {
+    return locationRepository.restrict({
+      id,
+      maxWidthMm: null,
+      maxHeightMm: null,
+      maxDepthMm: null,
+      reason: null,
+    });
+  },
+
   async enable({ id }: { id: string }) {
     const before = await locationRepository.findById({ id });
     if (!before) throw new Error(`Location ${id} not found`);

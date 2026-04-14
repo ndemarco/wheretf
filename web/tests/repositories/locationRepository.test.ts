@@ -469,6 +469,65 @@ describe("locationRepository", () => {
     });
   });
 
+  describe("restrict / clearRestrict", () => {
+    it("sets capacity clamps and reason", async () => {
+      const module = await createTestModule();
+      const loc = await locationRepository.create({
+        moduleId: module.id,
+        label: "A1",
+        pathSegments: ["MUSE", "3", "A1"],
+        locationType: "leaf",
+      });
+
+      const restricted = await locationRepository.restrict({
+        id: loc.id,
+        maxHeightMm: 60,
+        reason: "Must slide under shelf above",
+      });
+
+      expect(Number(restricted.maxHeightMm)).toBe(60);
+      expect(restricted.maxWidthMm).toBeNull();
+      expect(restricted.maxDepthMm).toBeNull();
+      expect(restricted.restrictReason).toBe("Must slide under shelf above");
+    });
+
+    it("clearRestrict removes all clamps", async () => {
+      const module = await createTestModule();
+      const loc = await locationRepository.create({
+        moduleId: module.id,
+        label: "A1",
+        pathSegments: ["MUSE", "3", "A1"],
+        locationType: "leaf",
+      });
+      await locationRepository.restrict({
+        id: loc.id,
+        maxWidthMm: 100,
+        maxHeightMm: 50,
+        reason: "tight",
+      });
+      const cleared = await locationRepository.clearRestrict({ id: loc.id });
+      expect(cleared.maxWidthMm).toBeNull();
+      expect(cleared.maxHeightMm).toBeNull();
+      expect(cleared.maxDepthMm).toBeNull();
+      expect(cleared.restrictReason).toBeNull();
+    });
+
+    it("logs a transaction", async () => {
+      const module = await createTestModule();
+      const loc = await locationRepository.create({
+        moduleId: module.id,
+        label: "A1",
+        pathSegments: ["MUSE", "3", "A1"],
+        locationType: "leaf",
+      });
+      await locationRepository.restrict({ id: loc.id, maxHeightMm: 45 });
+      const txns = await transactionRepository.listRecent();
+      expect(
+        txns.find((t) => t.actionType === "location.restrict")
+      ).toBeDefined();
+    });
+  });
+
   describe("merge alias", () => {
     it("sets a merge alias", async () => {
       const module = await createTestModule();

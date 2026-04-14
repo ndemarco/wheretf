@@ -21,11 +21,17 @@ interface Location {
   label: string;
   path: string;
   locationType: string;
+  interfaceTypeAccepted: string | null;
   isDisabled: boolean;
   disableReason: string | null;
   templateVersionId: string | null;
   gridRow: number | null;
   gridColumn: number | null;
+  // Capacity clamps (Restrict override)
+  maxWidthMm: string | null; // postgres numeric comes back as string
+  maxHeightMm: string | null;
+  maxDepthMm: string | null;
+  restrictReason: string | null;
   metadata: Record<string, unknown> | null;
 }
 
@@ -69,6 +75,15 @@ export default function ModuleDetailPage() {
   // Right-panel edit mode (gates module + level editing)
   const [editingModule, setEditingModule] = useState(false);
   const [editingLevel, setEditingLevel] = useState(false);
+
+  // Restrict-override draft (per selected cell)
+  const [editingRestrict, setEditingRestrict] = useState(false);
+  const [restrictDraft, setRestrictDraft] = useState<{
+    maxWidthMm: string;
+    maxHeightMm: string;
+    maxDepthMm: string;
+    reason: string;
+  }>({ maxWidthMm: "", maxHeightMm: "", maxDepthMm: "", reason: "" });
 
   // Deletion dialog state (ML-2)
   const [deletingOpen, setDeletingOpen] = useState(false);
@@ -473,6 +488,65 @@ export default function ModuleDetailPage() {
     }
   }
 
+  function openRestrict() {
+    if (!selectedCell) return;
+    setRestrictDraft({
+      maxWidthMm: selectedCell.maxWidthMm ?? "",
+      maxHeightMm: selectedCell.maxHeightMm ?? "",
+      maxDepthMm: selectedCell.maxDepthMm ?? "",
+      reason: selectedCell.restrictReason ?? "",
+    });
+    setEditingRestrict(true);
+  }
+
+  async function saveRestrict() {
+    if (!selectedCell) return;
+    const body = {
+      maxWidthMm: restrictDraft.maxWidthMm.trim() || null,
+      maxHeightMm: restrictDraft.maxHeightMm.trim() || null,
+      maxDepthMm: restrictDraft.maxDepthMm.trim() || null,
+      reason: restrictDraft.reason.trim() || null,
+    };
+    try {
+      const res = await fetch(
+        `/api/locations/${selectedCell.id}/restrict`,
+        {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(body),
+        }
+      );
+      if (!res.ok) {
+        const data = await res.json();
+        alert(data.error || "Failed to save restriction");
+        return;
+      }
+      setEditingRestrict(false);
+      await fetchData();
+    } catch (err) {
+      console.error(err);
+    }
+  }
+
+  async function clearRestrict() {
+    if (!selectedCell) return;
+    try {
+      const res = await fetch(
+        `/api/locations/${selectedCell.id}/restrict`,
+        { method: "DELETE" }
+      );
+      if (!res.ok) {
+        const data = await res.json();
+        alert(data.error || "Failed to clear restriction");
+        return;
+      }
+      setEditingRestrict(false);
+      await fetchData();
+    } catch (err) {
+      console.error(err);
+    }
+  }
+
   async function enableCell() {
     if (!selectedCell) return;
     try {
@@ -808,10 +882,12 @@ export default function ModuleDetailPage() {
             )}
 
             {/* Overrides */}
-            <div className="mt-4 pt-4 border-t border-slate-700">
-              <h4 className="text-xs font-medium text-slate-400 uppercase tracking-wider mb-2">
+            <div className="mt-4 pt-4 border-t border-slate-700 space-y-3">
+              <h4 className="text-xs font-medium text-slate-400 uppercase tracking-wider">
                 Overrides
               </h4>
+
+              {/* Disable / Enable */}
               {selectedCell.isDisabled ? (
                 <div className="space-y-2">
                   <div className="text-xs text-red-400">
@@ -838,6 +914,137 @@ export default function ModuleDetailPage() {
                   className="w-full px-3 py-1.5 border border-slate-600 text-slate-300 rounded text-xs hover:bg-slate-700/50 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
                 >
                   Disable…
+                </button>
+              )}
+
+              {/* Restrict */}
+              {editingRestrict ? (
+                <div className="space-y-2 p-2 rounded bg-slate-800/60 border border-slate-700">
+                  <div className="text-xs text-slate-400">
+                    Clamp usable capacity (mm). Leave blank for no clamp.
+                  </div>
+                  <div className="grid grid-cols-3 gap-1.5">
+                    <label className="text-[10px] text-slate-500 flex flex-col gap-0.5">
+                      Max W
+                      <input
+                        type="number"
+                        min="0"
+                        step="any"
+                        value={restrictDraft.maxWidthMm}
+                        onChange={(e) =>
+                          setRestrictDraft({
+                            ...restrictDraft,
+                            maxWidthMm: e.target.value,
+                          })
+                        }
+                        className="px-1.5 py-1 bg-slate-900 border border-slate-600 rounded text-xs text-slate-200 focus:border-accent focus:outline-none tabular-nums"
+                      />
+                    </label>
+                    <label className="text-[10px] text-slate-500 flex flex-col gap-0.5">
+                      Max H
+                      <input
+                        type="number"
+                        min="0"
+                        step="any"
+                        value={restrictDraft.maxHeightMm}
+                        onChange={(e) =>
+                          setRestrictDraft({
+                            ...restrictDraft,
+                            maxHeightMm: e.target.value,
+                          })
+                        }
+                        className="px-1.5 py-1 bg-slate-900 border border-slate-600 rounded text-xs text-slate-200 focus:border-accent focus:outline-none tabular-nums"
+                      />
+                    </label>
+                    <label className="text-[10px] text-slate-500 flex flex-col gap-0.5">
+                      Max D
+                      <input
+                        type="number"
+                        min="0"
+                        step="any"
+                        value={restrictDraft.maxDepthMm}
+                        onChange={(e) =>
+                          setRestrictDraft({
+                            ...restrictDraft,
+                            maxDepthMm: e.target.value,
+                          })
+                        }
+                        className="px-1.5 py-1 bg-slate-900 border border-slate-600 rounded text-xs text-slate-200 focus:border-accent focus:outline-none tabular-nums"
+                      />
+                    </label>
+                  </div>
+                  <input
+                    type="text"
+                    placeholder="Reason (optional)"
+                    value={restrictDraft.reason}
+                    onChange={(e) =>
+                      setRestrictDraft({
+                        ...restrictDraft,
+                        reason: e.target.value,
+                      })
+                    }
+                    className="w-full px-2 py-1 bg-slate-900 border border-slate-600 rounded text-xs text-slate-200 focus:border-accent focus:outline-none placeholder:text-slate-600"
+                  />
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={saveRestrict}
+                      className="px-2.5 py-1 bg-accent text-white rounded text-xs hover:brightness-110 transition-all"
+                    >
+                      Save
+                    </button>
+                    <button
+                      onClick={() => setEditingRestrict(false)}
+                      className="px-2.5 py-1 border border-slate-600 text-slate-300 rounded text-xs hover:bg-slate-700/50 transition-colors"
+                    >
+                      Cancel
+                    </button>
+                    {(selectedCell.maxWidthMm ||
+                      selectedCell.maxHeightMm ||
+                      selectedCell.maxDepthMm) && (
+                      <button
+                        onClick={clearRestrict}
+                        className="ml-auto text-xs text-slate-500 hover:text-slate-300 transition-colors"
+                      >
+                        Clear
+                      </button>
+                    )}
+                  </div>
+                </div>
+              ) : selectedCell.maxWidthMm ||
+                selectedCell.maxHeightMm ||
+                selectedCell.maxDepthMm ? (
+                <div className="space-y-1">
+                  <div className="text-xs text-amber-300">
+                    Restricted:{" "}
+                    {[
+                      selectedCell.maxWidthMm &&
+                        `W≤${selectedCell.maxWidthMm}mm`,
+                      selectedCell.maxHeightMm &&
+                        `H≤${selectedCell.maxHeightMm}mm`,
+                      selectedCell.maxDepthMm &&
+                        `D≤${selectedCell.maxDepthMm}mm`,
+                    ]
+                      .filter(Boolean)
+                      .join(", ")}
+                  </div>
+                  {selectedCell.restrictReason && (
+                    <div className="text-[11px] text-slate-500">
+                      {selectedCell.restrictReason}
+                    </div>
+                  )}
+                  <button
+                    onClick={openRestrict}
+                    className="w-full px-3 py-1.5 border border-slate-600 text-slate-300 rounded text-xs hover:bg-slate-700/50 transition-colors"
+                  >
+                    Edit restriction
+                  </button>
+                </div>
+              ) : (
+                <button
+                  onClick={openRestrict}
+                  className="w-full px-3 py-1.5 border border-slate-600 text-slate-300 rounded text-xs hover:bg-slate-700/50 transition-colors"
+                >
+                  Restrict dimensions…
                 </button>
               )}
             </div>
