@@ -514,6 +514,51 @@ describe("insertRepository", () => {
       expect(unplaced!.path).toBe("A1");
     });
 
+    it("materializes cells on first placement when insert has a template", async () => {
+      const template = await templateRepository.create({
+        name: "Plano 3600 test",
+      });
+      const version = await templateRepository.getVersion({
+        templateId: template.id,
+        version: 1,
+      });
+      const mod = await moduleRepository.create({
+        name: "MUSE",
+        primaryDimensionLabel: "level",
+        primaryDimensionCount: 11,
+      });
+      const level = await locationRepository.create({
+        moduleId: mod.id,
+        label: "1",
+        pathSegments: ["MUSE", "1"],
+        locationType: "receptacle",
+      });
+
+      // Unplaced insert, no cells yet
+      const insert = await insertRepository.create({
+        name: "fresh",
+        templateId: template.id,
+        templateVersionId: version!.id,
+        rows: 2,
+        columns: 3,
+      });
+      const before = await locationRepository.findChildren({
+        parentId: level.id,
+      });
+      expect(before.length).toBe(0);
+
+      // Place: cells get materialized
+      await insertRepository.place({ id: insert.id, locationId: level.id });
+
+      const after = await locationRepository.findChildren({
+        parentId: level.id,
+      });
+      expect(after.length).toBe(6);
+      for (const cell of after) {
+        expect(cell.insertId).toBe(insert.id);
+      }
+    });
+
     it("deleting the insert cascades its cells", async () => {
       const mod = await moduleRepository.create({
         name: "MUSE",

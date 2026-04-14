@@ -99,12 +99,19 @@ export default function InsertsPage() {
     <div className="flex-1 flex min-w-0 h-full overflow-hidden">
       {/* Left — filters + list */}
       <div className="w-96 border-r border-slate-700 flex flex-col shrink-0 overflow-hidden">
-        <div className="p-4 border-b border-slate-700">
-          <h1 className="text-base font-semibold text-slate-100">Inserts</h1>
-          <p className="text-xs text-slate-500 mt-0.5">
-            Physical instances of templates (Plano boxes, Gridfinity bins,
-            drawer dividers, …)
-          </p>
+        <div className="p-4 border-b border-slate-700 flex items-center justify-between gap-2">
+          <div className="min-w-0">
+            <h1 className="text-base font-semibold text-slate-100">Inserts</h1>
+            <p className="text-xs text-slate-500 mt-0.5 truncate">
+              Physical instances of templates
+            </p>
+          </div>
+          <Link
+            href="/inserts/new"
+            className="px-3 py-1 bg-accent text-white rounded text-xs font-medium hover:brightness-110 transition-all shrink-0"
+          >
+            + New
+          </Link>
         </div>
 
         <div className="p-3 border-b border-slate-700 space-y-2">
@@ -171,8 +178,7 @@ export default function InsertsPage() {
               {inserts.map((ins) => {
                 const isSelected = ins.id === selectedId;
                 const displayName =
-                  ins.name ||
-                  (ins.uid ? `#${ins.uid}` : `${ins.templateName ?? "Insert"}`);
+                  ins.name ?? ins.templateName ?? "Insert";
                 return (
                   <li key={ins.id}>
                     <button
@@ -187,11 +193,6 @@ export default function InsertsPage() {
                         <span className="text-sm font-medium text-slate-100 truncate flex-1">
                           {displayName}
                         </span>
-                        {ins.uid && (
-                          <span className="text-[10px] font-mono text-slate-500 shrink-0">
-                            {ins.uid}
-                          </span>
-                        )}
                       </div>
                       <div className="flex items-center gap-2 mt-0.5">
                         {ins.templateName && (
@@ -396,9 +397,7 @@ function InsertDetail({
         ) : (
           <div className="flex items-center gap-2">
             <h2 className="text-lg font-semibold text-slate-100 truncate flex-1">
-              {insert.name ||
-                insert.templateName ||
-                (insert.uid ? `#${insert.uid}` : "Untitled insert")}
+              {insert.name || insert.templateName || "Untitled insert"}
             </h2>
             <button
               onClick={() => setEditing(true)}
@@ -406,11 +405,6 @@ function InsertDetail({
             >
               Edit
             </button>
-          </div>
-        )}
-        {insert.uid && (
-          <div className="text-xs font-mono text-slate-500">
-            UID {insert.uid}
           </div>
         )}
       </div>
