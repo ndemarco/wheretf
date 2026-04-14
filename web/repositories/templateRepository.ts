@@ -8,9 +8,18 @@ export const templateRepository = {
     name,
     description,
     metadata,
+    scope,
     rows,
     columns,
     isParametric,
+    isContinuous,
+    widthMm,
+    heightMm,
+    depthMm,
+    rowPitchMm,
+    overflowDirection,
+    bufferMm,
+    unitSystem,
     minRows,
     maxRows,
     minColumns,
@@ -29,9 +38,18 @@ export const templateRepository = {
     name: string;
     description?: string;
     metadata?: Record<string, unknown>;
+    scope?: "shared" | "single_instance";
     rows?: number;
     columns?: number;
     isParametric?: boolean;
+    isContinuous?: boolean;
+    widthMm?: number | null;
+    heightMm?: number | null;
+    depthMm?: number | null;
+    rowPitchMm?: number | null;
+    overflowDirection?: "up" | "down" | null;
+    bufferMm?: number | null;
+    unitSystem?: "metric" | "imperial";
     minRows?: number | null;
     maxRows?: number | null;
     minColumns?: number | null;
@@ -53,6 +71,7 @@ export const templateRepository = {
         name,
         description,
         metadata,
+        scope: scope ?? "shared",
         currentVersion: 1,
         activeVersion: 1,
       })
@@ -65,6 +84,14 @@ export const templateRepository = {
         templateId: template.id,
         version: 1,
         isParametric: isParametric ?? false,
+        isContinuous: isContinuous ?? false,
+        widthMm: widthMm != null ? String(widthMm) : null,
+        heightMm: heightMm != null ? String(heightMm) : null,
+        depthMm: depthMm != null ? String(depthMm) : null,
+        rowPitchMm: rowPitchMm != null ? String(rowPitchMm) : null,
+        overflowDirection: overflowDirection ?? null,
+        bufferMm: bufferMm != null ? String(bufferMm) : null,
+        unitSystem: unitSystem ?? "metric",
         rows: rows ?? 1,
         columns: columns ?? 1,
         minRows: minRows ?? null,

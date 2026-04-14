@@ -1,8 +1,7 @@
-import { db } from "@/db/connection";
-import { locations } from "@/db/schema";
 import { moduleRepository } from "@/repositories/moduleRepository";
 import { itemRepository } from "@/repositories/itemRepository";
 import { assignmentRepository } from "@/repositories/assignmentRepository";
+import { locationRepository } from "@/repositories/locationRepository";
 import { transactionRepository } from "@/repositories/transactionRepository";
 
 async function createTestModule() {
@@ -14,17 +13,12 @@ async function createTestModule() {
 }
 
 async function createTestLocation(moduleId: string, label: string) {
-  const [loc] = await db
-    .insert(locations)
-    .values({
-      moduleId,
-      label,
-      path: `TEST:${label}`,
-      pathSegments: ["TEST", label],
-      locationType: "leaf",
-    })
-    .returning();
-  return loc;
+  return locationRepository.create({
+    moduleId,
+    label,
+    pathSegments: ["TEST", label],
+    locationType: "leaf",
+  });
 }
 
 async function createTestItem(name: string) {

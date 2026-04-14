@@ -1,7 +1,29 @@
 import { eq } from "drizzle-orm";
 import { db } from "@/db/connection";
-import { locations } from "@/db/schema";
+import { locations, templates, templateVersions } from "@/db/schema";
 import { transactionRepository } from "./transactionRepository";
+
+async function createSingleInstanceTemplateVersion(pathSegments: string[]) {
+  const [template] = await db
+    .insert(templates)
+    .values({
+      name: `ad-hoc: ${pathSegments.join(":")}`,
+      scope: "single_instance",
+      currentVersion: 1,
+      activeVersion: 1,
+    })
+    .returning();
+
+  const [version] = await db
+    .insert(templateVersions)
+    .values({
+      templateId: template.id,
+      version: 1,
+    })
+    .returning();
+
+  return version.id;
+}
 
 export const locationRepository = {
   async create({
@@ -29,6 +51,10 @@ export const locationRepository = {
   }) {
     const path = pathSegments.join(":");
 
+    const resolvedTemplateVersionId =
+      templateVersionId ??
+      (await createSingleInstanceTemplateVersion(pathSegments));
+
     const [location] = await db
       .insert(locations)
       .values({
@@ -39,7 +65,7 @@ export const locationRepository = {
         pathSegments,
         locationType,
         interfaceTypeAccepted,
-        templateVersionId,
+        templateVersionId: resolvedTemplateVersionId,
         gridRow,
         gridColumn,
         metadata,

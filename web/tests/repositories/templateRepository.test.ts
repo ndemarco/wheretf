@@ -58,6 +58,57 @@ describe("templateRepository", () => {
       const found = await templateRepository.findById({ id: template.id });
       expect(found?.metadata).toEqual({ manufacturer: "Plano", sku: "3600" });
     });
+
+    it("defaults scope to shared", async () => {
+      const template = await templateRepository.create({ name: "Plano 3600" });
+      expect(template.scope).toBe("shared");
+    });
+
+    it("accepts scope=single_instance for ad-hoc templates", async () => {
+      const template = await templateRepository.create({
+        name: "ad-hoc shelf",
+        scope: "single_instance",
+      });
+      expect(template.scope).toBe("single_instance");
+    });
+
+    it("stores continuous-dimension capacity on the version", async () => {
+      const template = await templateRepository.create({
+        name: "Akro-Mils 30636",
+        isContinuous: true,
+        widthMm: 914.4, // 36 in
+        rowPitchMm: 88.9, // 3.5 in
+        overflowDirection: "down",
+        unitSystem: "imperial",
+      });
+
+      const version = await templateRepository.getVersion({
+        templateId: template.id,
+        version: 1,
+      });
+
+      expect(version!.isContinuous).toBe(true);
+      expect(Number(version!.widthMm)).toBeCloseTo(914.4);
+      expect(Number(version!.rowPitchMm)).toBeCloseTo(88.9);
+      expect(version!.overflowDirection).toBe("down");
+      expect(version!.unitSystem).toBe("imperial");
+    });
+
+    it("stores bufferMm on insert templates", async () => {
+      const template = await templateRepository.create({
+        name: "Akro-Mils 30220",
+        isContinuous: true,
+        widthMm: 104.775, // 4⅛ in
+        bufferMm: 6.35, // ¼ in
+      });
+
+      const version = await templateRepository.getVersion({
+        templateId: template.id,
+        version: 1,
+      });
+
+      expect(Number(version!.bufferMm)).toBeCloseTo(6.35);
+    });
   });
 
   describe("findById", () => {

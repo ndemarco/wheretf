@@ -1,3 +1,6 @@
+import { db } from "@/db/connection";
+import { templates, templateVersions } from "@/db/schema";
+import { eq } from "drizzle-orm";
 import { locationRepository } from "@/repositories/locationRepository";
 import { moduleRepository } from "@/repositories/moduleRepository";
 import { transactionRepository } from "@/repositories/transactionRepository";
@@ -28,6 +31,56 @@ describe("locationRepository", () => {
       expect(location.path).toBe("MUSE:3");
       expect(location.pathSegments).toEqual(["MUSE", "3"]);
       expect(location.locationType).toBe("fixed");
+    });
+
+    it("auto-creates a single_instance template when templateVersionId is omitted", async () => {
+      const module = await createTestModule();
+
+      const location = await locationRepository.create({
+        moduleId: module.id,
+        label: "shelf",
+        pathSegments: ["AD-HOC", "shelf"],
+        locationType: "leaf",
+      });
+
+      expect(location.templateVersionId).toBeDefined();
+      expect(location.templateVersionId).not.toBeNull();
+
+      const [version] = await db
+        .select()
+        .from(templateVersions)
+        .where(eq(templateVersions.id, location.templateVersionId!));
+      const [template] = await db
+        .select()
+        .from(templates)
+        .where(eq(templates.id, version.templateId));
+
+      expect(template.scope).toBe("single_instance");
+      expect(template.name).toBe("ad-hoc: AD-HOC:shelf");
+    });
+
+    it("uses provided templateVersionId when given", async () => {
+      const module = await createTestModule();
+
+      // Pre-create a shared template
+      const [tpl] = await db
+        .insert(templates)
+        .values({ name: "Plano 3600", scope: "shared" })
+        .returning();
+      const [ver] = await db
+        .insert(templateVersions)
+        .values({ templateId: tpl.id, version: 1 })
+        .returning();
+
+      const location = await locationRepository.create({
+        moduleId: module.id,
+        label: "A1",
+        pathSegments: ["MUSE", "3", "A1"],
+        locationType: "leaf",
+        templateVersionId: ver.id,
+      });
+
+      expect(location.templateVersionId).toBe(ver.id);
     });
 
     it("creates a receptacle with interfaceTypeAccepted", async () => {
