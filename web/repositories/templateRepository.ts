@@ -1,6 +1,11 @@
-import { eq, and } from "drizzle-orm";
+import { eq, and, inArray, sql } from "drizzle-orm";
 import { db } from "@/db/connection";
-import { templates, templateVersions } from "@/db/schema";
+import {
+  templates,
+  templateVersions,
+  inserts,
+  locations,
+} from "@/db/schema";
 import { transactionRepository } from "./transactionRepository";
 
 export const templateRepository = {
@@ -139,12 +144,23 @@ export const templateRepository = {
     return template ?? null;
   },
 
-  async list() {
-    return db.select().from(templates);
+  async list({ includeHidden = false }: { includeHidden?: boolean } = {}) {
+    if (includeHidden) return db.select().from(templates);
+    return db
+      .select()
+      .from(templates)
+      .where(eq(templates.isHidden, false));
   },
 
-  async listWithCurrentVersion() {
-    const allTemplates = await db.select().from(templates);
+  async listWithCurrentVersion({
+    includeHidden = false,
+  }: { includeHidden?: boolean } = {}) {
+    const allTemplates = includeHidden
+      ? await db.select().from(templates)
+      : await db
+          .select()
+          .from(templates)
+          .where(eq(templates.isHidden, false));
     if (allTemplates.length === 0) return [];
 
     const allVersions = await db.select().from(templateVersions);
@@ -213,6 +229,79 @@ export const templateRepository = {
       beforeState: before,
       afterState: null,
     });
+  },
+
+  /**
+   * Count inserts + locations referencing any version of this template.
+   * Used to decide between hard delete and soft hide.
+   */
+  async getReferenceCount({ id }: { id: string }) {
+    const versions = await db
+      .select({ id: templateVersions.id })
+      .from(templateVersions)
+      .where(eq(templateVersions.templateId, id));
+    const versionIds = versions.map((v) => v.id);
+
+    if (versionIds.length === 0) {
+      return { insertCount: 0, locationCount: 0 };
+    }
+
+    const [insertRow] = await db
+      .select({ c: sql<number>`COUNT(*)` })
+      .from(inserts)
+      .where(inArray(inserts.templateVersionId, versionIds));
+
+    const [locationRow] = await db
+      .select({ c: sql<number>`COUNT(*)` })
+      .from(locations)
+      .where(inArray(locations.templateVersionId, versionIds));
+
+    return {
+      insertCount: Number(insertRow?.c ?? 0),
+      locationCount: Number(locationRow?.c ?? 0),
+    };
+  },
+
+  async hide({ id }: { id: string }) {
+    const before = await templateRepository.findById({ id });
+    if (!before) throw new Error(`Template ${id} not found`);
+
+    const [updated] = await db
+      .update(templates)
+      .set({ isHidden: true, updatedAt: new Date() })
+      .where(eq(templates.id, id))
+      .returning();
+
+    await transactionRepository.log({
+      actionType: "template.hide",
+      entityType: "template",
+      entityId: id,
+      beforeState: before,
+      afterState: updated,
+    });
+
+    return updated;
+  },
+
+  async unhide({ id }: { id: string }) {
+    const before = await templateRepository.findById({ id });
+    if (!before) throw new Error(`Template ${id} not found`);
+
+    const [updated] = await db
+      .update(templates)
+      .set({ isHidden: false, updatedAt: new Date() })
+      .where(eq(templates.id, id))
+      .returning();
+
+    await transactionRepository.log({
+      actionType: "template.unhide",
+      entityType: "template",
+      entityId: id,
+      beforeState: before,
+      afterState: updated,
+    });
+
+    return updated;
   },
 
   async publishVersion({

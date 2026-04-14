@@ -51,6 +51,20 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
 export async function DELETE(_request: NextRequest, { params }: RouteParams) {
   try {
     const { id } = await params;
+
+    // If the template is referenced anywhere, reject hard delete and
+    // tell the caller to hide instead.
+    const refs = await templateRepository.getReferenceCount({ id });
+    if (refs.insertCount > 0 || refs.locationCount > 0) {
+      return NextResponse.json(
+        {
+          error: "Template is referenced and cannot be deleted. Hide it instead.",
+          references: refs,
+        },
+        { status: 409 }
+      );
+    }
+
     await templateRepository.remove({ id });
     return NextResponse.json({ success: true });
   } catch (err) {

@@ -1,5 +1,7 @@
 import { templateRepository } from "@/repositories/templateRepository";
 import { transactionRepository } from "@/repositories/transactionRepository";
+import { moduleRepository } from "@/repositories/moduleRepository";
+import { locationRepository } from "@/repositories/locationRepository";
 
 describe("templateRepository", () => {
   describe("create", () => {
@@ -162,6 +164,69 @@ describe("templateRepository", () => {
     it("returns empty array when no templates exist", async () => {
       const all = await templateRepository.list();
       expect(all).toHaveLength(0);
+    });
+
+    it("excludes hidden templates by default", async () => {
+      const a = await templateRepository.create({ name: "Shown" });
+      await templateRepository.create({ name: "Hidden" }).then((t) =>
+        templateRepository.hide({ id: t.id })
+      );
+      const all = await templateRepository.list();
+      expect(all).toHaveLength(1);
+      expect(all[0].id).toBe(a.id);
+    });
+
+    it("includes hidden when includeHidden=true", async () => {
+      await templateRepository.create({ name: "Shown" });
+      await templateRepository.create({ name: "Hidden" }).then((t) =>
+        templateRepository.hide({ id: t.id })
+      );
+      const all = await templateRepository.list({ includeHidden: true });
+      expect(all).toHaveLength(2);
+    });
+  });
+
+  describe("hide / unhide / getReferenceCount", () => {
+    it("hides and unhides a template", async () => {
+      const t = await templateRepository.create({ name: "Plano 3600" });
+      expect(t.isHidden).toBe(false);
+
+      const hidden = await templateRepository.hide({ id: t.id });
+      expect(hidden.isHidden).toBe(true);
+
+      const shown = await templateRepository.unhide({ id: t.id });
+      expect(shown.isHidden).toBe(false);
+    });
+
+    it("counts zero references for unused templates", async () => {
+      const t = await templateRepository.create({ name: "Plano 3600" });
+      const refs = await templateRepository.getReferenceCount({ id: t.id });
+      expect(refs.insertCount).toBe(0);
+      expect(refs.locationCount).toBe(0);
+    });
+
+    it("counts location references through any version", async () => {
+      const t = await templateRepository.create({ name: "Plano 3600" });
+      const mod = await moduleRepository.create({
+        name: "MUSE",
+        primaryDimensionLabel: "level",
+        primaryDimensionCount: 1,
+      });
+      const v1 = await templateRepository.getVersion({
+        templateId: t.id,
+        version: 1,
+      });
+      await locationRepository.create({
+        moduleId: mod.id,
+        label: "1",
+        pathSegments: ["MUSE", "1"],
+        locationType: "fixed",
+        templateVersionId: v1!.id,
+      });
+
+      const refs = await templateRepository.getReferenceCount({ id: t.id });
+      expect(refs.locationCount).toBe(1);
+      expect(refs.insertCount).toBe(0);
     });
   });
 

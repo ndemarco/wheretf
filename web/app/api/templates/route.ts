@@ -1,9 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import { templateRepository } from "@/repositories/templateRepository";
 
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
-    const templates = await templateRepository.listWithCurrentVersion();
+    const includeHidden =
+      request.nextUrl.searchParams.get("includeHidden") === "true";
+    const templates = await templateRepository.listWithCurrentVersion({
+      includeHidden,
+    });
     return NextResponse.json({ templates });
   } catch (err) {
     const message = err instanceof Error ? err.message : "Unknown error";

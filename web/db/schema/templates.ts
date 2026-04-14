@@ -16,6 +16,7 @@ export const templates = pgTable("templates", {
   currentVersion: integer("current_version").notNull().default(1),
   activeVersion: integer("active_version").notNull().default(1),
   scope: text("scope").notNull().default("shared"), // 'shared' | 'single_instance'
+  isHidden: boolean("is_hidden").notNull().default(false), // soft-deleted when still referenced
   metadata: jsonb("metadata"), // manufacturer, product number, photos, etc.
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
