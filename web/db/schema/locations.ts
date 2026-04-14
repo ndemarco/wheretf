@@ -11,6 +11,9 @@ import {
 } from "drizzle-orm/pg-core";
 import { modules } from "./modules";
 import { templates, templateVersions } from "./templates";
+// Forward reference: inserts ↔ locations is intentionally asymmetric.
+// inserts.locationId → locations.id (insert lives in a receptacle)
+// locations.insertId → inserts.id (cell belongs to an insert)
 
 export const locations = pgTable("locations", {
   id: uuid("id").primaryKey().defaultRandom(),
@@ -30,6 +33,10 @@ export const locations = pgTable("locations", {
   templateVersionId: uuid("template_version_id")
     .notNull()
     .references(() => templateVersions.id),
+
+  // Insert ownership (null for module-scoped locations like levels and fixed
+  // subdivisions; set for every cell that belongs to a specific insert)
+  insertId: uuid("insert_id"),
 
   // Grid position (if this location is within a grid)
   gridRow: integer("grid_row"),

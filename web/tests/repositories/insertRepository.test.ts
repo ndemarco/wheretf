@@ -408,6 +408,143 @@ describe("insertRepository", () => {
     });
   });
 
+  describe("cells travel with insert (IN-3 structural correctness)", () => {
+    it("re-parents cells when insert moves; overrides persist", async () => {
+      const mod = await moduleRepository.create({
+        name: "MUSE",
+        primaryDimensionLabel: "level",
+        primaryDimensionCount: 11,
+      });
+      const levelA = await locationRepository.create({
+        moduleId: mod.id,
+        label: "1",
+        pathSegments: ["MUSE", "1"],
+        locationType: "receptacle",
+      });
+      const levelB = await locationRepository.create({
+        moduleId: mod.id,
+        label: "2",
+        pathSegments: ["MUSE", "2"],
+        locationType: "receptacle",
+      });
+
+      const insert = await insertRepository.create({ name: "Construction screws" });
+      await insertRepository.place({ id: insert.id, locationId: levelA.id });
+
+      // Create a cell "A3" inside the insert at level 1
+      const cell = await locationRepository.create({
+        moduleId: mod.id,
+        parentId: levelA.id,
+        label: "A3",
+        pathSegments: ["MUSE", "1", "A3"],
+        locationType: "leaf",
+        insertId: insert.id,
+        gridRow: 0,
+        gridColumn: 2,
+      });
+
+      // Disable the cell — this is an override on the cell row
+      await locationRepository.disable({ id: cell.id, reason: "cracked" });
+
+      // Move insert from level 1 to level 2
+      await insertRepository.removeFromLocation({ id: insert.id });
+      await insertRepository.place({ id: insert.id, locationId: levelB.id });
+
+      const moved = await locationRepository.findById({ id: cell.id });
+      expect(moved).not.toBeNull();
+      expect(moved!.insertId).toBe(insert.id);
+      expect(moved!.parentId).toBe(levelB.id);
+      expect(moved!.path).toBe("MUSE:2:A3");
+      // Disabled state travels with the cell
+      expect(moved!.isDisabled).toBe(true);
+      expect(moved!.disableReason).toBe("cracked");
+    });
+
+    it("refuses to place into a receptacle that already holds another insert", async () => {
+      const mod = await moduleRepository.create({
+        name: "MUSE",
+        primaryDimensionLabel: "level",
+        primaryDimensionCount: 11,
+      });
+      const level = await locationRepository.create({
+        moduleId: mod.id,
+        label: "1",
+        pathSegments: ["MUSE", "1"],
+        locationType: "receptacle",
+      });
+
+      const a = await insertRepository.create({ name: "first" });
+      const b = await insertRepository.create({ name: "second" });
+      await insertRepository.place({ id: a.id, locationId: level.id });
+
+      await expect(
+        insertRepository.place({ id: b.id, locationId: level.id })
+      ).rejects.toThrow(/already holds/);
+    });
+
+    it("unplace leaves cells with insert_id set, parent_id null, path = cell label", async () => {
+      const mod = await moduleRepository.create({
+        name: "MUSE",
+        primaryDimensionLabel: "level",
+        primaryDimensionCount: 11,
+      });
+      const level = await locationRepository.create({
+        moduleId: mod.id,
+        label: "1",
+        pathSegments: ["MUSE", "1"],
+        locationType: "receptacle",
+      });
+      const insert = await insertRepository.create({ name: "orphan" });
+      await insertRepository.place({ id: insert.id, locationId: level.id });
+
+      const cell = await locationRepository.create({
+        moduleId: mod.id,
+        parentId: level.id,
+        label: "A1",
+        pathSegments: ["MUSE", "1", "A1"],
+        locationType: "leaf",
+        insertId: insert.id,
+      });
+
+      await insertRepository.removeFromLocation({ id: insert.id });
+
+      const unplaced = await locationRepository.findById({ id: cell.id });
+      expect(unplaced!.insertId).toBe(insert.id);
+      expect(unplaced!.parentId).toBeNull();
+      expect(unplaced!.path).toBe("A1");
+    });
+
+    it("deleting the insert cascades its cells", async () => {
+      const mod = await moduleRepository.create({
+        name: "MUSE",
+        primaryDimensionLabel: "level",
+        primaryDimensionCount: 11,
+      });
+      const level = await locationRepository.create({
+        moduleId: mod.id,
+        label: "1",
+        pathSegments: ["MUSE", "1"],
+        locationType: "receptacle",
+      });
+      const insert = await insertRepository.create({ name: "to delete" });
+      await insertRepository.place({ id: insert.id, locationId: level.id });
+
+      const cell = await locationRepository.create({
+        moduleId: mod.id,
+        parentId: level.id,
+        label: "A1",
+        pathSegments: ["MUSE", "1", "A1"],
+        locationType: "leaf",
+        insertId: insert.id,
+      });
+
+      await insertRepository.remove({ id: insert.id });
+
+      const gone = await locationRepository.findById({ id: cell.id });
+      expect(gone).toBeNull();
+    });
+  });
+
   describe("listWithDetails", () => {
     it("returns inserts with template + location + module joined", async () => {
       const template = await templateRepository.create({

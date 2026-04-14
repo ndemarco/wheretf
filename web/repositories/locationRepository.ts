@@ -39,6 +39,7 @@ export const locationRepository = {
     locationType,
     interfaceTypeAccepted,
     templateVersionId,
+    insertId,
     gridRow,
     gridColumn,
     metadata,
@@ -50,6 +51,7 @@ export const locationRepository = {
     locationType: string;
     interfaceTypeAccepted?: string;
     templateVersionId?: string;
+    insertId?: string;
     gridRow?: number;
     gridColumn?: number;
     metadata?: Record<string, unknown>;
@@ -71,6 +73,7 @@ export const locationRepository = {
         locationType,
         interfaceTypeAccepted,
         templateVersionId: resolvedTemplateVersionId,
+        insertId,
         gridRow,
         gridColumn,
         metadata,

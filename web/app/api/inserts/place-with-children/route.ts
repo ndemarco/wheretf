@@ -87,6 +87,7 @@ export async function POST(request: NextRequest) {
           pathSegments: [...parentSegments, cellLabel],
           locationType: "leaf",
           templateVersionId,
+          insertId: insert.id,
           gridRow: r,
           gridColumn: c,
         });
