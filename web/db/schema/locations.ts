@@ -17,9 +17,8 @@ import { templates, templateVersions } from "./templates";
 
 export const locations = pgTable("locations", {
   id: uuid("id").primaryKey().defaultRandom(),
-  moduleId: uuid("module_id")
-    .notNull()
-    .references(() => modules.id),
+  // Nullable: unplaced insert cells have no host module. Set on placement.
+  moduleId: uuid("module_id").references(() => modules.id),
   parentId: uuid("parent_id").references((): AnyPgColumn => locations.id),
   label: text("label").notNull(), // position label within parent (e.g., "3", "B4", "Front")
   path: text("path").notNull(), // colon-delimited serialized path (e.g., "MUSE:3:B4")

@@ -46,60 +46,6 @@ function getLabel(
   return scheme === "alpha" ? String.fromCharCode(65 + i) : String(i + 1);
 }
 
-type InsertRow = {
-  id: string;
-  templateVersionId: string | null;
-  rows: number | null;
-  columns: number | null;
-};
-
-/**
- * First-placement flow: create grid cells for an insert that doesn't
- * have any yet. Each cell is bound to the insert via insert_id with
- * parent_id = the receptacle and path = receptaclePath + cell label.
- */
-async function materializeInsertCells(
-  tx: Parameters<Parameters<typeof db.transaction>[0]>[0],
-  insert: InsertRow,
-  receptacle: InsertParentLocation & { moduleId: string }
-) {
-  if (!insert.templateVersionId) return;
-
-  const [tv] = await tx
-    .select()
-    .from(templateVersions)
-    .where(eq(templateVersions.id, insert.templateVersionId));
-  if (!tv) return;
-
-  const gridRows = insert.rows ?? tv.rows ?? 1;
-  const gridCols = insert.columns ?? tv.columns ?? 1;
-  const origin = tv.originPosition || "top-left";
-  const rowScheme = tv.rowLabelScheme || "alpha";
-  const colScheme = tv.columnLabelScheme || "numeric";
-  const parentSegments = (receptacle.pathSegments as string[]) ?? [];
-
-  for (let r = 0; r < gridRows; r++) {
-    for (let c = 0; c < gridCols; c++) {
-      const rowLabel = getLabel(rowScheme, r, gridRows, origin, "row");
-      const colLabel = getLabel(colScheme, c, gridCols, origin, "col");
-      const cellLabel = `${rowLabel}${colLabel}`;
-      const segments = [...parentSegments, cellLabel];
-      await tx.insert(locations).values({
-        moduleId: receptacle.moduleId,
-        parentId: receptacle.id,
-        label: cellLabel,
-        path: segments.join(":"),
-        pathSegments: segments,
-        locationType: "leaf",
-        templateVersionId: insert.templateVersionId,
-        insertId: insert.id,
-        gridRow: r,
-        gridColumn: c,
-      });
-    }
-  }
-}
-
 async function reparentInsertCells(
   tx: Parameters<Parameters<typeof db.transaction>[0]>[0],
   insertId: string,
@@ -133,6 +79,7 @@ async function reparentInsertCells(
     await tx
       .update(locations)
       .set({
+        moduleId: receptacle.moduleId,
         parentId: isTopLevelInInsert ? receptacle.id : cell.parentId,
         path: newSegments.join(":"),
         pathSegments: newSegments,
@@ -164,20 +111,73 @@ export const insertRepository = {
   }) {
     const uid = generateUid();
 
-    const [insert] = await db
-      .insert(inserts)
-      .values({
-        uid,
-        name,
-        templateId,
-        templateVersionId,
-        interfaceTypeProvided,
-        rows,
-        columns,
-        overrides,
-        metadata,
-      })
-      .returning();
+    const insert = await db.transaction(async (tx) => {
+      const [ins] = await tx
+        .insert(inserts)
+        .values({
+          uid,
+          name,
+          templateId,
+          templateVersionId,
+          interfaceTypeProvided,
+          rows,
+          columns,
+          overrides,
+          metadata,
+        })
+        .returning();
+
+      // Materialize cells now so the insert is physically "real" at
+      // creation. Cells are unplaced: moduleId null, parentId null,
+      // path = just the cell label. Placement fills in module/parent
+      // and rebuilds paths.
+      if (templateVersionId) {
+        const [tv] = await tx
+          .select()
+          .from(templateVersions)
+          .where(eq(templateVersions.id, templateVersionId));
+        if (tv) {
+          const gridRows = rows ?? tv.rows ?? 1;
+          const gridCols = columns ?? tv.columns ?? 1;
+          const origin = tv.originPosition || "top-left";
+          const rowScheme = tv.rowLabelScheme || "alpha";
+          const colScheme = tv.columnLabelScheme || "numeric";
+          for (let r = 0; r < gridRows; r++) {
+            for (let c = 0; c < gridCols; c++) {
+              const rowLabel = getLabel(
+                rowScheme,
+                r,
+                gridRows,
+                origin,
+                "row"
+              );
+              const colLabel = getLabel(
+                colScheme,
+                c,
+                gridCols,
+                origin,
+                "col"
+              );
+              const cellLabel = `${rowLabel}${colLabel}`;
+              await tx.insert(locations).values({
+                moduleId: null,
+                parentId: null,
+                label: cellLabel,
+                path: cellLabel,
+                pathSegments: [cellLabel],
+                locationType: "leaf",
+                templateVersionId,
+                insertId: ins.id,
+                gridRow: r,
+                gridColumn: c,
+              });
+            }
+          }
+        }
+      }
+
+      return ins;
+    });
 
     await transactionRepository.log({
       actionType: "insert.create",
@@ -186,10 +186,6 @@ export const insertRepository = {
       beforeState: null,
       afterState: insert,
     });
-
-    // Cells are materialized on first placement (see place-with-children
-    // route). This avoids an orphan-cell state for unplaced inserts where
-    // locations.module_id would have nothing sensible to point at.
 
     return insert;
   },
@@ -382,16 +378,7 @@ export const insertRepository = {
         .where(eq(inserts.id, id))
         .returning();
 
-      // Materialize cells on first placement if they don't exist yet.
-      const existingCells = await tx
-        .select({ id: locations.id })
-        .from(locations)
-        .where(eq(locations.insertId, id));
-      if (existingCells.length === 0 && insert.templateVersionId) {
-        await materializeInsertCells(tx, ins, location);
-      } else {
-        await reparentInsertCells(tx, id, location);
-      }
+      await reparentInsertCells(tx, id, location);
 
       return ins;
     });
@@ -430,6 +417,7 @@ export const insertRepository = {
         await tx
           .update(locations)
           .set({
+            moduleId: null,
             parentId: null,
             path: segments.join(":"),
             pathSegments: segments,

@@ -514,7 +514,42 @@ describe("insertRepository", () => {
       expect(unplaced!.path).toBe("A1");
     });
 
-    it("materializes cells on first placement when insert has a template", async () => {
+    it("materializes cells at creation time (unplaced, module null, path = label)", async () => {
+      const template = await templateRepository.create({
+        name: "Plano 3600 test",
+      });
+      const version = await templateRepository.getVersion({
+        templateId: template.id,
+        version: 1,
+      });
+
+      const insert = await insertRepository.create({
+        name: "fresh",
+        templateId: template.id,
+        templateVersionId: version!.id,
+        rows: 2,
+        columns: 3,
+      });
+
+      const { db } = await import("@/db/connection");
+      const { locations } = await import("@/db/schema");
+      const { eq } = await import("drizzle-orm");
+      const cells = await db
+        .select()
+        .from(locations)
+        .where(eq(locations.insertId, insert.id));
+
+      expect(cells).toHaveLength(6); // 2 rows × 3 cols
+      for (const cell of cells) {
+        expect(cell.insertId).toBe(insert.id);
+        expect(cell.moduleId).toBeNull();
+        expect(cell.parentId).toBeNull();
+        // Path is just the cell label pre-placement
+        expect(cell.path).toBe(cell.label);
+      }
+    });
+
+    it("place fills in moduleId + parentId + path on an unplaced insert", async () => {
       const template = await templateRepository.create({
         name: "Plano 3600 test",
       });
@@ -534,7 +569,6 @@ describe("insertRepository", () => {
         locationType: "receptacle",
       });
 
-      // Unplaced insert, no cells yet
       const insert = await insertRepository.create({
         name: "fresh",
         templateId: template.id,
@@ -542,20 +576,15 @@ describe("insertRepository", () => {
         rows: 2,
         columns: 3,
       });
-      const before = await locationRepository.findChildren({
-        parentId: level.id,
-      });
-      expect(before.length).toBe(0);
-
-      // Place: cells get materialized
       await insertRepository.place({ id: insert.id, locationId: level.id });
 
-      const after = await locationRepository.findChildren({
-        parentId: level.id,
-      });
-      expect(after.length).toBe(6);
-      for (const cell of after) {
+      const cells = await locationRepository.findChildren({ parentId: level.id });
+      expect(cells).toHaveLength(6);
+      for (const cell of cells) {
         expect(cell.insertId).toBe(insert.id);
+        expect(cell.moduleId).toBe(mod.id);
+        expect(cell.parentId).toBe(level.id);
+        expect(cell.path.startsWith("MUSE:1:")).toBe(true);
       }
     });
 

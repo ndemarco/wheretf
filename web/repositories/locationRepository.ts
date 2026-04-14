@@ -44,7 +44,7 @@ export const locationRepository = {
     gridColumn,
     metadata,
   }: {
-    moduleId: string;
+    moduleId?: string | null;
     parentId?: string;
     label: string;
     pathSegments: string[];
