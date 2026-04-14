@@ -66,9 +66,19 @@ export default function ModuleDetailPage() {
   const [selectedLevelId, setSelectedLevelId] = useState<string | null>(null);
   const [selectedCellId, setSelectedCellId] = useState<string | null>(null);
 
-  // Inline editing
-  const [editName, setEditName] = useState("");
-  const [editDesc, setEditDesc] = useState("");
+  // Right-panel edit mode (gates module + level editing)
+  const [editingModule, setEditingModule] = useState(false);
+  const [editingLevel, setEditingLevel] = useState(false);
+
+  // Draft state for edits
+  const [moduleDraft, setModuleDraft] = useState<{
+    name: string;
+    description: string;
+  }>({ name: "", description: "" });
+  const [levelDraft, setLevelDraft] = useState<{
+    label: string;
+    description: string;
+  }>({ label: "", description: "" });
 
   // Item picker
   const [showItemPicker, setShowItemPicker] = useState(false);
@@ -94,8 +104,10 @@ export default function ModuleDetailPage() {
 
       setModule(modData.module);
       setLocations(locs);
-      setEditName(modData.module.name);
-      setEditDesc(modData.module.description || "");
+      setModuleDraft({
+        name: modData.module.name,
+        description: modData.module.description ?? "",
+      });
 
       // Fetch assignments for all leaf locations
       const leafIds = locs
@@ -211,41 +223,104 @@ export default function ModuleDetailPage() {
     ? assignmentsByLocation.get(selectedCell.id) ?? []
     : [];
 
-  async function saveName() {
-    if (!module_ || editName.trim() === module_.name) return;
+  async function saveModule() {
+    if (!module_) return;
+    const name = moduleDraft.name.trim();
+    const description = moduleDraft.description.trim() || null;
+    if (!name) return;
+    const nameChanged = name !== module_.name;
+    const descChanged = description !== (module_.description ?? null);
+    if (!nameChanged && !descChanged) {
+      setEditingModule(false);
+      return;
+    }
     try {
       await fetch(`/api/modules/${id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name: editName.trim() }),
+        body: JSON.stringify({ name, description }),
       });
+      setEditingModule(false);
       await fetchData();
     } catch (err) {
       console.error(err);
     }
   }
 
-  async function saveDesc() {
-    if (!module_ || editDesc.trim() === (module_.description || "")) return;
+  function cancelModuleEdit() {
+    if (!module_) return;
+    setModuleDraft({
+      name: module_.name,
+      description: module_.description ?? "",
+    });
+    setEditingModule(false);
+  }
+
+  async function saveLevel() {
+    if (!selectedLevel) return;
+    const label = levelDraft.label.trim();
+    if (!label) return;
+    const existingNotes =
+      selectedLevel.metadata &&
+      typeof selectedLevel.metadata === "object" &&
+      "notes" in selectedLevel.metadata
+        ? (selectedLevel.metadata as { notes?: string }).notes ?? ""
+        : "";
+    const newDesc = levelDraft.description.trim();
+    const labelChanged = label !== selectedLevel.label;
+    const descChanged = newDesc !== existingNotes;
+    if (!labelChanged && !descChanged) {
+      setEditingLevel(false);
+      return;
+    }
     try {
-      await fetch(`/api/modules/${id}`, {
+      const body: Record<string, unknown> = {};
+      if (labelChanged) body.label = label;
+      if (descChanged) {
+        const nextMetadata = {
+          ...(selectedLevel.metadata ?? {}),
+          notes: newDesc || undefined,
+        };
+        if (!newDesc) delete (nextMetadata as { notes?: string }).notes;
+        body.metadata = nextMetadata;
+      }
+      await fetch(`/api/locations/${selectedLevel.id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ description: editDesc.trim() || null }),
+        body: JSON.stringify(body),
       });
+      setEditingLevel(false);
       await fetchData();
     } catch (err) {
       console.error(err);
     }
   }
 
-  async function deleteModule() {
-    if (!confirm("Delete this module and all its locations?")) return;
-    try {
-      await fetch(`/api/modules/${id}`, { method: "DELETE" });
-      router.push("/modules");
-    } catch (err) {
-      console.error(err);
+  function cancelLevelEdit() {
+    if (!selectedLevel) return;
+    const notes =
+      selectedLevel.metadata &&
+      typeof selectedLevel.metadata === "object" &&
+      "notes" in selectedLevel.metadata
+        ? (selectedLevel.metadata as { notes?: string }).notes ?? ""
+        : "";
+    setLevelDraft({ label: selectedLevel.label, description: notes });
+    setEditingLevel(false);
+  }
+
+  function selectLevel(level: Location | null) {
+    setSelectedLevelId(level?.id ?? null);
+    setSelectedCellId(null);
+    setShowItemPicker(false);
+    setEditingLevel(false);
+    if (level) {
+      const notes =
+        level.metadata &&
+        typeof level.metadata === "object" &&
+        "notes" in level.metadata
+          ? (level.metadata as { notes?: string }).notes ?? ""
+          : "";
+      setLevelDraft({ label: level.label, description: notes });
     }
   }
 
@@ -320,40 +395,17 @@ export default function ModuleDetailPage() {
 
   return (
     <div className="flex-1 flex min-w-0 h-full overflow-hidden">
-      {/* Left Panel — Module Info + Level Table */}
+      {/* Left Panel — Module Header (read-only) + Level Table */}
       <div className="w-72 flex flex-col min-w-0 overflow-y-auto border-r border-slate-700 shrink-0">
         <div className="p-4 border-b border-slate-700">
-          <input
-            type="text"
-            value={editName}
-            onChange={(e) => setEditName(e.target.value)}
-            onBlur={saveName}
-            onKeyDown={(e) => e.key === "Enter" && saveName()}
-            className="text-lg font-semibold text-slate-100 bg-transparent border-b border-transparent hover:border-slate-600 focus:border-accent focus:outline-none w-full"
-          />
-          <input
-            type="text"
-            value={editDesc}
-            onChange={(e) => setEditDesc(e.target.value)}
-            onBlur={saveDesc}
-            onKeyDown={(e) => e.key === "Enter" && saveDesc()}
-            placeholder="Add description..."
-            className="text-sm text-slate-400 bg-transparent border-b border-transparent hover:border-slate-600 focus:border-accent focus:outline-none w-full mt-1 placeholder:text-slate-600"
-          />
-          <div className="flex items-center gap-4 mt-2">
-            <span className="text-xs text-slate-500">
-              {levels.length}{" "}
-              {levels.length === 1
-                ? module_.primaryDimensionLabel
-                : module_.primaryDimensionLabel + "s"}
-            </span>
-            <button
-              onClick={deleteModule}
-              className="text-xs text-red-400 hover:text-red-300 transition-colors ml-auto"
-            >
-              Delete
-            </button>
-          </div>
+          <h2 className="text-lg font-semibold text-slate-100 truncate">
+            {module_.name}
+          </h2>
+          {module_.description && (
+            <p className="text-sm text-slate-400 mt-1 truncate">
+              {module_.description}
+            </p>
+          )}
         </div>
 
         {/* Level list */}
@@ -380,10 +432,7 @@ export default function ModuleDetailPage() {
                 return (
                   <button
                     key={level.id}
-                    onClick={() => {
-                      setSelectedLevelId(level.id);
-                      setSelectedCellId(null);
-                    }}
+                    onClick={() => selectLevel(level)}
                     className={`w-full text-left px-4 py-3 border-b border-slate-700/50 transition-colors ${
                       isSelected
                         ? "bg-slate-700/50"
@@ -511,9 +560,10 @@ export default function ModuleDetailPage() {
         )}
       </div>
 
-      {/* Right Panel — Cell Detail */}
-      {selectedCell && (
-        <div className="w-80 flex flex-col shrink-0 border-l border-slate-700 bg-slate-800/20 overflow-y-auto">
+      {/* Right Panel — Cell / Level / Module detail */}
+      <div className="w-80 flex flex-col shrink-0 border-l border-slate-700 bg-slate-800/20 overflow-y-auto">
+      {selectedCell ? (
+        <>
           <div className="p-4 border-b border-slate-700">
             <div className="flex items-center justify-between">
               <h3 className="text-sm font-medium text-slate-200">
@@ -669,9 +719,261 @@ export default function ModuleDetailPage() {
               </div>
             )}
           </div>
-        </div>
+        </>
+      ) : selectedLevel ? (
+        <LevelPanel
+          level={selectedLevel}
+          editing={editingLevel}
+          draft={levelDraft}
+          setDraft={setLevelDraft}
+          onEdit={() => setEditingLevel(true)}
+          onSave={saveLevel}
+          onCancel={cancelLevelEdit}
+          onClose={() => selectLevel(null)}
+        />
+      ) : (
+        <ModulePanel
+          module_={module_}
+          levelCount={levels.length}
+          editing={editingModule}
+          draft={moduleDraft}
+          setDraft={setModuleDraft}
+          onEdit={() => setEditingModule(true)}
+          onSave={saveModule}
+          onCancel={cancelModuleEdit}
+        />
       )}
+      </div>
     </div>
+  );
+}
+
+// --- Module Panel (right) ---
+
+function ModulePanel({
+  module_,
+  levelCount,
+  editing,
+  draft,
+  setDraft,
+  onEdit,
+  onSave,
+  onCancel,
+}: {
+  module_: Module;
+  levelCount: number;
+  editing: boolean;
+  draft: { name: string; description: string };
+  setDraft: (v: { name: string; description: string }) => void;
+  onEdit: () => void;
+  onSave: () => void;
+  onCancel: () => void;
+}) {
+  return (
+    <>
+      <div className="p-4 border-b border-slate-700">
+        <div className="flex items-center justify-between">
+          <h3 className="text-sm font-medium text-slate-200">Module</h3>
+          {!editing && (
+            <button
+              onClick={onEdit}
+              className="text-xs text-slate-400 hover:text-accent transition-colors"
+            >
+              Edit
+            </button>
+          )}
+        </div>
+      </div>
+
+      <div className="p-4 space-y-4">
+        {editing ? (
+          <>
+            <div>
+              <label className="text-xs text-slate-500 block mb-1">Name</label>
+              <input
+                type="text"
+                value={draft.name}
+                onChange={(e) =>
+                  setDraft({ ...draft, name: e.target.value })
+                }
+                className="w-full px-2 py-1.5 bg-slate-800 border border-slate-600 rounded text-sm text-slate-200 focus:border-accent focus:outline-none"
+              />
+            </div>
+            <div>
+              <label className="text-xs text-slate-500 block mb-1">
+                Description
+              </label>
+              <textarea
+                value={draft.description}
+                onChange={(e) =>
+                  setDraft({ ...draft, description: e.target.value })
+                }
+                rows={3}
+                className="w-full px-2 py-1.5 bg-slate-800 border border-slate-600 rounded text-sm text-slate-200 focus:border-accent focus:outline-none resize-none"
+              />
+            </div>
+            <div className="flex gap-2">
+              <button
+                onClick={onSave}
+                className="px-3 py-1.5 bg-accent text-white rounded text-xs hover:brightness-110 transition-all"
+              >
+                Save
+              </button>
+              <button
+                onClick={onCancel}
+                className="px-3 py-1.5 border border-slate-600 text-slate-300 rounded text-xs hover:bg-slate-700/50 transition-colors"
+              >
+                Cancel
+              </button>
+            </div>
+          </>
+        ) : (
+          <>
+            <div>
+              <div className="text-xs text-slate-500">Name</div>
+              <div className="text-sm text-slate-100">{module_.name}</div>
+            </div>
+            {module_.description && (
+              <div>
+                <div className="text-xs text-slate-500">Description</div>
+                <div className="text-sm text-slate-300 whitespace-pre-wrap">
+                  {module_.description}
+                </div>
+              </div>
+            )}
+            <div>
+              <div className="text-xs text-slate-500">Primary dimension</div>
+              <div className="text-sm text-slate-300">
+                {module_.primaryDimensionLabel} ({levelCount})
+              </div>
+            </div>
+          </>
+        )}
+      </div>
+    </>
+  );
+}
+
+// --- Level Panel (right) ---
+
+function LevelPanel({
+  level,
+  editing,
+  draft,
+  setDraft,
+  onEdit,
+  onSave,
+  onCancel,
+  onClose,
+}: {
+  level: Location;
+  editing: boolean;
+  draft: { label: string; description: string };
+  setDraft: (v: { label: string; description: string }) => void;
+  onEdit: () => void;
+  onSave: () => void;
+  onCancel: () => void;
+  onClose: () => void;
+}) {
+  return (
+    <>
+      <div className="p-4 border-b border-slate-700">
+        <div className="flex items-center justify-between">
+          <h3 className="text-sm font-medium text-slate-200">
+            Level {level.label}
+          </h3>
+          <div className="flex items-center gap-3">
+            {!editing && (
+              <button
+                onClick={onEdit}
+                className="text-xs text-slate-400 hover:text-accent transition-colors"
+              >
+                Edit
+              </button>
+            )}
+            <button
+              onClick={onClose}
+              className="text-slate-500 hover:text-slate-300 text-xs"
+            >
+              Close
+            </button>
+          </div>
+        </div>
+        <p className="text-xs text-slate-500 mt-1">{level.path}</p>
+      </div>
+
+      <div className="p-4 space-y-4">
+        {editing ? (
+          <>
+            <div>
+              <label className="text-xs text-slate-500 block mb-1">Label</label>
+              <input
+                type="text"
+                value={draft.label}
+                onChange={(e) =>
+                  setDraft({ ...draft, label: e.target.value })
+                }
+                className="w-full px-2 py-1.5 bg-slate-800 border border-slate-600 rounded text-sm text-slate-200 focus:border-accent focus:outline-none"
+              />
+            </div>
+            <div>
+              <label className="text-xs text-slate-500 block mb-1">
+                Notes
+              </label>
+              <textarea
+                value={draft.description}
+                onChange={(e) =>
+                  setDraft({ ...draft, description: e.target.value })
+                }
+                rows={3}
+                className="w-full px-2 py-1.5 bg-slate-800 border border-slate-600 rounded text-sm text-slate-200 focus:border-accent focus:outline-none resize-none"
+              />
+            </div>
+            <div className="flex gap-2">
+              <button
+                onClick={onSave}
+                className="px-3 py-1.5 bg-accent text-white rounded text-xs hover:brightness-110 transition-all"
+              >
+                Save
+              </button>
+              <button
+                onClick={onCancel}
+                className="px-3 py-1.5 border border-slate-600 text-slate-300 rounded text-xs hover:bg-slate-700/50 transition-colors"
+              >
+                Cancel
+              </button>
+            </div>
+          </>
+        ) : (
+          <>
+            <div>
+              <div className="text-xs text-slate-500">Label</div>
+              <div className="text-sm text-slate-100">{level.label}</div>
+            </div>
+            <div>
+              <div className="text-xs text-slate-500">Type</div>
+              <div className="text-sm text-slate-300">
+                {level.locationType}
+                {level.interfaceTypeAccepted &&
+                  ` · accepts ${level.interfaceTypeAccepted}`}
+              </div>
+            </div>
+            {level.metadata &&
+              typeof level.metadata === "object" &&
+              "notes" in level.metadata &&
+              typeof (level.metadata as { notes?: string }).notes ===
+                "string" && (
+                <div>
+                  <div className="text-xs text-slate-500">Notes</div>
+                  <div className="text-sm text-slate-300 whitespace-pre-wrap">
+                    {(level.metadata as { notes: string }).notes}
+                  </div>
+                </div>
+              )}
+          </>
+        )}
+      </div>
+    </>
   );
 }
 
