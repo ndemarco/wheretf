@@ -111,19 +111,20 @@ Running list of issues and decisions for the `/modules` and `/modules/[id]` area
 
 ### IN-3 — Module level UI conflates receptacle with its insert
 - **Problem:** On `/modules/[id]` a level like MUSE:1 shows grid cells (A1..D6) directly, hiding the fact that those cells belong to a specific **insert** (a physical instance of Plano 3600). User owns a *stack* of Plano 3600s; each is a distinct insert with its own name, overrides, and contents. The current UI doesn't name the insert in the level view and doesn't frame overrides as "on this insert" vs. "on this receptacle".
+- **Name ownership:** the insert's name is a property of the insert. The level's label is usually a sequential stub (1, 2, 3 or A, B, C). Renaming the insert *may* be offered as a convenience from the receptacle context, but authoritative edit happens on the insert itself.
 - **Direction:**
   - Module level header should read something like: **MUSE 1** · receptacle · holds *"construction screws"* (Plano 3600 Stowaway)
   - Or show a breadcrumb on the grid: MUSE › 1 › *construction screws* (Plano 3600)
   - Overrides (merge/divide/disable/restrict) applied to cells *inside an insert* are insert-scoped — should persist as `inserts.overrides`, not on the location. They travel with the insert when relocated.
-  - Renaming the insert in-context (e.g., click the insert name → rename).
   - Offer "Remove insert" and "Replace insert" at the receptacle level.
 - **Open:** For cells inside an insert we've been writing to `locations.{isDisabled,maxWidthMm,…}` which lives on the child location row. That works when the insert never moves, but the spec says overrides must travel with the insert. Needs the structured `inserts.overrides` JSONB format we deferred earlier. Punt to when we implement merge (which already has to deal with insert-scoped persistence).
 
 ### IN-4 — Placement from the insert side
-- **Problem:** Today placement is receptacle-first (go to a level, pick a template). User also wants insert-first: "I'm holding this Plano, find somewhere it fits."
+- **Problem:** Today placement is receptacle-first (go to a level, pick a template). User also wants insert-first: "I'm holding this Plano, find somewhere it fits." And also wants to **kick an insert out** from either side.
 - **Direction:**
   - On `/inserts` detail for an unplaced insert: a "Place in…" button that lists compatible receptacles (filter by interface type match + currently empty).
-  - If already placed, show "Move to…" offering same picker.
+  - If already placed, show "Move to…" offering the same picker, plus "Unplace" (kick out without replacement).
+  - On `/modules/[id]` at a receptacle level that holds an insert: "Remove insert" (= unplace) and "Replace insert" (= unplace + reopen placement flow).
 - **Naming clarification (per user):** the compatibility name is the **interface type**. Insert template `interfaceTypeProvided` must match receptacle `interfaceTypeAccepted`.
 
 ### IN-2 — Where do I edit an insert's overrides (merge / divide / disable / restrict)?
