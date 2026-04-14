@@ -142,6 +142,62 @@ export const insertRepository = {
   },
 
   /**
+   * For IN-4 placement UX. Given an insert, list receptacle locations where
+   * it could be placed:
+   *   - locationType = 'receptacle'
+   *   - currently empty (no other insert pointing at it)
+   *   - interface type compatible (or either side unspecified)
+   *   - not the current host (already there)
+   */
+  async listCompatibleReceptacles({ id }: { id: string }) {
+    const insert = await insertRepository.findById({ id });
+    if (!insert) throw new Error(`Insert ${id} not found`);
+
+    // Resolve insert's effective interface type: explicit override first,
+    // else template version's interfaceTypeProvided.
+    let effectiveIface = insert.interfaceTypeProvided ?? null;
+    if (!effectiveIface && insert.templateVersionId) {
+      const [tv] = await db
+        .select({ iface: templateVersions.interfaceTypeProvided })
+        .from(templateVersions)
+        .where(eq(templateVersions.id, insert.templateVersionId));
+      effectiveIface = tv?.iface ?? null;
+    }
+
+    const receptacles = await db
+      .select({
+        id: locations.id,
+        path: locations.path,
+        label: locations.label,
+        interfaceTypeAccepted: locations.interfaceTypeAccepted,
+        moduleId: locations.moduleId,
+        moduleName: modules.name,
+      })
+      .from(locations)
+      .leftJoin(modules, eq(locations.moduleId, modules.id))
+      .where(eq(locations.locationType, "receptacle"));
+
+    // Find which receptacles are currently occupied.
+    const occupants = await db
+      .select({ locationId: inserts.locationId })
+      .from(inserts)
+      .where(isNotNull(inserts.locationId));
+    const occupied = new Set(
+      occupants.map((o) => o.locationId).filter(Boolean) as string[]
+    );
+
+    return receptacles
+      .filter((r) => r.id !== insert.locationId) // skip current host
+      .filter((r) => !occupied.has(r.id))
+      .filter((r) => {
+        // compatibility: if either side is null, allow; else must match
+        const accepts = r.interfaceTypeAccepted ?? null;
+        if (!effectiveIface || !accepts) return true;
+        return effectiveIface === accepts;
+      });
+  },
+
+  /**
    * Rich list of inserts for the /inserts page. Joins template name,
    * current location path, and host module. Filters:
    *   - templateId: restrict to one template
@@ -153,16 +209,19 @@ export const insertRepository = {
     templateId,
     interfaceType,
     placement = "all",
+    moduleId,
   }: {
     templateId?: string;
     interfaceType?: string;
     placement?: "placed" | "unplaced" | "all";
+    moduleId?: string;
   } = {}) {
     const conditions: SQL[] = [];
 
     if (templateId) conditions.push(eq(inserts.templateId, templateId));
     if (placement === "placed") conditions.push(isNotNull(inserts.locationId));
     if (placement === "unplaced") conditions.push(isNull(inserts.locationId));
+    if (moduleId) conditions.push(eq(locations.moduleId, moduleId));
 
     if (interfaceType) {
       conditions.push(

@@ -237,6 +237,15 @@ export default function InsertsPage() {
   );
 }
 
+interface Receptacle {
+  id: string;
+  path: string;
+  label: string;
+  interfaceTypeAccepted: string | null;
+  moduleId: string;
+  moduleName: string | null;
+}
+
 function InsertDetail({
   insert,
   onChanged,
@@ -248,10 +257,55 @@ function InsertDetail({
   const [editing, setEditing] = useState(false);
   const [saving, setSaving] = useState(false);
 
+  // Place/Move picker
+  const [pickerOpen, setPickerOpen] = useState(false);
+  const [receptacles, setReceptacles] = useState<Receptacle[]>([]);
+  const [pickerLoading, setPickerLoading] = useState(false);
+  const [placing, setPlacing] = useState(false);
+
   useEffect(() => {
     setDraftName(insert.name ?? "");
     setEditing(false);
+    setPickerOpen(false);
   }, [insert.id, insert.name]);
+
+  async function openPicker() {
+    setPickerOpen(true);
+    setPickerLoading(true);
+    try {
+      const res = await fetch(
+        `/api/inserts/${insert.id}/compatible-receptacles`
+      );
+      const data = await res.json();
+      setReceptacles(data.receptacles ?? []);
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setPickerLoading(false);
+    }
+  }
+
+  async function placeAt(locationId: string) {
+    setPlacing(true);
+    try {
+      const res = await fetch(`/api/inserts/${insert.id}/place`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ locationId }),
+      });
+      if (!res.ok) {
+        const data = await res.json();
+        alert(data.error || "Failed to place");
+        return;
+      }
+      setPickerOpen(false);
+      onChanged();
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setPlacing(false);
+    }
+  }
 
   async function saveName() {
     if (!editing) return;
@@ -413,6 +467,12 @@ function InsertDetail({
       </div>
 
       <div className="p-6 pt-0 mt-auto flex items-center gap-2 border-t border-slate-700 pt-4">
+        <button
+          onClick={openPicker}
+          className="px-3 py-1.5 bg-accent text-white rounded text-xs hover:brightness-110 transition-all"
+        >
+          {insert.locationId ? "Move to…" : "Place in…"}
+        </button>
         {insert.locationId && (
           <button
             onClick={unplace}
@@ -428,6 +488,78 @@ function InsertDetail({
           Delete insert
         </button>
       </div>
+
+      {pickerOpen && (
+        <div
+          className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4"
+          onClick={() => !placing && setPickerOpen(false)}
+        >
+          <div
+            className="bg-slate-900 border border-slate-700 rounded-lg w-full max-w-md flex flex-col max-h-[80vh]"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="p-4 border-b border-slate-700">
+              <h2 className="text-base font-semibold text-slate-100">
+                {insert.locationId ? "Move insert to…" : "Place insert in…"}
+              </h2>
+              <p className="text-xs text-slate-500 mt-1">
+                Compatible empty receptacles
+                {insert.interfaceType && (
+                  <> (interface <span className="font-mono text-slate-400">{insert.interfaceType}</span>)</>
+                )}
+              </p>
+            </div>
+            <div className="flex-1 overflow-y-auto">
+              {pickerLoading ? (
+                <div className="p-6 text-center text-slate-500 text-sm">
+                  Loading…
+                </div>
+              ) : receptacles.length === 0 ? (
+                <div className="p-6 text-center text-slate-500 text-sm">
+                  No compatible empty receptacles. Either all candidates
+                  are occupied or none accept this insert&apos;s interface.
+                </div>
+              ) : (
+                <ul className="flex flex-col">
+                  {receptacles.map((r) => (
+                    <li key={r.id}>
+                      <button
+                        onClick={() => placeAt(r.id)}
+                        disabled={placing}
+                        className="w-full text-left px-4 py-3 border-b border-slate-700/50 hover:bg-slate-800/40 disabled:opacity-50 transition-colors"
+                      >
+                        <div className="text-sm text-slate-100 truncate">
+                          {r.moduleName} &nbsp;
+                          <span className="text-slate-400">
+                            {r.path.replace(
+                              r.moduleName ? r.moduleName + ":" : "",
+                              ""
+                            )}
+                          </span>
+                        </div>
+                        {r.interfaceTypeAccepted && (
+                          <div className="text-[10px] text-slate-500 mt-0.5">
+                            accepts {r.interfaceTypeAccepted}
+                          </div>
+                        )}
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+            <div className="p-3 border-t border-slate-700 flex items-center justify-end">
+              <button
+                onClick={() => setPickerOpen(false)}
+                disabled={placing}
+                className="px-3 py-1.5 border border-slate-600 text-slate-300 rounded text-xs hover:bg-slate-700/50 disabled:opacity-50"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

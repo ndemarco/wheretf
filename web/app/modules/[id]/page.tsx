@@ -54,7 +54,10 @@ interface Insert {
   uid: string | null;
   name: string | null;
   templateId: string | null;
+  templateName?: string | null;
+  interfaceType?: string | null;
   locationId: string | null;
+  locationPath?: string | null;
 }
 
 // --- Main Page ---
@@ -107,6 +110,11 @@ export default function ModuleDetailPage() {
     description: string;
   }>({ label: "", description: "" });
 
+  // Inserts in this module (key: receptacle location id → insert)
+  const [insertsByReceptacle, setInsertsByReceptacle] = useState<
+    Map<string, Insert>
+  >(new Map());
+
   // Item picker
   const [showItemPicker, setShowItemPicker] = useState(false);
   const [itemSearchQuery, setItemSearchQuery] = useState("");
@@ -115,9 +123,10 @@ export default function ModuleDetailPage() {
 
   const fetchData = useCallback(async () => {
     try {
-      const [modRes, locRes] = await Promise.all([
+      const [modRes, locRes, insRes] = await Promise.all([
         fetch(`/api/modules/${id}`),
         fetch(`/api/locations?moduleId=${id}`),
+        fetch(`/api/inserts?moduleId=${id}&placement=placed`),
       ]);
 
       if (!modRes.ok) {
@@ -127,7 +136,14 @@ export default function ModuleDetailPage() {
 
       const modData = await modRes.json();
       const locData = await locRes.json();
+      const insData = await insRes.json();
       const locs: Location[] = locData.locations || [];
+      const insertList: Insert[] = insData.inserts || [];
+      const insMap = new Map<string, Insert>();
+      for (const ins of insertList) {
+        if (ins.locationId) insMap.set(ins.locationId, ins);
+      }
+      setInsertsByReceptacle(insMap);
 
       setModule(modData.module);
       setLocations(locs);
@@ -500,6 +516,29 @@ export default function ModuleDetailPage() {
     setEditingRestrict(true);
   }
 
+  async function removeInsertFromLevel(insertId: string) {
+    if (
+      !confirm(
+        "Remove this insert from the level? The insert and its contents stay together — it moves to the unplaced pool."
+      )
+    )
+      return;
+    try {
+      const res = await fetch(`/api/inserts/${insertId}/place`, {
+        method: "DELETE",
+      });
+      if (!res.ok) {
+        const data = await res.json();
+        alert(data.error || "Failed to remove insert");
+        return;
+      }
+      setSelectedCellId(null);
+      await fetchData();
+    } catch (err) {
+      console.error(err);
+    }
+  }
+
   async function handleStaleLocation() {
     alert(
       "This cell no longer exists on the server. Reloading the module."
@@ -735,24 +774,56 @@ export default function ModuleDetailPage() {
           </div>
         ) : childLocations.length > 0 ? (
           <>
-            {/* Grid toolbar */}
+            {/* Grid toolbar — IN-3: show insert as first-class */}
             <div className="flex items-center gap-3 px-4 py-2 border-b border-slate-700 bg-slate-800/30">
               <h3 className="text-sm font-medium text-slate-200">
                 {module_.primaryDimensionLabel.charAt(0).toUpperCase() +
                   module_.primaryDimensionLabel.slice(1)}{" "}
                 {selectedLevel.label}
               </h3>
-              <span className="text-xs text-slate-500">
-                {childLocations.length} positions
-              </span>
-              <div className="ml-auto flex items-center gap-2">
-                <Link
-                  href={`/modules/${id}/levels/${selectedLevel.id}/place-insert`}
-                  className="text-xs px-2.5 py-1 rounded bg-slate-700 text-slate-300 hover:bg-slate-600 transition-colors"
-                >
-                  Place Insert
-                </Link>
-              </div>
+              {(() => {
+                const ins = insertsByReceptacle.get(selectedLevel.id);
+                return (
+                  <>
+                    {ins ? (
+                      <>
+                        <span className="text-slate-600 text-xs">·</span>
+                        <Link
+                          href={`/inserts?selected=${ins.id}`}
+                          className="text-sm text-slate-100 hover:text-accent transition-colors truncate"
+                        >
+                          {ins.name ?? "(unnamed insert)"}
+                        </Link>
+                        {ins.templateName && (
+                          <span className="text-xs text-slate-500 truncate">
+                            ({ins.templateName})
+                          </span>
+                        )}
+                      </>
+                    ) : null}
+                    <span className="text-xs text-slate-500">
+                      · {childLocations.length} positions
+                    </span>
+                    <div className="ml-auto flex items-center gap-2">
+                      {ins ? (
+                        <button
+                          onClick={() => removeInsertFromLevel(ins.id)}
+                          className="text-xs px-2.5 py-1 rounded border border-slate-600 text-slate-300 hover:bg-slate-700/50 transition-colors"
+                        >
+                          Remove insert
+                        </button>
+                      ) : (
+                        <Link
+                          href={`/modules/${id}/levels/${selectedLevel.id}/place-insert`}
+                          className="text-xs px-2.5 py-1 rounded bg-slate-700 text-slate-300 hover:bg-slate-600 transition-colors"
+                        >
+                          Place Insert
+                        </Link>
+                      )}
+                    </div>
+                  </>
+                );
+              })()}
             </div>
 
             {/* Grid */}
