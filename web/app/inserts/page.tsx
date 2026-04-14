@@ -19,6 +19,21 @@ interface Insert {
   moduleName: string | null;
 }
 
+interface CellRow {
+  id: string;
+  label: string;
+  path: string;
+  gridRow: number | null;
+  gridColumn: number | null;
+  isDisabled: boolean;
+  disableReason: string | null;
+  maxWidthMm: string | null;
+  maxHeightMm: string | null;
+  maxDepthMm: string | null;
+  restrictReason: string | null;
+  mergedIntoId: string | null;
+}
+
 interface TemplateOption {
   id: string;
   name: string;
@@ -264,31 +279,89 @@ function InsertDetail({
   const [pickerLoading, setPickerLoading] = useState(false);
   const [placing, setPlacing] = useState(false);
 
-  // Cells (grid)
-  const [cells, setCells] = useState<
+  // Cells (grid) — full type so we can show overrides
+  const [cells, setCells] = useState<CellRow[]>([]);
+  const [selectedCellId, setSelectedCellId] = useState<string | null>(null);
+
+  // Assignments on this insert's cells
+  const [assignments, setAssignments] = useState<
     Array<{
       id: string;
-      label: string;
-      gridRow: number | null;
-      gridColumn: number | null;
-      isDisabled: boolean;
+      itemId: string;
+      locationId: string;
+      assignmentType: "placed" | "provisional";
     }>
   >([]);
+  const [itemsById, setItemsById] = useState<
+    Map<string, { id: string; name: string; description: string | null }>
+  >(new Map());
+
+  // Item picker
+  const [showItemPicker, setShowItemPicker] = useState(false);
+  const [itemSearchQuery, setItemSearchQuery] = useState("");
+  const [itemSearchResults, setItemSearchResults] = useState<
+    Array<{ id: string; name: string; description: string | null }>
+  >([]);
+
+  // Restrict override editor
+  const [editingRestrict, setEditingRestrict] = useState(false);
+  const [restrictDraft, setRestrictDraft] = useState({
+    maxWidthMm: "",
+    maxHeightMm: "",
+    maxDepthMm: "",
+    reason: "",
+  });
+
+  const loadAll = useCallback(async () => {
+    try {
+      const locRes = await fetch(`/api/locations?insertId=${insert.id}`);
+      const locData = await locRes.json();
+      const locs: CellRow[] = locData.locations ?? [];
+      setCells(locs);
+
+      const leafIds = locs.map((l) => l.id);
+      if (leafIds.length > 0) {
+        const asns: typeof assignments = [];
+        await Promise.all(
+          leafIds.map(async (lid) => {
+            const r = await fetch(`/api/assignments?locationId=${lid}`);
+            const d = await r.json();
+            for (const a of d.assignments ?? []) asns.push(a);
+          })
+        );
+        setAssignments(asns);
+
+        const itemIds = [...new Set(asns.map((a) => a.itemId))];
+        const itemMap = new Map<
+          string,
+          { id: string; name: string; description: string | null }
+        >();
+        await Promise.all(
+          itemIds.map(async (iid) => {
+            const r = await fetch(`/api/items/${iid}`);
+            const d = await r.json();
+            if (d.item) itemMap.set(d.item.id, d.item);
+          })
+        );
+        setItemsById(itemMap);
+      } else {
+        setAssignments([]);
+        setItemsById(new Map());
+      }
+    } catch (err) {
+      console.error(err);
+    }
+  }, [insert.id]);
 
   useEffect(() => {
     setDraftName(insert.name ?? "");
     setEditing(false);
     setPickerOpen(false);
-    (async () => {
-      try {
-        const res = await fetch(`/api/locations?insertId=${insert.id}`);
-        const data = await res.json();
-        setCells(data.locations ?? []);
-      } catch (err) {
-        console.error(err);
-      }
-    })();
-  }, [insert.id, insert.name]);
+    setSelectedCellId(null);
+    setShowItemPicker(false);
+    setEditingRestrict(false);
+    loadAll();
+  }, [insert.id, insert.name, loadAll]);
 
   async function openPicker() {
     setPickerOpen(true);
@@ -368,6 +441,159 @@ function InsertDetail({
     }
   }
 
+  const selectedCell = cells.find((c) => c.id === selectedCellId) ?? null;
+  const selectedAssignments = useMemo(
+    () => assignments.filter((a) => a.locationId === selectedCellId),
+    [assignments, selectedCellId]
+  );
+
+  function selectCell(id: string | null) {
+    setSelectedCellId(id);
+    setShowItemPicker(false);
+    setEditingRestrict(false);
+  }
+
+  async function searchItems(q: string) {
+    setItemSearchQuery(q);
+    if (q.trim().length < 2) {
+      setItemSearchResults([]);
+      return;
+    }
+    try {
+      const r = await fetch(`/api/items?q=${encodeURIComponent(q.trim())}`);
+      const d = await r.json();
+      setItemSearchResults(d.items ?? []);
+    } catch (err) {
+      console.error(err);
+    }
+  }
+
+  async function assignItem(itemId: string) {
+    if (!selectedCellId) return;
+    try {
+      const r = await fetch(`/api/assignments`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          itemId,
+          locationId: selectedCellId,
+          assignmentType: "placed",
+        }),
+      });
+      if (!r.ok) {
+        const d = await r.json();
+        alert(d.error || "Failed to assign");
+        return;
+      }
+      setShowItemPicker(false);
+      setItemSearchQuery("");
+      setItemSearchResults([]);
+      await loadAll();
+    } catch (err) {
+      console.error(err);
+    }
+  }
+
+  async function unassignItem(assignmentId: string) {
+    try {
+      await fetch(`/api/assignments/${assignmentId}`, { method: "DELETE" });
+      await loadAll();
+    } catch (err) {
+      console.error(err);
+    }
+  }
+
+  async function disableCell() {
+    if (!selectedCell) return;
+    const reason = window.prompt(
+      "Disable this cell. Reason (optional):",
+      selectedCell.disableReason ?? ""
+    );
+    if (reason === null) return;
+    try {
+      const r = await fetch(
+        `/api/locations/${selectedCell.id}/disable`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ reason: reason.trim() || undefined }),
+        }
+      );
+      if (!r.ok) {
+        const d = await r.json();
+        alert(d.error || "Failed");
+        return;
+      }
+      await loadAll();
+    } catch (err) {
+      console.error(err);
+    }
+  }
+
+  async function enableCell() {
+    if (!selectedCell) return;
+    try {
+      await fetch(`/api/locations/${selectedCell.id}/disable`, {
+        method: "DELETE",
+      });
+      await loadAll();
+    } catch (err) {
+      console.error(err);
+    }
+  }
+
+  function openRestrict() {
+    if (!selectedCell) return;
+    setRestrictDraft({
+      maxWidthMm: selectedCell.maxWidthMm ?? "",
+      maxHeightMm: selectedCell.maxHeightMm ?? "",
+      maxDepthMm: selectedCell.maxDepthMm ?? "",
+      reason: selectedCell.restrictReason ?? "",
+    });
+    setEditingRestrict(true);
+  }
+
+  async function saveRestrict() {
+    if (!selectedCell) return;
+    try {
+      const r = await fetch(
+        `/api/locations/${selectedCell.id}/restrict`,
+        {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            maxWidthMm: restrictDraft.maxWidthMm.trim() || null,
+            maxHeightMm: restrictDraft.maxHeightMm.trim() || null,
+            maxDepthMm: restrictDraft.maxDepthMm.trim() || null,
+            reason: restrictDraft.reason.trim() || null,
+          }),
+        }
+      );
+      if (!r.ok) {
+        const d = await r.json();
+        alert(d.error || "Failed");
+        return;
+      }
+      setEditingRestrict(false);
+      await loadAll();
+    } catch (err) {
+      console.error(err);
+    }
+  }
+
+  async function clearRestrict() {
+    if (!selectedCell) return;
+    try {
+      await fetch(`/api/locations/${selectedCell.id}/restrict`, {
+        method: "DELETE",
+      });
+      setEditingRestrict(false);
+      await loadAll();
+    } catch (err) {
+      console.error(err);
+    }
+  }
+
   async function deleteInsert() {
     if (!confirm("Delete this insert? This cannot be undone via the UI.")) return;
     try {
@@ -386,8 +612,8 @@ function InsertDetail({
   }
 
   return (
-    <div className="flex-1 flex flex-col min-w-0 overflow-y-auto">
-      <div className="p-6 border-b border-slate-700 space-y-2">
+    <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
+      <div className="p-6 border-b border-slate-700 space-y-2 shrink-0">
         {editing ? (
           <div className="flex items-center gap-2">
             <input
@@ -429,7 +655,7 @@ function InsertDetail({
         )}
       </div>
 
-      <div className="p-6 grid grid-cols-2 gap-x-6 gap-y-4 max-w-2xl">
+      <div className="p-6 grid grid-cols-2 gap-x-6 gap-y-4 max-w-2xl shrink-0">
         <Field label="Template">
           {insert.templateId ? (
             <Link
@@ -480,21 +706,313 @@ function InsertDetail({
         </Field>
       </div>
 
-      {/* Grid (cells materialized at create time) */}
-      <div className="px-6 pb-6">
-        <div className="text-xs text-slate-500 uppercase tracking-wider mb-3">
-          Layout
-        </div>
-        {cells.length === 0 ? (
-          <div className="text-sm text-slate-500">
-            No cells. Template has no grid, or insert was created without one.
+      {/* Layout area: grid + optional cell panel */}
+      <div className="flex-1 flex min-w-0 overflow-hidden">
+        <div className="flex-1 overflow-auto p-6">
+          <div className="text-xs text-slate-500 uppercase tracking-wider mb-3">
+            Layout
           </div>
-        ) : (
-          <InsertGrid cells={cells} />
+          {cells.length === 0 ? (
+            <div className="text-sm text-slate-500">
+              No cells. Template has no grid, or insert was created without
+              one.
+            </div>
+          ) : (
+            <InsertGrid
+              cells={cells}
+              assignments={assignments}
+              itemsById={itemsById}
+              selectedCellId={selectedCellId}
+              onCellClick={selectCell}
+            />
+          )}
+        </div>
+
+        {selectedCell && (
+          <div className="w-80 shrink-0 border-l border-slate-700 bg-slate-800/20 overflow-y-auto">
+            <div className="p-4 border-b border-slate-700 flex items-center justify-between">
+              <div className="min-w-0">
+                <div className="text-sm font-medium text-slate-200 truncate">
+                  Cell {selectedCell.label}
+                </div>
+                {selectedCell.isDisabled && (
+                  <div className="text-xs text-red-400 mt-0.5">
+                    Disabled
+                    {selectedCell.disableReason &&
+                      `: ${selectedCell.disableReason}`}
+                  </div>
+                )}
+              </div>
+              <button
+                onClick={() => selectCell(null)}
+                className="text-xs text-slate-500 hover:text-slate-300"
+              >
+                Close
+              </button>
+            </div>
+
+            {/* Assignments */}
+            <div className="p-4">
+              {selectedAssignments.length === 0 ? (
+                <div className="text-center">
+                  <p className="text-sm text-slate-500 mb-3">
+                    No items assigned.
+                  </p>
+                  {!selectedCell.isDisabled && (
+                    <button
+                      onClick={() => setShowItemPicker(true)}
+                      className="px-3 py-1.5 bg-accent text-white rounded text-xs hover:brightness-110"
+                    >
+                      Assign Item
+                    </button>
+                  )}
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  <h4 className="text-xs font-medium text-slate-400 uppercase tracking-wider">
+                    Assigned Items
+                  </h4>
+                  {selectedAssignments.map((a) => {
+                    const item = itemsById.get(a.itemId);
+                    return (
+                      <div
+                        key={a.id}
+                        className="p-2 rounded bg-slate-800/60 border border-slate-700"
+                      >
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="min-w-0">
+                            <div className="text-sm text-slate-200 font-medium truncate">
+                              {item?.name ?? "Unknown item"}
+                            </div>
+                            {item?.description && (
+                              <div className="text-xs text-slate-500 line-clamp-2">
+                                {item.description}
+                              </div>
+                            )}
+                          </div>
+                          <span
+                            className={`text-[10px] px-1.5 py-0.5 rounded shrink-0 ${
+                              a.assignmentType === "placed"
+                                ? "bg-green-900/40 text-green-300"
+                                : "bg-amber-900/40 text-amber-300"
+                            }`}
+                          >
+                            {a.assignmentType}
+                          </span>
+                        </div>
+                        <button
+                          onClick={() => unassignItem(a.id)}
+                          className="mt-1 text-xs text-red-400 hover:text-red-300"
+                        >
+                          Unassign
+                        </button>
+                      </div>
+                    );
+                  })}
+                  {!selectedCell.isDisabled && (
+                    <button
+                      onClick={() => setShowItemPicker(true)}
+                      className="w-full px-3 py-1.5 border border-dashed border-slate-600 text-slate-400 rounded text-xs hover:border-slate-500 hover:text-slate-300"
+                    >
+                      + Assign another item
+                    </button>
+                  )}
+                </div>
+              )}
+
+              {/* Item picker */}
+              {showItemPicker && (
+                <div className="mt-4 border-t border-slate-700 pt-3">
+                  <input
+                    type="text"
+                    value={itemSearchQuery}
+                    onChange={(e) => searchItems(e.target.value)}
+                    placeholder="Search items…"
+                    autoFocus
+                    className="w-full px-2 py-1 bg-slate-800 border border-slate-600 rounded text-sm text-slate-200 focus:border-accent focus:outline-none"
+                  />
+                  <div className="mt-2 max-h-48 overflow-y-auto">
+                    {itemSearchResults.length > 0 ? (
+                      itemSearchResults.map((it) => (
+                        <button
+                          key={it.id}
+                          onClick={() => assignItem(it.id)}
+                          className="w-full text-left px-2 py-1.5 rounded hover:bg-slate-700/50"
+                        >
+                          <div className="text-sm text-slate-200">{it.name}</div>
+                          {it.description && (
+                            <div className="text-xs text-slate-500 line-clamp-1">
+                              {it.description}
+                            </div>
+                          )}
+                        </button>
+                      ))
+                    ) : itemSearchQuery.trim().length >= 2 ? (
+                      <p className="text-xs text-slate-500 py-2 text-center">
+                        No items found.
+                      </p>
+                    ) : (
+                      <p className="text-xs text-slate-500 py-2 text-center">
+                        Type 2+ chars to search.
+                      </p>
+                    )}
+                  </div>
+                  <button
+                    onClick={() => {
+                      setShowItemPicker(false);
+                      setItemSearchQuery("");
+                      setItemSearchResults([]);
+                    }}
+                    className="mt-2 text-xs text-slate-500 hover:text-slate-400"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              )}
+
+              {/* Overrides */}
+              <div className="mt-4 pt-4 border-t border-slate-700 space-y-3">
+                <h4 className="text-xs font-medium text-slate-400 uppercase tracking-wider">
+                  Overrides
+                </h4>
+
+                {selectedCell.isDisabled ? (
+                  <button
+                    onClick={enableCell}
+                    className="w-full px-3 py-1.5 border border-slate-600 text-slate-300 rounded text-xs hover:bg-slate-700/50"
+                  >
+                    Enable
+                  </button>
+                ) : (
+                  <button
+                    onClick={disableCell}
+                    disabled={selectedAssignments.length > 0}
+                    title={
+                      selectedAssignments.length > 0
+                        ? "Unassign items before disabling this cell"
+                        : undefined
+                    }
+                    className="w-full px-3 py-1.5 border border-slate-600 text-slate-300 rounded text-xs hover:bg-slate-700/50 disabled:opacity-40 disabled:cursor-not-allowed"
+                  >
+                    Disable…
+                  </button>
+                )}
+
+                {editingRestrict ? (
+                  <div className="space-y-2 p-2 rounded bg-slate-800/60 border border-slate-700">
+                    <div className="text-xs text-slate-400">
+                      Clamp usable capacity (mm). Blank = no clamp.
+                    </div>
+                    <div className="grid grid-cols-3 gap-1.5">
+                      {(["maxWidthMm", "maxHeightMm", "maxDepthMm"] as const).map(
+                        (k) => (
+                          <label
+                            key={k}
+                            className="text-[10px] text-slate-500 flex flex-col gap-0.5"
+                          >
+                            {k === "maxWidthMm"
+                              ? "Max W"
+                              : k === "maxHeightMm"
+                                ? "Max H"
+                                : "Max D"}
+                            <input
+                              type="number"
+                              min="0"
+                              step="any"
+                              value={restrictDraft[k]}
+                              onChange={(e) =>
+                                setRestrictDraft({
+                                  ...restrictDraft,
+                                  [k]: e.target.value,
+                                })
+                              }
+                              className="px-1.5 py-1 bg-slate-900 border border-slate-600 rounded text-xs text-slate-200 focus:border-accent focus:outline-none tabular-nums"
+                            />
+                          </label>
+                        )
+                      )}
+                    </div>
+                    <input
+                      type="text"
+                      placeholder="Reason (optional)"
+                      value={restrictDraft.reason}
+                      onChange={(e) =>
+                        setRestrictDraft({
+                          ...restrictDraft,
+                          reason: e.target.value,
+                        })
+                      }
+                      className="w-full px-2 py-1 bg-slate-900 border border-slate-600 rounded text-xs text-slate-200 focus:border-accent focus:outline-none placeholder:text-slate-600"
+                    />
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={saveRestrict}
+                        className="px-2.5 py-1 bg-accent text-white rounded text-xs hover:brightness-110"
+                      >
+                        Save
+                      </button>
+                      <button
+                        onClick={() => setEditingRestrict(false)}
+                        className="px-2.5 py-1 border border-slate-600 text-slate-300 rounded text-xs hover:bg-slate-700/50"
+                      >
+                        Cancel
+                      </button>
+                      {(selectedCell.maxWidthMm ||
+                        selectedCell.maxHeightMm ||
+                        selectedCell.maxDepthMm) && (
+                        <button
+                          onClick={clearRestrict}
+                          className="ml-auto text-xs text-slate-500 hover:text-slate-300"
+                        >
+                          Clear
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                ) : selectedCell.maxWidthMm ||
+                  selectedCell.maxHeightMm ||
+                  selectedCell.maxDepthMm ? (
+                  <div className="space-y-1">
+                    <div className="text-xs text-amber-300">
+                      Restricted:{" "}
+                      {[
+                        selectedCell.maxWidthMm &&
+                          `W≤${selectedCell.maxWidthMm}mm`,
+                        selectedCell.maxHeightMm &&
+                          `H≤${selectedCell.maxHeightMm}mm`,
+                        selectedCell.maxDepthMm &&
+                          `D≤${selectedCell.maxDepthMm}mm`,
+                      ]
+                        .filter(Boolean)
+                        .join(", ")}
+                    </div>
+                    {selectedCell.restrictReason && (
+                      <div className="text-[11px] text-slate-500">
+                        {selectedCell.restrictReason}
+                      </div>
+                    )}
+                    <button
+                      onClick={openRestrict}
+                      className="w-full px-3 py-1.5 border border-slate-600 text-slate-300 rounded text-xs hover:bg-slate-700/50"
+                    >
+                      Edit restriction
+                    </button>
+                  </div>
+                ) : (
+                  <button
+                    onClick={openRestrict}
+                    className="w-full px-3 py-1.5 border border-slate-600 text-slate-300 rounded text-xs hover:bg-slate-700/50"
+                  >
+                    Restrict dimensions…
+                  </button>
+                )}
+              </div>
+            </div>
+          </div>
         )}
       </div>
 
-      <div className="p-6 pt-0 mt-auto flex items-center gap-2 border-t border-slate-700 pt-4">
+      <div className="p-6 flex items-center gap-2 border-t border-slate-700 shrink-0">
         <button
           onClick={openPicker}
           className="px-3 py-1.5 bg-accent text-white rounded text-xs hover:brightness-110 transition-all"
@@ -611,29 +1129,57 @@ function Field({
 
 function InsertGrid({
   cells,
+  assignments,
+  itemsById,
+  selectedCellId,
+  onCellClick,
 }: {
-  cells: Array<{
+  cells: CellRow[];
+  assignments: Array<{
     id: string;
-    label: string;
-    gridRow: number | null;
-    gridColumn: number | null;
-    isDisabled: boolean;
+    itemId: string;
+    locationId: string;
+    assignmentType: "placed" | "provisional";
   }>;
+  itemsById: Map<
+    string,
+    { id: string; name: string; description: string | null }
+  >;
+  selectedCellId: string | null;
+  onCellClick: (id: string) => void;
 }) {
+  const assignByLoc = new Map<
+    string,
+    typeof assignments
+  >();
+  for (const a of assignments) {
+    const list = assignByLoc.get(a.locationId) ?? [];
+    list.push(a);
+    assignByLoc.set(a.locationId, list);
+  }
+
   const gridCells = cells.filter(
     (c) => c.gridRow != null && c.gridColumn != null
   );
   if (gridCells.length === 0) {
     return (
       <div className="flex flex-wrap gap-1 max-w-lg">
-        {cells.map((c) => (
-          <div
-            key={c.id}
-            className="px-3 py-2 rounded border border-slate-700 bg-slate-800/40 text-sm text-slate-300"
-          >
-            {c.label}
-          </div>
-        ))}
+        {cells.map((c) => {
+          const isSel = c.id === selectedCellId;
+          return (
+            <button
+              key={c.id}
+              onClick={() => onCellClick(c.id)}
+              className={`px-3 py-2 rounded border text-sm transition-colors ${
+                isSel
+                  ? "border-accent bg-accent/10 text-slate-100"
+                  : "border-slate-700 bg-slate-800/40 text-slate-300 hover:border-slate-600"
+              }`}
+            >
+              {c.label}
+            </button>
+          );
+        })}
       </div>
     );
   }
@@ -648,7 +1194,6 @@ function InsertGrid({
 
   return (
     <svg width={svgW} height={svgH} className="max-w-full">
-      {/* Row labels */}
       {Array.from({ length: maxRow + 1 }, (_, r) => {
         const label = gridCells.find((c) => c.gridRow === r)?.label.charAt(0);
         return (
@@ -665,7 +1210,6 @@ function InsertGrid({
           </text>
         );
       })}
-      {/* Col labels */}
       {Array.from({ length: maxCol + 1 }, (_, c) => (
         <text
           key={`c-${c}`}
@@ -678,32 +1222,97 @@ function InsertGrid({
           {c + 1}
         </text>
       ))}
-      {/* Cells */}
       {gridCells.map((cell) => {
         const x = labelPad + cell.gridColumn! * (cellSize + gap);
         const y = labelPad + cell.gridRow! * (cellSize + gap);
+        const cellAssignments = assignByLoc.get(cell.id) ?? [];
+        const occupied = cellAssignments.length > 0;
+        const isSelected = cell.id === selectedCellId;
+        const isProvisional =
+          occupied && cellAssignments[0].assignmentType === "provisional";
+        const isRestricted =
+          cell.maxWidthMm || cell.maxHeightMm || cell.maxDepthMm;
+
+        let fillColor = "transparent";
+        let strokeColor = "#475569";
+        let strokeWidth = 1;
+
+        if (cell.isDisabled) {
+          fillColor = "rgba(248,113,113,0.12)";
+          strokeColor = "#7f1d1d";
+        } else if (isSelected) {
+          fillColor = "rgba(255,102,0,0.12)";
+          strokeColor = "#ff6600";
+          strokeWidth = 2;
+        } else if (occupied) {
+          fillColor = isProvisional
+            ? "rgba(251,191,36,0.1)"
+            : "rgba(96,165,250,0.12)";
+          strokeColor = isProvisional ? "#92400e" : "#1e40af";
+        }
+
+        const itemName = occupied
+          ? itemsById.get(cellAssignments[0].itemId)?.name
+          : null;
+
         return (
-          <g key={cell.id}>
+          <g
+            key={cell.id}
+            onClick={() => onCellClick(cell.id)}
+            className="cursor-pointer"
+          >
             <rect
               x={x}
               y={y}
               width={cellSize}
               height={cellSize}
-              fill={cell.isDisabled ? "rgba(248,113,113,0.12)" : "transparent"}
-              stroke={cell.isDisabled ? "#7f1d1d" : "#475569"}
-              strokeWidth={1}
+              fill={fillColor}
+              stroke={strokeColor}
+              strokeWidth={strokeWidth}
               rx={3}
             />
             <text
               x={x + cellSize / 2}
-              y={y + cellSize / 2}
+              y={occupied ? y + 14 : y + cellSize / 2}
               textAnchor="middle"
-              dominantBaseline="central"
-              fill={cell.isDisabled ? "#f87171" : "#94a3b8"}
-              fontSize={11}
+              dominantBaseline={occupied ? "auto" : "central"}
+              fill={cell.isDisabled ? "#f87171" : "#64748b"}
+              fontSize={10}
+              fontWeight={isSelected ? 600 : 400}
             >
               {cell.label}
             </text>
+            {itemName && (
+              <text
+                x={x + cellSize / 2}
+                y={y + cellSize / 2 + 4}
+                textAnchor="middle"
+                dominantBaseline="central"
+                fill={isProvisional ? "#fbbf24" : "#93c5fd"}
+                fontSize={9}
+                className="select-none pointer-events-none"
+              >
+                {itemName.length > 9
+                  ? itemName.substring(0, 8) + "…"
+                  : itemName}
+              </text>
+            )}
+            {occupied && (
+              <circle
+                cx={x + cellSize - 6}
+                cy={y + 6}
+                r={3}
+                fill={isProvisional ? "#fbbf24" : "#60a5fa"}
+              />
+            )}
+            {isRestricted && !cell.isDisabled && (
+              <circle
+                cx={x + 6}
+                cy={y + 6}
+                r={3}
+                fill="#fbbf24"
+              />
+            )}
           </g>
         );
       })}
