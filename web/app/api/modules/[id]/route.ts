@@ -42,9 +42,14 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
   }
 }
 
-export async function DELETE(_request: NextRequest, { params }: RouteParams) {
+export async function DELETE(request: NextRequest, { params }: RouteParams) {
   try {
     const { id } = await params;
+    const cascade = request.nextUrl.searchParams.get("cascade") === "true";
+    if (cascade) {
+      const stats = await moduleRepository.removeWithCascade({ id });
+      return NextResponse.json({ success: true, stats });
+    }
     await moduleRepository.remove({ id });
     return NextResponse.json({ success: true });
   } catch (err) {

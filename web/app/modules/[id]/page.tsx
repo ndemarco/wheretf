@@ -70,6 +70,18 @@ export default function ModuleDetailPage() {
   const [editingModule, setEditingModule] = useState(false);
   const [editingLevel, setEditingLevel] = useState(false);
 
+  // Deletion dialog state (ML-2)
+  const [deletingOpen, setDeletingOpen] = useState(false);
+  const [deleteStats, setDeleteStats] = useState<{
+    locationCount: number;
+    levelCount: number;
+    assignmentCount: number;
+    insertCount: number;
+  } | null>(null);
+  const [confirmName, setConfirmName] = useState("");
+  const [orphanAcknowledged, setOrphanAcknowledged] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+
   // Draft state for edits
   const [moduleDraft, setModuleDraft] = useState<{
     name: string;
@@ -279,6 +291,46 @@ export default function ModuleDetailPage() {
       description: module_.description ?? "",
     });
     setEditingModule(false);
+  }
+
+  async function openDeleteDialog() {
+    setDeletingOpen(true);
+    setConfirmName("");
+    setOrphanAcknowledged(false);
+    setDeleteStats(null);
+    try {
+      const res = await fetch(`/api/modules/${id}/stats`);
+      const data = await res.json();
+      setDeleteStats(data.stats);
+    } catch (err) {
+      console.error(err);
+    }
+  }
+
+  function closeDeleteDialog() {
+    if (deleting) return;
+    setDeletingOpen(false);
+  }
+
+  async function confirmDelete() {
+    if (!module_) return;
+    setDeleting(true);
+    try {
+      const res = await fetch(`/api/modules/${id}?cascade=true`, {
+        method: "DELETE",
+      });
+      if (!res.ok) {
+        const data = await res.json();
+        alert(data.error || "Failed to delete module");
+        setDeleting(false);
+        return;
+      }
+      localStorage.removeItem(`wheretf.module.${id}.selectedLevel`);
+      router.push("/modules");
+    } catch (err) {
+      console.error(err);
+      setDeleting(false);
+    }
   }
 
   async function saveLevel() {
@@ -792,9 +844,197 @@ export default function ModuleDetailPage() {
           onEdit={() => setEditingModule(true)}
           onSave={saveModule}
           onCancel={cancelModuleEdit}
+          onDelete={openDeleteDialog}
         />
       )}
       </div>
+      </div>
+
+      {deletingOpen && (
+        <DeleteModuleDialog
+          moduleName={module_.name}
+          stats={deleteStats}
+          confirmName={confirmName}
+          setConfirmName={setConfirmName}
+          orphanAcknowledged={orphanAcknowledged}
+          setOrphanAcknowledged={setOrphanAcknowledged}
+          onClose={closeDeleteDialog}
+          onConfirm={confirmDelete}
+          deleting={deleting}
+        />
+      )}
+    </div>
+  );
+}
+
+// --- Delete Module Dialog (GitHub-repo pattern) ---
+
+function DeleteModuleDialog({
+  moduleName,
+  stats,
+  confirmName,
+  setConfirmName,
+  orphanAcknowledged,
+  setOrphanAcknowledged,
+  onClose,
+  onConfirm,
+  deleting,
+}: {
+  moduleName: string;
+  stats: {
+    locationCount: number;
+    levelCount: number;
+    assignmentCount: number;
+    insertCount: number;
+  } | null;
+  confirmName: string;
+  setConfirmName: (v: string) => void;
+  orphanAcknowledged: boolean;
+  setOrphanAcknowledged: (v: boolean) => void;
+  onClose: () => void;
+  onConfirm: () => void;
+  deleting: boolean;
+}) {
+  const hasContents =
+    !!stats &&
+    (stats.assignmentCount > 0 ||
+      stats.insertCount > 0 ||
+      stats.locationCount > 0);
+  const orphanRequired =
+    !!stats && (stats.assignmentCount > 0 || stats.insertCount > 0);
+  const nameMatches = confirmName === moduleName;
+  const canDelete =
+    !!stats &&
+    nameMatches &&
+    (!orphanRequired || orphanAcknowledged) &&
+    !deleting;
+
+  return (
+    <div
+      className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4"
+      onClick={onClose}
+    >
+      <div
+        className="bg-slate-900 border border-slate-700 rounded-lg w-full max-w-md flex flex-col"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="p-4 border-b border-slate-700">
+          <h2 className="text-base font-semibold text-red-300">
+            Delete module
+          </h2>
+          <p className="text-xs text-slate-500 mt-1">
+            This action cannot be undone from the UI.
+          </p>
+        </div>
+
+        <div className="p-4 space-y-4">
+          {!stats ? (
+            <p className="text-sm text-slate-400">Loading contents…</p>
+          ) : (
+            <>
+              {hasContents ? (
+                <div className="space-y-2">
+                  <p className="text-sm text-slate-300">
+                    <span className="font-semibold text-slate-100">
+                      {moduleName}
+                    </span>{" "}
+                    contains:
+                  </p>
+                  <ul className="text-sm text-slate-400 space-y-0.5 pl-4 list-disc">
+                    {stats.levelCount > 0 && (
+                      <li>
+                        {stats.levelCount}{" "}
+                        {stats.levelCount === 1 ? "level" : "levels"}
+                      </li>
+                    )}
+                    {stats.locationCount > 0 && (
+                      <li>
+                        {stats.locationCount} total{" "}
+                        {stats.locationCount === 1
+                          ? "location"
+                          : "locations"}
+                      </li>
+                    )}
+                    {stats.insertCount > 0 && (
+                      <li>
+                        {stats.insertCount}{" "}
+                        {stats.insertCount === 1
+                          ? "insert placed"
+                          : "inserts placed"}{" "}
+                        (will be unplaced)
+                      </li>
+                    )}
+                    {stats.assignmentCount > 0 && (
+                      <li>
+                        {stats.assignmentCount}{" "}
+                        {stats.assignmentCount === 1
+                          ? "assignment"
+                          : "assignments"}{" "}
+                        (items will become unassigned)
+                      </li>
+                    )}
+                  </ul>
+                </div>
+              ) : (
+                <p className="text-sm text-slate-400">
+                  This module is empty.
+                </p>
+              )}
+
+              {orphanRequired && (
+                <label className="flex items-start gap-2 text-sm text-slate-300 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={orphanAcknowledged}
+                    onChange={(e) =>
+                      setOrphanAcknowledged(e.target.checked)
+                    }
+                    className="mt-0.5 accent-red-500"
+                  />
+                  <span>
+                    I understand that items and inserts in this module will
+                    be orphaned. Assignments will be removed; inserts will
+                    be unplaced.
+                  </span>
+                </label>
+              )}
+
+              <div>
+                <label className="text-xs text-slate-500 block mb-1">
+                  Type{" "}
+                  <span className="font-mono text-slate-300">
+                    {moduleName}
+                  </span>{" "}
+                  to confirm
+                </label>
+                <input
+                  type="text"
+                  value={confirmName}
+                  onChange={(e) => setConfirmName(e.target.value)}
+                  autoFocus
+                  className="w-full px-2 py-1.5 bg-slate-800 border border-slate-600 rounded text-sm text-slate-200 focus:border-red-500 focus:outline-none font-mono"
+                />
+              </div>
+            </>
+          )}
+        </div>
+
+        <div className="p-4 border-t border-slate-700 flex items-center justify-end gap-2">
+          <button
+            onClick={onClose}
+            disabled={deleting}
+            className="px-3 py-1.5 border border-slate-600 text-slate-300 rounded text-xs hover:bg-slate-700/50 transition-colors disabled:opacity-50"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={onConfirm}
+            disabled={!canDelete}
+            className="px-3 py-1.5 bg-red-600 text-white rounded text-xs hover:bg-red-500 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+          >
+            {deleting ? "Deleting…" : "Delete module"}
+          </button>
+        </div>
       </div>
     </div>
   );
@@ -811,6 +1051,7 @@ function ModulePanel({
   onEdit,
   onSave,
   onCancel,
+  onDelete,
 }: {
   module_: Module;
   levelCount: number;
@@ -820,6 +1061,7 @@ function ModulePanel({
   onEdit: () => void;
   onSave: () => void;
   onCancel: () => void;
+  onDelete: () => void;
 }) {
   return (
     <>
@@ -864,7 +1106,7 @@ function ModulePanel({
                 className="w-full px-2 py-1.5 bg-slate-800 border border-slate-600 rounded text-sm text-slate-200 focus:border-accent focus:outline-none resize-none"
               />
             </div>
-            <div className="flex gap-2">
+            <div className="flex items-center gap-2">
               <button
                 onClick={onSave}
                 className="px-3 py-1.5 bg-accent text-white rounded text-xs hover:brightness-110 transition-all"
@@ -876,6 +1118,12 @@ function ModulePanel({
                 className="px-3 py-1.5 border border-slate-600 text-slate-300 rounded text-xs hover:bg-slate-700/50 transition-colors"
               >
                 Cancel
+              </button>
+              <button
+                onClick={onDelete}
+                className="ml-auto px-3 py-1.5 border border-red-900/60 text-red-400 rounded text-xs hover:bg-red-900/20 transition-colors"
+              >
+                Delete…
               </button>
             </div>
           </>
