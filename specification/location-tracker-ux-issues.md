@@ -75,9 +75,13 @@ Running list of issues and decisions for the `/modules` and `/modules/[id]` area
 - **Problem:** No entry point to create a template from the list page or detail page. `/templates/new` exists as a route.
 - **Status:** Capturing; needs clarification.
 
-### TP-2 — Delete a template missing
+### TP-2 — Delete a template
 - **Problem:** No affordance to delete a template.
-- **Status:** Capturing; same GitHub-repo deletion pattern likely applies (dialog + contents summary + type-to-confirm). Open: what are "contents" for a template — all inserts/locations referencing any of its versions?
+- **Decision:**
+  - If the template is **unreferenced** (no insert or location points at any of its versions): hard delete allowed via the same GitHub-repo pattern (type-to-confirm).
+  - If the template is **referenced**: hide instead of delete. A hidden template stays usable for existing inserts/locations but does not appear in pickers for new ones.
+- **Future:** Delete-with-move — on delete of a referenced template, offer to replace its usages with a different template before removing.
+- **Schema impact:** add `templates.isHidden boolean default false`. Picker/listing code filters it out. Existing inserts/locations resolve their templateVersion as normal.
 
 ### TP-3 — No way back to templates list from detail
 - **Problem:** When viewing `/templates/[id]`, the only path back to the list is the sidebar menu button. Feels wrong.
@@ -88,16 +92,42 @@ Running list of issues and decisions for the `/modules` and `/modules/[id]` area
 - **Recommended MVP:** Breadcrumb (matches GN-2 and the conventions the user already agreed to). Add a back-arrow on narrow viewports as a bonus.
 - **Bigger picture (new from user):** Consider a "template editor" mode layered over the list — view the list, select/edit a template, return to the list. This is the *master-detail* / *stacked-navigation* pattern (Slack channels, Gmail labels, Xcode settings). Needs its own spec pass; deferred until TP-1/TP-2 land.
 
-### TP-4 — Template editor mode over list
-- **Problem:** Navigating away from the list to a dedicated detail page loses the user's place in the list and feels heavy.
-- **Direction:** A "template editor mode" logically applied on top of the list — select a template → inline detail view opens (could be right pane, drawer, or modal) → user edits → closes → returns to list with selection preserved.
-- **Status:** New idea. Defer full spec until we agree on which layout pattern fits best (pane vs. drawer vs. modal vs. full-page overlay).
-- **Open:** Does this pattern also apply to `/items/[id]` and `/modules/[id]`? If yes, it becomes a cross-cutting layout decision, not just templates.
+### TP-4 — Template editor: master-detail layout
+- **Decision:** `/templates` becomes master-detail. List on the left, detail/editor on the right. Click a row → list stays visible, detail fills the right pane. URL reflects selection (`/templates?selected=<id>`).
+- **Scope:** Templates only. Items and modules keep their current patterns.
+- **Supersedes TP-3:** With master-detail, there's no navigation-away, so the "how do I get back" problem disappears.
+- **Detail route:** `/templates/[id]` remains for deep-linking but becomes a thin redirect to `/templates?selected=[id]`.
+
+---
+
+---
+
+## Inserts
+
+### IN-1 — No `/inserts` page
+- **Problem:** Inserts are only manageable through the module that hosts them. No way to see all inserts across the system, no way to create an unplaced insert from the UI (API only).
+- **Direction (TBD):**
+  - **Option a** — add a full `/inserts` area (list + detail, master-detail like templates). Lets the user manage unplaced insert inventory, see all instances of a template, etc.
+  - **Option b** — keep inserts module-scoped. Add "inserts" sub-area on the module detail page listing what's in this module.
+  - **Option c** — both: a cross-module `/inserts` *and* a per-module list.
+- **Open:** Decide scope. Related to whether inserts count as "inventory" (global) or are always seen through their host location.
+
+### IN-2 — Where do I edit an insert's overrides (merge / divide / disable / restrict)?
+- **Problem:** No UI exists for any of the four override types (see storage-model.md §Override Types). Schema supports:
+  - `locations.mergedIntoId` for merge aliasing on module-scoped locations
+  - `locations.isDisabled` + `disableReason` for disable on module-scoped locations
+  - `locations.maxWidthMm/maxHeightMm/maxDepthMm/restrictReason` for restrict (MVP)
+  - `inserts.overrides` JSONB for insert-scoped overrides (unstructured today — no validator)
+- **Gaps:**
+  - No API endpoint to apply an override to an insert
+  - No API endpoint to divide a location (materialize children)
+  - No UI for any of this
+- **Direction:** Overrides should be editable from the cell detail panel (right pane) on the module detail page. Multi-select a range of cells → "Merge" shows up in the panel. Right-click or action menu on a single cell → "Disable" / "Restrict height" / "Divide".
+- **Status:** Deferred. Big feature area; needs its own spec pass before implementation. Related to IN-1 (if inserts get a dedicated UI, insert-scoped overrides may live there too).
 
 ---
 
 ## Cross-cutting open questions
 - **MD-1** add-level semantics (deferred)
-- **TP-1/TP-2** template create/delete affordances
-- **TP-3** back-nav from template detail (recommend breadcrumb)
-- **TP-4** master-detail pattern — scope decision (templates only, or everywhere)
+- **IN-1** inserts UI scope (cross-module vs. per-module vs. both)
+- **IN-2** override UX and missing API endpoints
