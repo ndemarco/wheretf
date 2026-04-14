@@ -477,6 +477,7 @@ export default function ModuleDetailPage() {
           body: JSON.stringify({ reason: reason.trim() || undefined }),
         }
       );
+      if (res.status === 404) return handleStaleLocation();
       if (!res.ok) {
         const data = await res.json();
         alert(data.error || "Failed to disable location");
@@ -499,6 +500,15 @@ export default function ModuleDetailPage() {
     setEditingRestrict(true);
   }
 
+  async function handleStaleLocation() {
+    alert(
+      "This cell no longer exists on the server. Reloading the module."
+    );
+    setSelectedCellId(null);
+    setEditingRestrict(false);
+    await fetchData();
+  }
+
   async function saveRestrict() {
     if (!selectedCell) return;
     const body = {
@@ -516,6 +526,7 @@ export default function ModuleDetailPage() {
           body: JSON.stringify(body),
         }
       );
+      if (res.status === 404) return handleStaleLocation();
       if (!res.ok) {
         const data = await res.json();
         alert(data.error || "Failed to save restriction");
@@ -535,6 +546,7 @@ export default function ModuleDetailPage() {
         `/api/locations/${selectedCell.id}/restrict`,
         { method: "DELETE" }
       );
+      if (res.status === 404) return handleStaleLocation();
       if (!res.ok) {
         const data = await res.json();
         alert(data.error || "Failed to clear restriction");
@@ -554,6 +566,7 @@ export default function ModuleDetailPage() {
         `/api/locations/${selectedCell.id}/disable`,
         { method: "DELETE" }
       );
+      if (res.status === 404) return handleStaleLocation();
       if (!res.ok) {
         const data = await res.json();
         alert(data.error || "Failed to enable location");
