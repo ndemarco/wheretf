@@ -4,9 +4,14 @@ import { locationRepository } from "@/repositories/locationRepository";
 export async function GET(request: NextRequest) {
   try {
     const moduleId = request.nextUrl.searchParams.get("moduleId");
+    const insertId = request.nextUrl.searchParams.get("insertId");
+    if (insertId) {
+      const locations = await locationRepository.findByInsertId({ insertId });
+      return NextResponse.json({ locations });
+    }
     if (!moduleId) {
       return NextResponse.json(
-        { error: "moduleId query parameter is required" },
+        { error: "moduleId or insertId query parameter is required" },
         { status: 400 },
       );
     }

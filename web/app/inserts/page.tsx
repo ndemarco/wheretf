@@ -264,10 +264,30 @@ function InsertDetail({
   const [pickerLoading, setPickerLoading] = useState(false);
   const [placing, setPlacing] = useState(false);
 
+  // Cells (grid)
+  const [cells, setCells] = useState<
+    Array<{
+      id: string;
+      label: string;
+      gridRow: number | null;
+      gridColumn: number | null;
+      isDisabled: boolean;
+    }>
+  >([]);
+
   useEffect(() => {
     setDraftName(insert.name ?? "");
     setEditing(false);
     setPickerOpen(false);
+    (async () => {
+      try {
+        const res = await fetch(`/api/locations?insertId=${insert.id}`);
+        const data = await res.json();
+        setCells(data.locations ?? []);
+      } catch (err) {
+        console.error(err);
+      }
+    })();
   }, [insert.id, insert.name]);
 
   async function openPicker() {
@@ -460,6 +480,20 @@ function InsertDetail({
         </Field>
       </div>
 
+      {/* Grid (cells materialized at create time) */}
+      <div className="px-6 pb-6">
+        <div className="text-xs text-slate-500 uppercase tracking-wider mb-3">
+          Layout
+        </div>
+        {cells.length === 0 ? (
+          <div className="text-sm text-slate-500">
+            No cells. Template has no grid, or insert was created without one.
+          </div>
+        ) : (
+          <InsertGrid cells={cells} />
+        )}
+      </div>
+
       <div className="p-6 pt-0 mt-auto flex items-center gap-2 border-t border-slate-700 pt-4">
         <button
           onClick={openPicker}
@@ -572,5 +606,107 @@ function Field({
       </div>
       <div className="text-sm text-slate-200 mt-1">{children}</div>
     </div>
+  );
+}
+
+function InsertGrid({
+  cells,
+}: {
+  cells: Array<{
+    id: string;
+    label: string;
+    gridRow: number | null;
+    gridColumn: number | null;
+    isDisabled: boolean;
+  }>;
+}) {
+  const gridCells = cells.filter(
+    (c) => c.gridRow != null && c.gridColumn != null
+  );
+  if (gridCells.length === 0) {
+    return (
+      <div className="flex flex-wrap gap-1 max-w-lg">
+        {cells.map((c) => (
+          <div
+            key={c.id}
+            className="px-3 py-2 rounded border border-slate-700 bg-slate-800/40 text-sm text-slate-300"
+          >
+            {c.label}
+          </div>
+        ))}
+      </div>
+    );
+  }
+
+  const maxRow = Math.max(...gridCells.map((c) => c.gridRow!));
+  const maxCol = Math.max(...gridCells.map((c) => c.gridColumn!));
+  const cellSize = 64;
+  const gap = 4;
+  const labelPad = 26;
+  const svgW = labelPad + (maxCol + 1) * (cellSize + gap) + 4;
+  const svgH = labelPad + (maxRow + 1) * (cellSize + gap) + 4;
+
+  return (
+    <svg width={svgW} height={svgH} className="max-w-full">
+      {/* Row labels */}
+      {Array.from({ length: maxRow + 1 }, (_, r) => {
+        const label = gridCells.find((c) => c.gridRow === r)?.label.charAt(0);
+        return (
+          <text
+            key={`r-${r}`}
+            x={labelPad - 8}
+            y={labelPad + r * (cellSize + gap) + cellSize / 2}
+            textAnchor="end"
+            dominantBaseline="central"
+            fill="#64748b"
+            fontSize={11}
+          >
+            {label}
+          </text>
+        );
+      })}
+      {/* Col labels */}
+      {Array.from({ length: maxCol + 1 }, (_, c) => (
+        <text
+          key={`c-${c}`}
+          x={labelPad + c * (cellSize + gap) + cellSize / 2}
+          y={labelPad - 8}
+          textAnchor="middle"
+          fill="#64748b"
+          fontSize={11}
+        >
+          {c + 1}
+        </text>
+      ))}
+      {/* Cells */}
+      {gridCells.map((cell) => {
+        const x = labelPad + cell.gridColumn! * (cellSize + gap);
+        const y = labelPad + cell.gridRow! * (cellSize + gap);
+        return (
+          <g key={cell.id}>
+            <rect
+              x={x}
+              y={y}
+              width={cellSize}
+              height={cellSize}
+              fill={cell.isDisabled ? "rgba(248,113,113,0.12)" : "transparent"}
+              stroke={cell.isDisabled ? "#7f1d1d" : "#475569"}
+              strokeWidth={1}
+              rx={3}
+            />
+            <text
+              x={x + cellSize / 2}
+              y={y + cellSize / 2}
+              textAnchor="middle"
+              dominantBaseline="central"
+              fill={cell.isDisabled ? "#f87171" : "#94a3b8"}
+              fontSize={11}
+            >
+              {cell.label}
+            </text>
+          </g>
+        );
+      })}
+    </svg>
   );
 }

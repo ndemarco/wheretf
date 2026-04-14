@@ -115,6 +115,13 @@ export const locationRepository = {
       .where(eq(locations.moduleId, moduleId));
   },
 
+  async findByInsertId({ insertId }: { insertId: string }) {
+    return db
+      .select()
+      .from(locations)
+      .where(eq(locations.insertId, insertId));
+  },
+
   async findChildren({ parentId }: { parentId: string }) {
     return db
       .select()
