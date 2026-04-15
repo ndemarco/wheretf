@@ -541,18 +541,26 @@ function InsertDetail({
     }
   }
 
-  async function undivideCell() {
-    if (!selectedCell) return;
-    if (!confirm("Collapse this cell's subdivisions? All children lose assignments.")) return;
+  async function undivideAt(parentId: string) {
+    if (
+      !confirm(
+        "Collapse this cell's subdivisions? Children will be removed."
+      )
+    )
+      return;
     try {
-      const r = await fetch(
-        `/api/locations/${selectedCell.id}/divide`,
-        { method: "DELETE" }
-      );
+      const r = await fetch(`/api/locations/${parentId}/divide`, {
+        method: "DELETE",
+      });
       if (!r.ok) {
         const d = await r.json();
         alert(d.error || "Undivide failed");
         return;
+      }
+      // If the currently selected cell was a child of this parent, it's
+      // gone now — select the former parent instead.
+      if (selectedCell && selectedCell.parentId === parentId) {
+        setSelectedCellId(parentId);
       }
       await loadAll();
     } catch (err) {
@@ -1063,13 +1071,25 @@ function InsertDetail({
                   </button>
                 )}
 
-                {/* Divide / Undivide */}
+                {/* Divide / Undivide — undivide applies to the parent
+                    whether the user selected the parent itself or any
+                    of its children */}
                 {cells.some((c) => c.parentId === selectedCell.id) ? (
                   <button
-                    onClick={undivideCell}
+                    onClick={() => undivideAt(selectedCell.id)}
                     className="w-full px-3 py-1.5 border border-slate-600 text-slate-300 rounded text-xs hover:bg-slate-700/50"
                   >
                     Undivide
+                  </button>
+                ) : selectedCell.parentId &&
+                  cells.some((c) => c.id === selectedCell.parentId) ? (
+                  <button
+                    onClick={() => undivideAt(selectedCell.parentId!)}
+                    className="w-full px-3 py-1.5 border border-slate-600 text-slate-300 rounded text-xs hover:bg-slate-700/50"
+                  >
+                    Undivide parent ({
+                      cells.find((c) => c.id === selectedCell.parentId)?.label
+                    })
                   </button>
                 ) : dividingOpen ? (
                   <div className="space-y-2 p-2 rounded bg-slate-800/60 border border-slate-700">
