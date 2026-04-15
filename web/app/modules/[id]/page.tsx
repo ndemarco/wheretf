@@ -750,23 +750,40 @@ export default function ModuleDetailPage() {
                         : "hover:bg-slate-800/30"
                     }`}
                   >
-                    <div className="flex items-center gap-2">
-                      <span className="text-slate-100 font-medium text-sm">
-                        {level.label}
-                      </span>
-                      <span
-                        className={`text-[10px] px-1.5 py-0.5 rounded ${
-                          level.locationType === "receptacle"
-                            ? "bg-blue-900/40 text-blue-300"
-                            : "bg-slate-700 text-slate-300"
-                        }`}
-                      >
-                        {level.locationType}
-                      </span>
-                      {level.isDisabled && (
-                        <span className="text-[10px] text-red-400">disabled</span>
-                      )}
-                    </div>
+                    {(() => {
+                      const ins = insertsByReceptacle.get(level.id);
+                      // Badge: insert name when filled; interface type when
+                      // empty receptacle; locationType for non-receptacles.
+                      let badgeText: string;
+                      let badgeClass: string;
+                      if (ins) {
+                        badgeText = ins.name ?? ins.templateName ?? "insert";
+                        badgeClass = "bg-slate-700 text-slate-100";
+                      } else if (level.locationType === "receptacle") {
+                        badgeText = level.interfaceTypeAccepted ?? "empty";
+                        badgeClass = "bg-blue-900/40 text-blue-300";
+                      } else {
+                        badgeText = level.locationType;
+                        badgeClass = "bg-slate-700 text-slate-300";
+                      }
+                      return (
+                        <div className="flex items-center gap-2">
+                          <span className="text-slate-100 font-medium text-sm">
+                            {level.label}
+                          </span>
+                          <span
+                            className={`text-[10px] px-1.5 py-0.5 rounded truncate max-w-[140px] ${badgeClass}`}
+                          >
+                            {badgeText}
+                          </span>
+                          {level.isDisabled && (
+                            <span className="text-[10px] text-red-400">
+                              disabled
+                            </span>
+                          )}
+                        </div>
+                      );
+                    })()}
                     {notes && (
                       <span className="block text-xs text-slate-500 mt-0.5">
                         {notes}
