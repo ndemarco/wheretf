@@ -265,6 +265,7 @@ export default function TaxonomyPage() {
 // --- Aspects Tab ---
 
 function AspectsTab() {
+  const [view, setView] = useState<"detail" | "matrix">("detail");
   const [aspects, setAspects] = useState<Aspect[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [params, setParams] = useState<AspectParameter[]>([]);
@@ -401,8 +402,22 @@ function AspectsTab() {
     }
   }
 
+  if (view === "matrix") {
+    return (
+      <div className="flex-1 flex flex-col overflow-hidden">
+        <ViewToggle view={view} onChange={setView} />
+        <AspectParameterMatrix
+          aspects={aspects}
+          allParamDefs={allParamDefs.length ? allParamDefs : null}
+        />
+      </div>
+    );
+  }
+
   return (
-    <div className="flex-1 flex overflow-hidden">
+    <div className="flex-1 flex flex-col overflow-hidden">
+      <ViewToggle view={view} onChange={setView} />
+      <div className="flex-1 flex overflow-hidden">
       {/* Aspect list */}
       <div className="w-72 border-r border-slate-700 flex flex-col shrink-0">
         <div className="p-3 border-b border-slate-700 flex items-center justify-between">
@@ -606,6 +621,290 @@ function AspectsTab() {
           onCancel={() => setDeleteTarget(null)}
         />
       )}
+      </div>
+    </div>
+  );
+}
+
+function ViewToggle({
+  view,
+  onChange,
+}: {
+  view: "detail" | "matrix";
+  onChange: (v: "detail" | "matrix") => void;
+}) {
+  return (
+    <div className="px-4 py-2 border-b border-slate-700 flex items-center justify-end gap-1 bg-slate-900/40">
+      {(["detail", "matrix"] as const).map((v) => (
+        <button
+          key={v}
+          onClick={() => onChange(v)}
+          className={`px-2.5 py-1 rounded text-[11px] transition-colors ${
+            view === v
+              ? "bg-slate-700 text-slate-100"
+              : "text-slate-400 hover:text-slate-200"
+          }`}
+        >
+          {v === "detail" ? "Detail" : "Matrix"}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+function AspectParameterMatrix({
+  aspects,
+  allParamDefs: allParamDefsSeed,
+}: {
+  aspects: Aspect[];
+  allParamDefs: ParameterDefinition[] | null;
+}) {
+  const [paramDefs, setParamDefs] = useState<ParameterDefinition[]>(
+    allParamDefsSeed ?? []
+  );
+  const [links, setLinks] = useState<Map<string, Set<string>>>(new Map());
+  const [pendingCells, setPendingCells] = useState<Set<string>>(new Set());
+  const [loading, setLoading] = useState(true);
+
+  const cellKey = (aspectId: string, pdId: string) => `${aspectId}:${pdId}`;
+
+  const refresh = useCallback(async () => {
+    setLoading(true);
+    try {
+      const [defsRes, ...aspectParamRes] = await Promise.all([
+        fetch("/api/parameter-definitions"),
+        ...aspects.map((a) => fetch(`/api/aspects/${a.id}/parameters`)),
+      ]);
+      const defsData = await defsRes.json();
+      setParamDefs(defsData.parameterDefinitions ?? []);
+      const nextLinks = new Map<string, Set<string>>();
+      for (let i = 0; i < aspects.length; i++) {
+        const d = await aspectParamRes[i].json();
+        const pdIds = new Set<string>(
+          (d.parameters ?? []).map(
+            (p: AspectParameter) => p.parameterDefinitionId
+          )
+        );
+        nextLinks.set(aspects[i].id, pdIds);
+      }
+      setLinks(nextLinks);
+    } finally {
+      setLoading(false);
+    }
+  }, [aspects]);
+
+  useEffect(() => {
+    if (aspects.length > 0) refresh();
+  }, [refresh, aspects.length]);
+
+  async function toggle(aspectId: string, pdId: string) {
+    const key = cellKey(aspectId, pdId);
+    if (pendingCells.has(key)) return;
+    setPendingCells((prev) => new Set(prev).add(key));
+    const current = links.get(aspectId)?.has(pdId) ?? false;
+
+    // optimistic update
+    setLinks((prev) => {
+      const next = new Map(prev);
+      const s = new Set(next.get(aspectId) ?? []);
+      if (current) s.delete(pdId);
+      else s.add(pdId);
+      next.set(aspectId, s);
+      return next;
+    });
+
+    try {
+      if (current) {
+        await fetch(`/api/aspects/${aspectId}/parameters`, {
+          method: "DELETE",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ parameterDefinitionId: pdId }),
+        });
+      } else {
+        await fetch(`/api/aspects/${aspectId}/parameters`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ parameterDefinitionId: pdId }),
+        });
+      }
+    } catch (err) {
+      console.error(err);
+      // revert on failure
+      setLinks((prev) => {
+        const next = new Map(prev);
+        const s = new Set(next.get(aspectId) ?? []);
+        if (current) s.add(pdId);
+        else s.delete(pdId);
+        next.set(aspectId, s);
+        return next;
+      });
+    } finally {
+      setPendingCells((prev) => {
+        const next = new Set(prev);
+        next.delete(key);
+        return next;
+      });
+    }
+  }
+
+  function toggleRow(pdId: string) {
+    // If param is in *every* aspect, clear all. Otherwise, add to all missing.
+    const missing = aspects.filter((a) => !(links.get(a.id)?.has(pdId) ?? false));
+    if (missing.length === 0) {
+      for (const a of aspects) toggle(a.id, pdId);
+    } else {
+      for (const a of missing) toggle(a.id, pdId);
+    }
+  }
+
+  function toggleCol(aspectId: string) {
+    const setOf = links.get(aspectId) ?? new Set<string>();
+    const missing = paramDefs.filter((pd) => !setOf.has(pd.id));
+    if (missing.length === 0) {
+      for (const pd of paramDefs) toggle(aspectId, pd.id);
+    } else {
+      for (const pd of missing) toggle(aspectId, pd.id);
+    }
+  }
+
+  const rowUsage = new Map<string, number>();
+  for (const pd of paramDefs) {
+    let n = 0;
+    for (const a of aspects) if (links.get(a.id)?.has(pd.id)) n++;
+    rowUsage.set(pd.id, n);
+  }
+
+  if (loading) {
+    return (
+      <div className="flex-1 flex items-center justify-center text-slate-500 text-sm">
+        Loading matrix…
+      </div>
+    );
+  }
+
+  if (aspects.length === 0) {
+    return (
+      <div className="flex-1 flex items-center justify-center text-slate-500 text-sm">
+        No aspects defined yet.
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex-1 overflow-auto">
+      <div className="p-4">
+        <p className="text-[11px] text-slate-500 mb-3">
+          Click a cell to toggle the parameter on that aspect. Click a row or
+          column header to toggle the whole row/column. Parameters are global
+          — a parameter appearing in two aspects is the same canonical
+          definition, not a duplicate.
+        </p>
+        <div className="inline-block border border-slate-700 rounded overflow-hidden">
+          <table className="text-xs">
+            <thead>
+              <tr>
+                <th className="sticky left-0 z-10 bg-slate-900 border-b border-r border-slate-700 px-3 py-2 text-left text-[10px] uppercase tracking-wider text-slate-500 min-w-[180px]">
+                  Parameter
+                </th>
+                <th className="border-b border-slate-700 px-2 py-2 text-[10px] uppercase tracking-wider text-slate-500 text-center">
+                  Used in
+                </th>
+                {aspects.map((a) => (
+                  <th
+                    key={a.id}
+                    className="border-b border-l border-slate-700 px-2 py-2 text-center min-w-[90px] cursor-pointer hover:bg-slate-800/60"
+                    onClick={() => toggleCol(a.id)}
+                    title="Click to toggle all parameters for this aspect"
+                  >
+                    <div className="text-[11px] font-medium text-slate-200 truncate max-w-[120px]">
+                      {a.name}
+                    </div>
+                    <div className="text-[9px] text-slate-500 tabular-nums mt-0.5">
+                      {links.get(a.id)?.size ?? 0}
+                    </div>
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {paramDefs.map((pd) => (
+                <tr
+                  key={pd.id}
+                  className="border-t border-slate-800 hover:bg-slate-900/30"
+                >
+                  <td
+                    className="sticky left-0 z-10 bg-slate-900 border-r border-slate-700 px-3 py-1.5 cursor-pointer hover:bg-slate-800/60"
+                    onClick={() => toggleRow(pd.id)}
+                    title="Click to toggle this parameter across all aspects"
+                  >
+                    <div className="flex items-center gap-2">
+                      <span className="font-mono text-slate-200 text-[11px] truncate">
+                        {pd.name}
+                      </span>
+                      <span className="text-[9px] px-1 py-px rounded bg-slate-800 text-slate-500">
+                        {pd.dataType}
+                      </span>
+                      {pd.unit && (
+                        <span className="text-[9px] text-slate-600">
+                          {pd.unit}
+                        </span>
+                      )}
+                    </div>
+                  </td>
+                  <td className="border-l border-slate-800 px-2 py-1.5 text-center text-[10px] tabular-nums text-slate-500">
+                    {rowUsage.get(pd.id) ?? 0}
+                  </td>
+                  {aspects.map((a) => {
+                    const on = links.get(a.id)?.has(pd.id) ?? false;
+                    const pending = pendingCells.has(cellKey(a.id, pd.id));
+                    return (
+                      <td
+                        key={a.id}
+                        onClick={() => toggle(a.id, pd.id)}
+                        className={`border-l border-slate-800 px-2 py-1.5 text-center cursor-pointer transition-colors ${
+                          on
+                            ? "bg-accent/20 hover:bg-accent/30"
+                            : "hover:bg-slate-800/60"
+                        } ${pending ? "opacity-50" : ""}`}
+                      >
+                        <span
+                          className={`inline-block w-4 h-4 rounded border ${
+                            on
+                              ? "bg-accent border-accent"
+                              : "border-slate-600 bg-transparent"
+                          }`}
+                        >
+                          {on && (
+                            <svg
+                              viewBox="0 0 16 16"
+                              fill="none"
+                              className="w-4 h-4 text-white"
+                            >
+                              <path
+                                d="M3 8l3 3 6-6"
+                                stroke="currentColor"
+                                strokeWidth="2"
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                              />
+                            </svg>
+                          )}
+                        </span>
+                      </td>
+                    );
+                  })}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+
+        {paramDefs.length === 0 && (
+          <p className="text-xs text-slate-500 italic mt-3">
+            No parameters yet. Create some in the Parameters tab.
+          </p>
+        )}
+      </div>
     </div>
   );
 }
