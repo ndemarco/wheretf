@@ -1250,6 +1250,21 @@ interface Designation {
   metadata: unknown;
 }
 
+interface StandardItemUsage {
+  itemStandardId: string;
+  itemId: string;
+  itemName: string;
+  designation: string | null;
+  isCustom: boolean;
+  createdAt: string;
+}
+
+interface DesignationUsage {
+  designationId: string | null;
+  designation: string | null;
+  itemCount: number;
+}
+
 function StandardsTab() {
   const [standards, setStandards] = useState<StandardSummary[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -1398,6 +1413,17 @@ function StandardDetail({
   const [parameters, setParameters] = useState<StandardParameter[]>([]);
   const [designations, setDesignations] = useState<Designation[]>([]);
   const [designationTotal, setDesignationTotal] = useState(0);
+  const [usage, setUsage] = useState<{
+    itemCount: number;
+    designationCount: number;
+    items: StandardItemUsage[];
+    designationUsage: DesignationUsage[];
+  }>({
+    itemCount: 0,
+    designationCount: 0,
+    items: [],
+    designationUsage: [],
+  });
   const [allAspects, setAllAspects] = useState<Aspect[]>([]);
   const [aspectParamsById, setAspectParamsById] = useState<
     Map<string, AspectParameter[]>
@@ -1435,6 +1461,12 @@ function StandardDetail({
     setParameters(pData.parameters ?? []);
     setDesignations(dData.designations ?? []);
     setDesignationTotal(dData.total ?? 0);
+    setUsage({
+      itemCount: std.itemCount ?? 0,
+      designationCount: std.designationCount ?? 0,
+      items: std.items ?? [],
+      designationUsage: std.designationUsage ?? [],
+    });
     setAllAspects(aData.aspects ?? []);
   }, [standardId, designationQuery]);
 
@@ -1613,7 +1645,8 @@ function StandardDetail({
   }
 
   return (
-    <div className="p-6 space-y-6 max-w-4xl">
+    <div className="flex-1 flex min-h-0 overflow-hidden">
+      <div className="flex-1 overflow-y-auto p-6 space-y-6 max-w-4xl">
       {/* Header */}
       {meta && (
         <div className="space-y-2">
@@ -1755,44 +1788,6 @@ function StandardDetail({
           <h3 className="text-xs uppercase tracking-wider text-slate-500">
             Designations ({designationTotal})
           </h3>
-          <div className="flex items-center gap-3">
-            {pending.length > 0 && (
-              <>
-                <button
-                  onClick={saveBatch}
-                  disabled={
-                    savingBatch ||
-                    !pending.some((r) => r.designation.trim())
-                  }
-                  className="text-[11px] px-2 py-0.5 bg-accent text-white rounded hover:brightness-110 disabled:opacity-50"
-                >
-                  {savingBatch
-                    ? "Saving…"
-                    : `Save ${pending.filter((r) => r.designation.trim()).length} row${
-                        pending.filter((r) => r.designation.trim()).length === 1 ? "" : "s"
-                      }`}
-                </button>
-                <button
-                  onClick={() => setPending([])}
-                  className="text-[11px] text-slate-500 hover:text-slate-300"
-                >
-                  Discard
-                </button>
-              </>
-            )}
-            <button
-              onClick={addPendingRow}
-              disabled={parameters.length === 0}
-              className="text-[11px] text-accent hover:brightness-110 disabled:opacity-40"
-              title={
-                parameters.length === 0
-                  ? "Add parameters to this standard first"
-                  : "Append an empty row"
-              }
-            >
-              + Add row
-            </button>
-          </div>
         </div>
 
         {parameters.length === 0 && (
@@ -1913,7 +1908,207 @@ function StandardDetail({
             </table>
           </div>
         )}
+
+        {/* Add-row / Save controls at the bottom (table convention) */}
+        <div className="flex items-center gap-3">
+          <button
+            onClick={addPendingRow}
+            disabled={parameters.length === 0}
+            className="text-[11px] px-2 py-1 border border-dashed border-slate-600 rounded text-slate-400 hover:text-accent hover:border-accent disabled:opacity-40 transition-colors"
+            title={
+              parameters.length === 0
+                ? "Add parameters to this standard first"
+                : "Append an empty row"
+            }
+          >
+            + Add row
+          </button>
+          {pending.length > 0 && (
+            <>
+              <button
+                onClick={saveBatch}
+                disabled={
+                  savingBatch || !pending.some((r) => r.designation.trim())
+                }
+                className="text-[11px] px-3 py-1 bg-accent text-white rounded hover:brightness-110 disabled:opacity-50"
+              >
+                {savingBatch
+                  ? "Saving…"
+                  : `Save ${pending.filter((r) => r.designation.trim()).length} row${
+                      pending.filter((r) => r.designation.trim()).length === 1 ? "" : "s"
+                    }`}
+              </button>
+              <button
+                onClick={() => setPending([])}
+                className="text-[11px] text-slate-500 hover:text-slate-300"
+              >
+                Discard
+              </button>
+            </>
+          )}
+        </div>
       </section>
+      </div>
+
+      {/* Right info panel */}
+      <StandardInfoPanel
+        meta={meta}
+        usage={usage}
+        aspectCount={aspects.length}
+        parameterCount={parameters.length}
+        designationTotal={designationTotal}
+      />
+    </div>
+  );
+}
+
+function StandardInfoPanel({
+  meta,
+  usage,
+  aspectCount,
+  parameterCount,
+  designationTotal,
+}: {
+  meta: StandardSummary | null;
+  usage: {
+    itemCount: number;
+    designationCount: number;
+    items: StandardItemUsage[];
+    designationUsage: DesignationUsage[];
+  };
+  aspectCount: number;
+  parameterCount: number;
+  designationTotal: number;
+}) {
+  return (
+    <aside className="w-80 shrink-0 border-l border-slate-700 bg-slate-900/40 overflow-y-auto">
+      {/* Tab header — single Info tab for now, styled to match modules/inserts */}
+      <div className="px-4 py-2.5 border-b border-slate-700 flex items-center gap-2">
+        <span className="text-xs font-semibold uppercase tracking-wider text-accent">
+          Info
+        </span>
+      </div>
+
+      <div className="p-4 space-y-5 text-xs">
+        {/* Summary tiles */}
+        <div className="grid grid-cols-2 gap-2">
+          <Tile label="Items using" value={usage.itemCount} />
+          <Tile label="Designations" value={designationTotal} />
+          <Tile label="Aspects linked" value={aspectCount} />
+          <Tile label="Parameters" value={parameterCount} />
+        </div>
+
+        {/* Where applied */}
+        <div>
+          <h3 className="text-[10px] uppercase tracking-wider text-slate-500 mb-1.5">
+            Applied to items ({usage.items.length}
+            {usage.itemCount > usage.items.length
+              ? ` of ${usage.itemCount}`
+              : ""}
+            )
+          </h3>
+          {usage.items.length === 0 ? (
+            <p className="text-[11px] text-slate-600 italic">
+              Not applied yet.
+            </p>
+          ) : (
+            <ul className="divide-y divide-slate-800 rounded border border-slate-800">
+              {usage.items.map((i) => (
+                <li
+                  key={i.itemStandardId}
+                  className="px-2 py-1.5 flex items-center justify-between gap-2 hover:bg-slate-800/40"
+                >
+                  <span className="text-slate-200 truncate" title={i.itemName}>
+                    {i.itemName}
+                  </span>
+                  <span className="shrink-0 flex items-center gap-1.5">
+                    {i.designation ? (
+                      <span className="font-mono text-accent">
+                        {i.designation}
+                      </span>
+                    ) : (
+                      <span className="text-slate-600 italic">no desig.</span>
+                    )}
+                    {i.isCustom && (
+                      <span className="text-amber-400 text-[9px]">custom</span>
+                    )}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+
+        {/* Top designations */}
+        {usage.designationUsage.length > 0 && (
+          <div>
+            <h3 className="text-[10px] uppercase tracking-wider text-slate-500 mb-1.5">
+              Designation usage
+            </h3>
+            <ul className="space-y-1">
+              {usage.designationUsage.slice(0, 8).map((d) => {
+                const max = Math.max(
+                  ...usage.designationUsage.map((x) => x.itemCount),
+                  1
+                );
+                const pct = (d.itemCount / max) * 100;
+                return (
+                  <li
+                    key={d.designationId ?? "none"}
+                    className="flex items-center gap-2 text-[11px]"
+                  >
+                    <span className="w-24 truncate font-mono text-slate-300">
+                      {d.designation ?? (
+                        <span className="italic text-slate-600">none</span>
+                      )}
+                    </span>
+                    <div className="flex-1 h-1.5 bg-slate-800 rounded overflow-hidden">
+                      <div
+                        className="h-full bg-accent/70"
+                        style={{ width: `${pct}%` }}
+                      />
+                    </div>
+                    <span className="w-6 text-right tabular-nums text-slate-400">
+                      {d.itemCount}
+                    </span>
+                  </li>
+                );
+              })}
+            </ul>
+          </div>
+        )}
+
+        {/* Metadata */}
+        {meta && (
+          <div className="pt-3 border-t border-slate-800 space-y-1 text-[11px] text-slate-500">
+            {meta.domainTag && (
+              <div>
+                <span className="text-slate-600">Tag:</span>{" "}
+                <span className="text-slate-400">{meta.domainTag}</span>
+              </div>
+            )}
+            <div>
+              <span className="text-slate-600">ID:</span>{" "}
+              <span className="font-mono text-slate-500 text-[10px]">
+                {meta.id}
+              </span>
+            </div>
+          </div>
+        )}
+      </div>
+    </aside>
+  );
+}
+
+function Tile({ label, value }: { label: string; value: number }) {
+  return (
+    <div className="bg-slate-800/60 border border-slate-700 rounded px-2.5 py-1.5">
+      <div className="text-[10px] uppercase tracking-wider text-slate-500">
+        {label}
+      </div>
+      <div className="text-base font-semibold text-slate-100 tabular-nums">
+        {value}
+      </div>
     </div>
   );
 }

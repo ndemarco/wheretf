@@ -12,14 +12,25 @@ export async function GET(
       return NextResponse.json({ error: "Standard not found" }, { status: 404 });
     }
 
-    const [parameters, aspects, itemCount, designationCount] = await Promise.all([
-      standardRepository.getParameters({ standardId: id }),
-      standardRepository.listAspectsForStandard({ standardId: id }),
-      standardRepository.countItemsUsing({ standardId: id }),
-      standardRepository.countDesignations({ standardId: id }),
-    ]);
+    const [parameters, aspects, itemCount, designationCount, items, designationUsage] =
+      await Promise.all([
+        standardRepository.getParameters({ standardId: id }),
+        standardRepository.listAspectsForStandard({ standardId: id }),
+        standardRepository.countItemsUsing({ standardId: id }),
+        standardRepository.countDesignations({ standardId: id }),
+        standardRepository.listItemsUsing({ standardId: id, limit: 50 }),
+        standardRepository.designationUsage({ standardId: id }),
+      ]);
 
-    return NextResponse.json({ standard, parameters, aspects, itemCount, designationCount });
+    return NextResponse.json({
+      standard,
+      parameters,
+      aspects,
+      itemCount,
+      designationCount,
+      items,
+      designationUsage,
+    });
   } catch (error: unknown) {
     return NextResponse.json(
       { error: error instanceof Error ? error.message : "Unknown error" },

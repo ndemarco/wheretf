@@ -7,6 +7,7 @@ import {
   standardDesignations,
   itemStandards,
   itemParameterValues,
+  items,
   parameterDefinitions,
   aspects,
   aspectParameters,
@@ -141,6 +142,61 @@ export const standardRepository = {
       .from(itemStandards)
       .where(eq(itemStandards.standardId, standardId));
     return result?.count ?? 0;
+  },
+
+  /**
+   * Items that have this standard applied. Includes the chosen
+   * designation label (if any) so the caller can render
+   * "M3 screw — M3×0.5" in a usage panel.
+   */
+  async listItemsUsing({
+    standardId,
+    limit = 50,
+  }: {
+    standardId: string;
+    limit?: number;
+  }) {
+    const rows = await db
+      .select({
+        itemStandardId: itemStandards.id,
+        itemId: itemStandards.itemId,
+        itemName: items.name,
+        designation: standardDesignations.designation,
+        isCustom: itemStandards.isCustom,
+        createdAt: itemStandards.createdAt,
+      })
+      .from(itemStandards)
+      .innerJoin(items, eq(items.id, itemStandards.itemId))
+      .leftJoin(
+        standardDesignations,
+        eq(itemStandards.designationId, standardDesignations.id)
+      )
+      .where(eq(itemStandards.standardId, standardId))
+      .orderBy(sql`${itemStandards.createdAt} DESC`)
+      .limit(limit);
+    return rows;
+  },
+
+  /**
+   * Histogram of designation usage: which designations under this standard
+   * are most applied to items, and how many items each covers.
+   */
+  async designationUsage({ standardId }: { standardId: string }) {
+    const rows = await db
+      .select({
+        designationId: itemStandards.designationId,
+        designation: standardDesignations.designation,
+        itemCount: count(itemStandards.id),
+      })
+      .from(itemStandards)
+      .leftJoin(
+        standardDesignations,
+        eq(itemStandards.designationId, standardDesignations.id)
+      )
+      .where(eq(itemStandards.standardId, standardId))
+      .groupBy(itemStandards.designationId, standardDesignations.designation)
+      .orderBy(sql`count(${itemStandards.id}) DESC`);
+    return rows;
   },
 
   // --- Aspect-standard associations ---
