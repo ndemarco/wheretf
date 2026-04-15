@@ -1,276 +1,479 @@
-import Link from "next/link";
-import type { Metadata } from "next";
+"use client";
 
-export const metadata: Metadata = {
-  title: "Tour · WhereTF",
+import Link from "next/link";
+import { useCallback, useEffect, useRef, useState } from "react";
+
+type Step = {
+  id: string;
+  title: string;
+  copy: string;
+  Visual: React.FC<{ active: boolean }>;
 };
 
+const AUTOPLAY_MS = 5000;
+
+const steps: Step[] = [
+  {
+    id: "intro",
+    title: "WhereTF",
+    copy:
+      "Remembers where you put your stuff so you don’t have to. Two-minute tour.",
+    Visual: VisualIntro,
+  },
+  {
+    id: "module",
+    title: "Module",
+    copy:
+      "A top-level physical unit — a cabinet, a drawer chest, a shelving unit.",
+    Visual: VisualModule,
+  },
+  {
+    id: "level",
+    title: "Level",
+    copy: "Modules have levels: shelves, drawers, bays — each one addressable.",
+    Visual: VisualLevels,
+  },
+  {
+    id: "insert",
+    title: "Insert",
+    copy:
+      "A movable organizer — a Plano box, a Gridfinity bin — slots into a receptacle level.",
+    Visual: VisualInsert,
+  },
+  {
+    id: "cell",
+    title: "Cell",
+    copy:
+      "Inside the insert: cells. The smallest addressable slot where items live.",
+    Visual: VisualCells,
+  },
+  {
+    id: "item",
+    title: "Item",
+    copy:
+      "Items — resistors, screws, glue — get assigned to a cell. That’s how you find them later.",
+    Visual: VisualItem,
+  },
+  {
+    id: "template",
+    title: "Template",
+    copy:
+      "Every insert is built from a template. The template is the blueprint; the insert is the physical instance.",
+    Visual: VisualTemplate,
+  },
+  {
+    id: "go",
+    title: "You’re ready",
+    copy: "Create a module · place an insert · assign items.",
+    Visual: VisualFinal,
+  },
+];
+
 export default function TourPage() {
+  const [step, setStep] = useState(0);
+  const [playing, setPlaying] = useState(true);
+  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const clearTimer = useCallback(() => {
+    if (timer.current) {
+      clearTimeout(timer.current);
+      timer.current = null;
+    }
+  }, []);
+
+  useEffect(() => {
+    clearTimer();
+    if (!playing) return;
+    if (step >= steps.length - 1) return;
+    timer.current = setTimeout(
+      () => setStep((s) => Math.min(s + 1, steps.length - 1)),
+      AUTOPLAY_MS
+    );
+    return clearTimer;
+  }, [step, playing, clearTimer]);
+
+  const next = useCallback(() => {
+    setStep((s) => Math.min(s + 1, steps.length - 1));
+  }, []);
+  const prev = useCallback(() => {
+    setStep((s) => Math.max(s - 1, 0));
+  }, []);
+  const restart = useCallback(() => {
+    setStep(0);
+    setPlaying(true);
+  }, []);
+  const togglePlay = useCallback(() => setPlaying((p) => !p), []);
+
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      if (e.key === "ArrowRight") next();
+      else if (e.key === "ArrowLeft") prev();
+      else if (e.key === " ") {
+        e.preventDefault();
+        togglePlay();
+      }
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [next, prev, togglePlay]);
+
+  const current = steps[step];
+  const isLast = step === steps.length - 1;
+  const Visual = current.Visual;
+
   return (
-    <div className="flex-1 overflow-y-auto">
-      <div className="max-w-3xl mx-auto px-6 py-10 space-y-12">
-        {/* Goal */}
-        <section>
-          <h1 className="text-2xl font-semibold text-slate-100 mb-3">
-            Tour
-          </h1>
-          <p className="text-lg text-slate-200 leading-snug">
-            WhereTF remembers where you put everything in your workshop so
-            you don&apos;t have to.
-          </p>
-          <p className="text-sm text-slate-400 mt-3 leading-relaxed">
-            You tell it where your storage is, what kind of layout each
-            piece has, and what you put in each slot. Later, it tells you
-            back.
-          </p>
-        </section>
-
-        {/* Diagram */}
-        <section>
-          <h2 className="text-sm font-medium text-slate-400 uppercase tracking-wider mb-4">
-            How it fits together
-          </h2>
-          <div className="bg-slate-800/40 border border-slate-700 rounded-lg p-6">
-            <ConceptDiagram />
-          </div>
-          <p className="text-xs text-slate-500 mt-3 leading-relaxed">
-            A <b className="text-slate-300">module</b> has{" "}
-            <b className="text-slate-300">levels</b>. A level that accepts
-            an organizer (called a <b className="text-slate-300">receptacle</b>)
-            can hold an <b className="text-slate-300">insert</b>. An insert
-            was built from a <b className="text-slate-300">template</b> and
-            contains <b className="text-slate-300">cells</b>. Each cell
-            holds one or more <b className="text-slate-300">items</b> via
-            an <b className="text-slate-300">assignment</b>.
-          </p>
-        </section>
-
-        {/* Nouns */}
-        <section>
-          <h2 className="text-sm font-medium text-slate-400 uppercase tracking-wider mb-4">
-            Concepts
-          </h2>
-          <dl className="space-y-4">
-            <Concept term="Module">
-              A top-level physical unit you own — a cabinet, a drawer
-              chest, a shelving unit. Modules don&apos;t move often.{" "}
-              <span className="text-slate-500">
-                Example: MUSE (a red cabinet with 11 shelf levels).
-              </span>
-            </Concept>
-            <Concept term="Level">
-              One addressable slot inside a module — a shelf, a drawer, a
-              bay. Each level is either a{" "}
-              <em>receptacle</em> (accepts inserts) or <em>fixed</em>
-              {" "}(built-in internal layout).{" "}
-              <span className="text-slate-500">
-                Example: MUSE 3 = the third shelf.
-              </span>
-            </Concept>
-            <Concept term="Insert">
-              A movable organizer that slots into a receptacle: a Plano
-              tackle box, a Gridfinity bin, a drawer divider tray. Each
-              insert is a <em>specific physical object</em> — your two
-              Plano 3600s are two inserts, not one.{" "}
-              <span className="text-slate-500">
-                Example: &quot;construction screws&quot; (a Plano 3600
-                currently on MUSE 3).
-              </span>
-            </Concept>
-            <Concept term="Cell">
-              The smallest addressable slot. Lives inside an insert, or
-              directly inside a fixed level.{" "}
-              <span className="text-slate-500">
-                Example: A3 inside a Plano (row A, column 3).
-              </span>
-            </Concept>
-            <Concept term="Template">
-              The design/blueprint an insert or fixed level is built from.
-              A Plano 3600 template defines a 4×6 compartment layout; any
-              number of inserts can share that template.{" "}
-              <span className="text-slate-500">
-                Templates stay pristine; your inserts carry their own
-                overrides (e.g. a merged cell).
-              </span>
-            </Concept>
-            <Concept term="Item">
-              Something you want to find later — an M3 cap screw, a 10kΩ
-              resistor, a tube of CA glue. Items exist independently of
-              where they&apos;re stored.
-            </Concept>
-            <Concept term="Assignment">
-              The &quot;this item is here&quot; relationship. An item
-              assigned to cell A3 of Plano #2 = &quot;I can find it
-              there.&quot;
-            </Concept>
-            <Concept term="Interface type">
-              The physical fit contract between an insert and a receptacle.{" "}
-              <span className="text-slate-500">
-                Example: MUSE&apos;s shelves accept any insert that
-                provides the <code>plano-3600</code> interface.
-              </span>
-            </Concept>
-          </dl>
-        </section>
-
-        {/* Verbs */}
-        <section>
-          <h2 className="text-sm font-medium text-slate-400 uppercase tracking-wider mb-4">
-            What you do
-          </h2>
-          <dl className="space-y-3 text-sm">
-            <Verb name="Create a module">
-              Rare, admin action. You&apos;re telling the system about a
-              new physical thing you own.
-            </Verb>
-            <Verb name="Place an insert">
-              Drop a physical organizer into a receptacle level. You&apos;ll
-              usually pick from compatible inserts already in the system.
-            </Verb>
-            <Verb name="Assign an item">
-              The everyday action. Pick a cell and tell it what&apos;s
-              stored there.
-            </Verb>
-            <Verb name="Move an insert">
-              Pick the insert up, drop it into another receptacle. The
-              cells (and whatever&apos;s assigned to them) ride along.
-            </Verb>
-            <Verb name="Merge / Divide / Disable / Restrict">
-              Overrides on a specific cell. Merge two compartments
-              together, subdivide one into front/rear, mark one as
-              cracked/unavailable, clamp its usable size.
-            </Verb>
-          </dl>
-        </section>
-
-        {/* Workflow */}
-        <section>
-          <h2 className="text-sm font-medium text-slate-400 uppercase tracking-wider mb-4">
-            Getting started
-          </h2>
-          <ol className="space-y-3 text-sm text-slate-300 list-decimal pl-5">
-            <li>
-              Create a module under{" "}
-              <Link
-                href="/modules/new"
-                className="text-accent hover:brightness-110"
-              >
-                Admin → New Module
-              </Link>
-              . Give each level a type (receptacle / fixed) and, for
-              receptacles, the interface type they accept.
-            </li>
-            <li>
-              Open the module in{" "}
-              <Link
-                href="/modules"
-                className="text-accent hover:brightness-110"
-              >
-                Modules
-              </Link>
-              . Pick a level. From the right-pane Place tab, pick a
-              compatible insert or create one from a template.
-            </li>
-            <li>
-              Click a cell in the grid. In the right pane, search for an
-              item and assign it.
-            </li>
-            <li>
-              When you need to find something later, come back and look
-              at the grid — or use search once that lands.
-            </li>
-          </ol>
-        </section>
-
-        <section className="pt-6 border-t border-slate-700 text-xs text-slate-500">
-          <p>
-            This page is always reachable from the sidebar. The spec lives
-            under{" "}
-            <code className="text-slate-400">specification/</code> in the
-            repo.
-          </p>
-        </section>
+    <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
+      {/* Progress dots */}
+      <div className="flex items-center justify-center gap-1.5 py-4 shrink-0">
+        {steps.map((s, i) => (
+          <button
+            key={s.id}
+            onClick={() => {
+              setStep(i);
+              setPlaying(false);
+            }}
+            aria-label={`Go to step ${i + 1}`}
+            className={`h-1.5 rounded-full transition-all ${
+              i === step
+                ? "w-8 bg-accent"
+                : i < step
+                  ? "w-1.5 bg-accent/50"
+                  : "w-1.5 bg-slate-700 hover:bg-slate-600"
+            }`}
+          />
+        ))}
       </div>
+
+      {/* Slide */}
+      <div className="flex-1 min-h-0 flex flex-col items-center justify-center px-6">
+        <div
+          key={current.id}
+          className="w-full max-w-2xl flex flex-col items-center text-center animate-slide-in"
+        >
+          <div className="h-56 sm:h-72 w-full flex items-center justify-center mb-6">
+            <Visual active />
+          </div>
+          <h2 className="text-4xl sm:text-5xl font-semibold text-slate-100 tracking-tight">
+            {current.title}
+          </h2>
+          <p className="mt-4 text-base sm:text-lg text-slate-300 leading-snug max-w-xl">
+            {current.copy}
+          </p>
+        </div>
+      </div>
+
+      {/* Controls */}
+      <div className="shrink-0 p-6 flex items-center justify-center gap-2">
+        <button
+          onClick={prev}
+          disabled={step === 0}
+          className="px-3 py-1.5 border border-slate-600 text-slate-300 rounded text-xs hover:bg-slate-700/50 disabled:opacity-40 disabled:cursor-not-allowed"
+        >
+          ← Back
+        </button>
+        {!isLast ? (
+          <button
+            onClick={togglePlay}
+            className="px-3 py-1.5 border border-slate-600 text-slate-300 rounded text-xs hover:bg-slate-700/50"
+          >
+            {playing ? "Pause" : "Play"}
+          </button>
+        ) : (
+          <button
+            onClick={restart}
+            className="px-3 py-1.5 border border-slate-600 text-slate-300 rounded text-xs hover:bg-slate-700/50"
+          >
+            Restart
+          </button>
+        )}
+        {isLast ? (
+          <Link
+            href="/modules/new"
+            className="px-4 py-1.5 bg-accent text-white rounded text-xs hover:brightness-110"
+          >
+            Create your first module →
+          </Link>
+        ) : (
+          <button
+            onClick={next}
+            className="px-3 py-1.5 bg-accent text-white rounded text-xs hover:brightness-110"
+          >
+            Next →
+          </button>
+        )}
+      </div>
+
+      <style jsx>{`
+        @keyframes slide-in {
+          from {
+            opacity: 0;
+            transform: translateY(10px);
+          }
+          to {
+            opacity: 1;
+            transform: translateY(0);
+          }
+        }
+        .animate-slide-in {
+          animation: slide-in 0.45s ease-out;
+        }
+      `}</style>
     </div>
   );
 }
 
-function Concept({
-  term,
-  children,
-}: {
-  term: string;
-  children: React.ReactNode;
-}) {
+/* ---------- Visuals (inline SVG, each animates on mount) ---------- */
+
+function VisualIntro({ active }: { active: boolean }) {
   return (
-    <div>
-      <dt className="text-sm font-medium text-slate-100">{term}</dt>
-      <dd className="text-sm text-slate-300 leading-relaxed mt-1">
-        {children}
-      </dd>
-    </div>
+    <svg viewBox="0 0 200 200" className="w-44 h-44">
+      <circle
+        cx={100}
+        cy={100}
+        r={70}
+        fill="none"
+        stroke="#ff6600"
+        strokeWidth={3}
+        strokeDasharray="440"
+        strokeDashoffset={active ? 0 : 440}
+        style={{
+          transition: "stroke-dashoffset 1.2s ease-out",
+        }}
+      />
+      <text
+        x={100}
+        y={110}
+        textAnchor="middle"
+        fill="#e2e8f0"
+        fontSize={56}
+        fontWeight={700}
+        fontFamily="inherit"
+      >
+        ?
+      </text>
+    </svg>
   );
 }
 
-function Verb({
-  name,
-  children,
-}: {
-  name: string;
-  children: React.ReactNode;
-}) {
+function VisualModule({ active }: { active: boolean }) {
   return (
-    <div className="grid grid-cols-[10rem_1fr] gap-4">
-      <dt className="text-slate-100 font-medium">{name}</dt>
-      <dd className="text-slate-300 leading-relaxed">{children}</dd>
-    </div>
+    <svg viewBox="0 0 240 240" className="w-56 h-56">
+      <rect
+        x={40}
+        y={30}
+        width={160}
+        height={180}
+        rx={6}
+        fill="rgba(30,41,59,0.7)"
+        stroke="#94a3b8"
+        strokeWidth={3}
+        style={{
+          transform: active ? "scale(1)" : "scale(0.8)",
+          transformOrigin: "center",
+          transition: "transform 0.6s ease-out",
+        }}
+      />
+    </svg>
   );
 }
 
-/**
- * Hand-drawn SVG of the entity hierarchy. Two columns:
- * left shows physical containment (Module → Level → Insert → Cell),
- * right shows Items + Templates joining in via Assignment and
- * Template-of relationships.
- */
-function ConceptDiagram() {
-  const boxStyle = {
-    fill: "rgba(30,41,59,0.7)",
-    stroke: "#475569",
-    strokeWidth: 1,
-    rx: 6,
-  };
-  const textStyle = {
-    fill: "#e2e8f0",
-    fontSize: 13,
-    fontFamily: "inherit",
-    fontWeight: 500,
-    textAnchor: "middle" as const,
-    dominantBaseline: "central" as const,
-  };
-  const subStyle = {
-    fill: "#94a3b8",
-    fontSize: 10,
-    fontFamily: "inherit",
-    textAnchor: "middle" as const,
-  };
-  const labelStyle = {
-    fill: "#64748b",
-    fontSize: 10,
-    fontFamily: "inherit",
-    textAnchor: "middle" as const,
-  };
-  const arrow = "#64748b";
-
+function VisualLevels({ active }: { active: boolean }) {
+  const shelves = [60, 100, 140, 180];
   return (
-    <svg
-      viewBox="0 0 640 320"
-      className="w-full h-auto"
-      preserveAspectRatio="xMidYMid meet"
-    >
+    <svg viewBox="0 0 240 240" className="w-56 h-56">
+      <rect
+        x={40}
+        y={30}
+        width={160}
+        height={180}
+        rx={6}
+        fill="rgba(30,41,59,0.7)"
+        stroke="#94a3b8"
+        strokeWidth={3}
+      />
+      {shelves.map((y, i) => (
+        <line
+          key={y}
+          x1={50}
+          y1={y}
+          x2={190}
+          y2={y}
+          stroke="#ff6600"
+          strokeWidth={2}
+          style={{
+            opacity: active ? 1 : 0,
+            transition: `opacity 0.4s ease-out ${i * 0.18}s`,
+          }}
+        />
+      ))}
+    </svg>
+  );
+}
+
+function VisualInsert({ active }: { active: boolean }) {
+  return (
+    <svg viewBox="0 0 240 240" className="w-56 h-56">
+      <rect
+        x={40}
+        y={30}
+        width={160}
+        height={180}
+        rx={6}
+        fill="rgba(30,41,59,0.7)"
+        stroke="#94a3b8"
+        strokeWidth={3}
+      />
+      {[60, 100, 140, 180].map((y) => (
+        <line
+          key={y}
+          x1={50}
+          y1={y}
+          x2={190}
+          y2={y}
+          stroke="#475569"
+          strokeWidth={2}
+        />
+      ))}
+      {/* Insert dropping into a receptacle shelf */}
+      <rect
+        x={60}
+        y={active ? 110 : -40}
+        width={120}
+        height={28}
+        rx={3}
+        fill="rgba(96,165,250,0.2)"
+        stroke="#60a5fa"
+        strokeWidth={2}
+        style={{
+          transition: "y 0.8s cubic-bezier(0.34, 1.2, 0.64, 1)",
+        }}
+      />
+    </svg>
+  );
+}
+
+function VisualCells({ active }: { active: boolean }) {
+  const cells = [];
+  for (let r = 0; r < 3; r++) {
+    for (let c = 0; c < 5; c++) {
+      cells.push({ r, c, delay: (r * 5 + c) * 0.05 });
+    }
+  }
+  return (
+    <svg viewBox="0 0 240 160" className="w-72 h-48">
+      {cells.map(({ r, c, delay }) => (
+        <rect
+          key={`${r}-${c}`}
+          x={20 + c * 40}
+          y={20 + r * 40}
+          width={32}
+          height={32}
+          rx={3}
+          fill="rgba(30,41,59,0.7)"
+          stroke="#60a5fa"
+          strokeWidth={1.5}
+          style={{
+            opacity: active ? 1 : 0,
+            transform: active ? "scale(1)" : "scale(0.5)",
+            transformOrigin: `${36 + c * 40}px ${36 + r * 40}px`,
+            transition: `opacity 0.35s ease-out ${delay}s, transform 0.35s ease-out ${delay}s`,
+          }}
+        />
+      ))}
+    </svg>
+  );
+}
+
+function VisualItem({ active }: { active: boolean }) {
+  return (
+    <svg viewBox="0 0 240 160" className="w-72 h-48">
+      {[0, 1, 2, 3, 4].map((c) => (
+        <rect
+          key={c}
+          x={20 + c * 40}
+          y={60}
+          width={32}
+          height={32}
+          rx={3}
+          fill="rgba(30,41,59,0.7)"
+          stroke="#475569"
+          strokeWidth={1.5}
+        />
+      ))}
+      {/* Item falling into the middle cell */}
+      <circle
+        cx={116}
+        cy={active ? 76 : 10}
+        r={8}
+        fill="#fbbf24"
+        style={{
+          transition: "cy 0.7s cubic-bezier(0.34, 1.2, 0.64, 1)",
+        }}
+      />
+      <rect
+        x={100}
+        y={60}
+        width={32}
+        height={32}
+        rx={3}
+        fill="rgba(251,191,36,0.1)"
+        stroke="#fbbf24"
+        strokeWidth={2}
+        style={{
+          opacity: active ? 1 : 0,
+          transition: "opacity 0.4s ease-out 0.5s",
+        }}
+      />
+    </svg>
+  );
+}
+
+function VisualTemplate({ active }: { active: boolean }) {
+  return (
+    <svg viewBox="0 0 320 180" className="w-96 h-56">
+      {/* Template (blueprint on left) */}
+      <rect
+        x={20}
+        y={30}
+        width={120}
+        height={120}
+        rx={4}
+        fill="none"
+        stroke="#60a5fa"
+        strokeWidth={2}
+        strokeDasharray="6 4"
+        style={{
+          opacity: active ? 1 : 0,
+          transition: "opacity 0.4s ease-out",
+        }}
+      />
+      <text
+        x={80}
+        y={95}
+        textAnchor="middle"
+        fill="#60a5fa"
+        fontSize={11}
+        fontFamily="inherit"
+      >
+        template
+      </text>
+      {/* Arrow */}
+      <line
+        x1={150}
+        y1={90}
+        x2={180}
+        y2={90}
+        stroke="#ff6600"
+        strokeWidth={2}
+        markerEnd="url(#arr)"
+        style={{
+          opacity: active ? 1 : 0,
+          transition: "opacity 0.35s ease-out 0.4s",
+        }}
+      />
       <defs>
         <marker
-          id="arrowhead"
+          id="arr"
           viewBox="0 0 10 10"
           refX="9"
           refY="5"
@@ -278,137 +481,47 @@ function ConceptDiagram() {
           markerHeight="7"
           orient="auto"
         >
-          <path d="M 0 0 L 10 5 L 0 10 z" fill={arrow} />
+          <path d="M 0 0 L 10 5 L 0 10 z" fill="#ff6600" />
         </marker>
       </defs>
+      {/* Three inserts on the right */}
+      {[0, 1, 2].map((i) => (
+        <rect
+          key={i}
+          x={200 + i * 8}
+          y={40 + i * 6}
+          width={100}
+          height={100}
+          rx={4}
+          fill="rgba(30,41,59,0.9)"
+          stroke="#94a3b8"
+          strokeWidth={2}
+          style={{
+            opacity: active ? 1 : 0,
+            transition: `opacity 0.35s ease-out ${0.7 + i * 0.15}s`,
+          }}
+        />
+      ))}
+    </svg>
+  );
+}
 
-      {/* Column: Module → Level → Insert → Cell */}
-      <rect x={20} y={20} width={180} height={40} {...boxStyle} />
-      <text x={110} y={40} {...textStyle}>
-        Module
-      </text>
-      <text x={110} y={56} {...subStyle}>
-        MUSE, ALEX, BENCH
-      </text>
-
-      <line
-        x1={110}
-        y1={60}
-        x2={110}
-        y2={90}
-        stroke={arrow}
-        markerEnd="url(#arrowhead)"
+function VisualFinal({ active }: { active: boolean }) {
+  return (
+    <svg viewBox="0 0 240 240" className="w-56 h-56">
+      <path
+        d="M60 130 L100 170 L180 80"
+        fill="none"
+        stroke="#ff6600"
+        strokeWidth={8}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        strokeDasharray="200"
+        strokeDashoffset={active ? 0 : 200}
+        style={{
+          transition: "stroke-dashoffset 0.9s ease-out",
+        }}
       />
-      <text x={145} y={78} {...labelStyle} textAnchor="start">
-        has many
-      </text>
-
-      <rect x={20} y={90} width={180} height={40} {...boxStyle} />
-      <text x={110} y={110} {...textStyle}>
-        Level
-      </text>
-      <text x={110} y={126} {...subStyle}>
-        receptacle / fixed
-      </text>
-
-      <line
-        x1={110}
-        y1={130}
-        x2={110}
-        y2={160}
-        stroke={arrow}
-        markerEnd="url(#arrowhead)"
-      />
-      <text x={145} y={148} {...labelStyle} textAnchor="start">
-        holds (receptacle)
-      </text>
-
-      <rect x={20} y={160} width={180} height={40} {...boxStyle} />
-      <text x={110} y={180} {...textStyle}>
-        Insert
-      </text>
-      <text x={110} y={196} {...subStyle}>
-        your physical bin
-      </text>
-
-      <line
-        x1={110}
-        y1={200}
-        x2={110}
-        y2={230}
-        stroke={arrow}
-        markerEnd="url(#arrowhead)"
-      />
-      <text x={145} y={218} {...labelStyle} textAnchor="start">
-        contains
-      </text>
-
-      <rect x={20} y={230} width={180} height={40} {...boxStyle} />
-      <text x={110} y={250} {...textStyle}>
-        Cell
-      </text>
-      <text x={110} y={266} {...subStyle}>
-        A1, A2, B1…
-      </text>
-
-      {/* Right column: Template + Item + Assignment */}
-      <rect
-        x={410}
-        y={160}
-        width={180}
-        height={40}
-        {...boxStyle}
-        fill="rgba(59,130,246,0.1)"
-        stroke="#1e40af"
-      />
-      <text x={500} y={180} {...textStyle}>
-        Template
-      </text>
-      <text x={500} y={196} {...subStyle}>
-        Plano 3600, Gridfinity…
-      </text>
-      {/* Template → Insert (built from) */}
-      <line
-        x1={410}
-        y1={180}
-        x2={203}
-        y2={180}
-        stroke={arrow}
-        strokeDasharray="4 3"
-        markerEnd="url(#arrowhead)"
-      />
-      <text x={306} y={174} {...labelStyle}>
-        built from
-      </text>
-
-      <rect
-        x={410}
-        y={230}
-        width={180}
-        height={40}
-        {...boxStyle}
-        fill="rgba(251,191,36,0.08)"
-        stroke="#92400e"
-      />
-      <text x={500} y={250} {...textStyle}>
-        Item
-      </text>
-      <text x={500} y={266} {...subStyle}>
-        10kΩ resistor, M3 screw
-      </text>
-
-      {/* Item → Cell via Assignment */}
-      <line
-        x1={410}
-        y1={250}
-        x2={203}
-        y2={250}
-        stroke={arrow}
-        markerEnd="url(#arrowhead)"
-      />
-      <text x={306} y={244} {...labelStyle}>
-        assigned to
-      </text>
     </svg>
   );
 }
