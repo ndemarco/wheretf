@@ -3,6 +3,7 @@
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { useCallback, useEffect, useState, useMemo } from "react";
+import { CellGrid } from "@/app/_components/CellGrid";
 
 // --- Types ---
 
@@ -33,6 +34,9 @@ interface Location {
   maxHeightMm: string | null;
   maxDepthMm: string | null;
   restrictReason: string | null;
+  // Override + subdivision tracking (used by CellGrid renderer)
+  mergedIntoId: string | null;
+  subdivisionSource: string | null;
   metadata: Record<string, unknown> | null;
 }
 
@@ -860,10 +864,12 @@ export default function ModuleDetailPage() {
 
             {/* Grid */}
             <div className="flex-1 flex items-center justify-center p-6 overflow-auto">
-              <NavigatorGrid
-                locations={childLocations}
-                assignmentsByLocation={assignmentsByLocation}
-                items={items}
+              <CellGrid
+                cells={childLocations}
+                assignments={assignments.filter((a) =>
+                  childLocations.some((c) => c.id === a.locationId)
+                )}
+                itemsById={items}
                 selectedCellId={selectedCellId}
                 onCellClick={(cellId) => {
                   setSelectedCellId(cellId === selectedCellId ? null : cellId);
@@ -1764,253 +1770,3 @@ function LevelPanel({
   );
 }
 
-// --- Navigator Grid ---
-
-function NavigatorGrid({
-  locations,
-  assignmentsByLocation,
-  items,
-  selectedCellId,
-  onCellClick,
-}: {
-  locations: Location[];
-  assignmentsByLocation: Map<string, Assignment[]>;
-  items: Map<string, Item>;
-  selectedCellId: string | null;
-  onCellClick: (cellId: string) => void;
-}) {
-  const [hoveredCellId, setHoveredCellId] = useState<string | null>(null);
-
-  const gridLocs = locations.filter(
-    (l) => l.gridRow != null && l.gridColumn != null
-  );
-
-  if (gridLocs.length === 0) {
-    return (
-      <div className="flex flex-col gap-1 w-full max-w-sm">
-        {locations.map((l) => {
-          const cellAssignments = assignmentsByLocation.get(l.id) ?? [];
-          const isOccupied = cellAssignments.length > 0;
-          return (
-            <button
-              key={l.id}
-              onClick={() => onCellClick(l.id)}
-              className={`px-3 py-2 rounded border text-sm text-left transition-colors ${
-                l.id === selectedCellId
-                  ? "border-accent bg-accent/10 text-slate-200"
-                  : l.isDisabled
-                    ? "border-red-700/50 bg-red-900/20 text-red-300"
-                    : isOccupied
-                      ? "border-blue-700/50 bg-blue-900/20 text-slate-200"
-                      : "border-slate-700 bg-slate-800/50 text-slate-400 hover:border-slate-600"
-              }`}
-            >
-              <span className="font-medium">{l.label}</span>
-              {isOccupied && (
-                <span className="ml-2 text-xs text-blue-300">
-                  {items.get(cellAssignments[0].itemId)?.name ?? "Item"}
-                </span>
-              )}
-            </button>
-          );
-        })}
-      </div>
-    );
-  }
-
-  const maxRow = Math.max(...gridLocs.map((l) => l.gridRow!));
-  const maxCol = Math.max(...gridLocs.map((l) => l.gridColumn!));
-  const cellSize = 56;
-  const gap = 3;
-  const labelPad = 28;
-
-  const svgW = labelPad + (maxCol + 1) * (cellSize + gap) + 4;
-  const svgH = labelPad + (maxRow + 1) * (cellSize + gap) + 4;
-
-  const grid = new Map<string, Location>();
-  for (const l of gridLocs) {
-    grid.set(`${l.gridRow},${l.gridColumn}`, l);
-  }
-
-  const cells = [];
-  for (let r = 0; r <= maxRow; r++) {
-    for (let c = 0; c <= maxCol; c++) {
-      const loc = grid.get(`${r},${c}`);
-      if (!loc) continue;
-
-      const x = labelPad + c * (cellSize + gap);
-      const y = labelPad + r * (cellSize + gap);
-      const cellAssignments = assignmentsByLocation.get(loc.id) ?? [];
-      const isOccupied = cellAssignments.length > 0;
-      const isSelected = loc.id === selectedCellId;
-      const isHovered = loc.id === hoveredCellId;
-      const isProvisional =
-        isOccupied && cellAssignments[0].assignmentType === "provisional";
-
-      let fillColor = "transparent";
-      let strokeColor = "#475569";
-      let strokeWidth = 1;
-
-      if (loc.isDisabled) {
-        fillColor = "rgba(248,113,113,0.12)";
-        strokeColor = "#7f1d1d";
-      } else if (isSelected) {
-        fillColor = "rgba(255,102,0,0.12)";
-        strokeColor = "#ff6600";
-        strokeWidth = 2;
-      } else if (isOccupied) {
-        fillColor = isProvisional
-          ? "rgba(251,191,36,0.1)"
-          : "rgba(96,165,250,0.12)";
-        strokeColor = isProvisional ? "#92400e" : "#1e40af";
-      }
-
-      if (isHovered && !isSelected) {
-        strokeColor = "#ff6600";
-        strokeWidth = 1.5;
-      }
-
-      const itemName = isOccupied
-        ? items.get(cellAssignments[0].itemId)?.name
-        : null;
-
-      cells.push(
-        <g
-          key={loc.id}
-          onClick={() => onCellClick(loc.id)}
-          onMouseEnter={() => setHoveredCellId(loc.id)}
-          onMouseLeave={() => setHoveredCellId(null)}
-          className="cursor-pointer"
-        >
-          <rect
-            x={x}
-            y={y}
-            width={cellSize}
-            height={cellSize}
-            fill={fillColor}
-            stroke={strokeColor}
-            strokeWidth={strokeWidth}
-            rx={3}
-          />
-          {/* Disabled diagonal stripes */}
-          {loc.isDisabled && (
-            <>
-              <line
-                x1={x + 4}
-                y1={y + cellSize - 4}
-                x2={x + cellSize - 4}
-                y2={y + 4}
-                stroke="#7f1d1d"
-                strokeWidth={0.5}
-                opacity={0.4}
-              />
-              <line
-                x1={x + 12}
-                y1={y + cellSize - 4}
-                x2={x + cellSize - 4}
-                y2={y + 12}
-                stroke="#7f1d1d"
-                strokeWidth={0.5}
-                opacity={0.4}
-              />
-              <line
-                x1={x + 4}
-                y1={y + cellSize - 12}
-                x2={x + cellSize - 12}
-                y2={y + 4}
-                stroke="#7f1d1d"
-                strokeWidth={0.5}
-                opacity={0.4}
-              />
-            </>
-          )}
-          {/* Cell label */}
-          <text
-            x={x + cellSize / 2}
-            y={isOccupied ? y + 14 : y + cellSize / 2}
-            textAnchor="middle"
-            dominantBaseline={isOccupied ? "auto" : "central"}
-            fill={loc.isDisabled ? "#f87171" : "#64748b"}
-            fontSize={9}
-            fontWeight={isSelected ? 600 : 400}
-          >
-            {loc.label}
-          </text>
-          {/* Item name (truncated) */}
-          {itemName && (
-            <text
-              x={x + cellSize / 2}
-              y={y + cellSize / 2 + 4}
-              textAnchor="middle"
-              dominantBaseline="central"
-              fill={isProvisional ? "#fbbf24" : "#93c5fd"}
-              fontSize={8}
-              className="select-none"
-            >
-              {itemName.length > 8
-                ? itemName.substring(0, 7) + "…"
-                : itemName}
-            </text>
-          )}
-          {/* Occupancy dot */}
-          {isOccupied && (
-            <circle
-              cx={x + cellSize - 7}
-              cy={y + 7}
-              r={3}
-              fill={isProvisional ? "#fbbf24" : "#60a5fa"}
-            />
-          )}
-        </g>
-      );
-    }
-  }
-
-  // Row labels
-  const rowLabels = [];
-  for (let r = 0; r <= maxRow; r++) {
-    const loc = grid.get(`${r},0`);
-    const labelChar = loc
-      ? loc.label.charAt(0)
-      : String.fromCharCode(65 + r);
-    rowLabels.push(
-      <text
-        key={`rl-${r}`}
-        x={labelPad - 8}
-        y={labelPad + r * (cellSize + gap) + cellSize / 2}
-        textAnchor="end"
-        dominantBaseline="central"
-        fill="#64748b"
-        fontSize={11}
-      >
-        {labelChar}
-      </text>
-    );
-  }
-
-  // Column labels
-  const colLabels = [];
-  for (let c = 0; c <= maxCol; c++) {
-    colLabels.push(
-      <text
-        key={`cl-${c}`}
-        x={labelPad + c * (cellSize + gap) + cellSize / 2}
-        y={labelPad - 8}
-        textAnchor="middle"
-        dominantBaseline="alphabetic"
-        fill="#64748b"
-        fontSize={11}
-      >
-        {c + 1}
-      </text>
-    );
-  }
-
-  return (
-    <svg width={svgW} height={svgH} className="max-w-full">
-      {cells}
-      {rowLabels}
-      {colLabels}
-    </svg>
-  );
-}
