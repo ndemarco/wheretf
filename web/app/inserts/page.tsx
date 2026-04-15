@@ -781,69 +781,33 @@ function InsertDetail({
             </button>
           </div>
         ) : (
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 group/title">
             <h2 className="text-lg font-semibold text-slate-100 truncate flex-1">
               {insert.name || insert.templateName || "Untitled insert"}
             </h2>
             <button
               onClick={() => setEditing(true)}
-              className="text-xs text-slate-400 hover:text-accent"
+              title="Rename"
+              aria-label="Rename insert"
+              className="opacity-0 group-hover/title:opacity-100 focus:opacity-100 text-slate-400 hover:text-accent transition-opacity"
             >
-              Edit
+              <svg
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth={2}
+                className="w-4 h-4"
+              >
+                <path d="M12 20h9" strokeLinecap="round" />
+                <path
+                  d="M16.5 3.5a2.121 2.121 0 113 3L7 19l-4 1 1-4 12.5-12.5z"
+                  strokeLinejoin="round"
+                  strokeLinecap="round"
+                />
+              </svg>
             </button>
           </div>
         )}
-      </div>
-
-      <div className="p-6 grid grid-cols-2 gap-x-6 gap-y-4 max-w-2xl shrink-0">
-        <Field label="Template">
-          {insert.templateId ? (
-            <Link
-              href={`/templates?selected=${insert.templateId}`}
-              className="text-slate-200 hover:text-accent"
-            >
-              {insert.templateName ?? "(unknown)"}
-            </Link>
-          ) : (
-            <span className="text-slate-500">—</span>
-          )}
-        </Field>
-        <Field label="Interface">
-          {insert.interfaceType ? (
-            <span className="inline-block text-xs px-1.5 py-0.5 rounded bg-blue-900/40 text-blue-300">
-              {insert.interfaceType}
-            </span>
-          ) : (
-            <span className="text-slate-500">—</span>
-          )}
-        </Field>
-        <Field label="Dimensions">
-          {insert.rows != null && insert.columns != null
-            ? `${insert.rows} × ${insert.columns}`
-            : "—"}
-        </Field>
-        <Field label="Placement">
-          {insert.locationPath ? (
-            <span>
-              {insert.moduleName && (
-                <Link
-                  href={`/modules/`}
-                  className="text-slate-200 hover:text-accent"
-                >
-                  {insert.moduleName}
-                </Link>
-              )}{" "}
-              <span className="text-slate-400">
-                {insert.locationPath.replace(
-                  insert.moduleName ? insert.moduleName + ":" : "",
-                  ""
-                )}
-              </span>
-            </span>
-          ) : (
-            <span className="text-amber-400">Unplaced</span>
-          )}
-        </Field>
       </div>
 
       {/* Layout area: grid + optional cell panel */}
@@ -941,10 +905,6 @@ function InsertDetail({
             {panelMode === "edit" && multiSelect.size > 0 ? (
               /* Merge action panel — Edit mode only */
               <div className="p-4 space-y-3">
-                <div className="text-sm text-slate-200">
-                  {multiSelect.size}{" "}
-                  {multiSelect.size === 1 ? "cell" : "cells"} selected
-                </div>
                 {(() => {
                   const picked = cells.filter((c) =>
                     multiSelect.has(c.id)
@@ -953,13 +913,19 @@ function InsertDetail({
                   const anyDisabled = picked.some((c) => c.isDisabled);
                   return (
                     <>
-                      <div className="text-xs text-slate-500 break-words">
+                      <div className="text-base font-medium text-slate-100 break-words">
                         {labels}
+                      </div>
+                      <div className="text-xs text-slate-500">
+                        {multiSelect.size}{" "}
+                        {multiSelect.size === 1 ? "cell" : "cells"}
+                        {!anyDisabled && multiSelect.size >= 2
+                          ? " — ready to merge"
+                          : ""}
                       </div>
                       {anyDisabled && (
                         <div className="text-xs text-red-400">
-                          Selection includes a disabled cell. Enable it
-                          first to include it in the merge.
+                          Disabled cell in selection. Enable it first.
                         </div>
                       )}
                       <div className="flex items-center gap-2">
@@ -985,38 +951,37 @@ function InsertDetail({
               </div>
             ) : panelMode === "edit" && selectMode ? (
               <div className="p-6 text-center text-xs text-slate-500">
-                Click cells in the grid to select them for merging.
+                Click two or more cells to merge.
               </div>
+            ) : panelMode === "view" && !selectedCell ? (
+              /* View tab, nothing selected — placement still useful */
+              <ViewTabBody
+                placementOnly
+                insert={insert}
+                openPicker={openPicker}
+                unplace={unplace}
+              />
             ) : !selectedCell ? (
               <div className="p-6 text-center text-xs text-slate-500">
-                {panelMode === "view"
-                  ? "Click a cell to see its assignments."
-                  : "Click a cell to edit its overrides."}
+                Pick a cell to rework it.
               </div>
             ) : (
               <>
-            <div className="p-4 border-b border-slate-700 flex items-center justify-between">
-              <div className="min-w-0">
-                <div className="text-sm font-medium text-slate-200 truncate">
-                  Cell {selectedCell.label}
-                </div>
-                {selectedCell.isDisabled && (
-                  <div className="text-xs text-red-400 mt-0.5">
-                    Disabled
-                    {selectedCell.disableReason &&
-                      `: ${selectedCell.disableReason}`}
-                  </div>
-                )}
+            {panelMode === "view" && (
+              <PlacementSection
+                insert={insert}
+                openPicker={openPicker}
+                unplace={unplace}
+              />
+            )}
+            <div className="p-4 border-b border-slate-700">
+              <div className="text-base font-medium text-slate-100 truncate">
+                {selectedCell.label}
               </div>
-              <button
-                onClick={() => selectCell(null)}
-                className="text-xs text-slate-500 hover:text-slate-300"
-              >
-                Close
-              </button>
             </div>
 
-            {/* Assignments */}
+            {/* Assignments — View tab only */}
+            {panelMode === "view" && (
             <div className="p-4">
               {selectedAssignments.length === 0 ? (
                 <div className="text-center">
@@ -1134,6 +1099,8 @@ function InsertDetail({
                   </button>
                 </div>
               )}
+            </div>
+            )}
 
               {/* Overrides — view: read-only summary; edit: full controls */}
               {panelMode === "view" ? (
@@ -1409,35 +1376,32 @@ function InsertDetail({
                 )}
               </div>
               )}
-            </div>
               </>
+            )}
+
+            {/* Edit-tab footer: destructive Delete insert.
+                Always visible at the bottom of Edit tab regardless of
+                cell selection. GitHub-style red. */}
+            {panelMode === "edit" && (
+              <div className="mt-auto p-4 border-t border-slate-700">
+                <button
+                  onClick={deleteInsert}
+                  className="w-full px-3 py-1.5 border border-red-700 text-red-400 rounded text-xs hover:bg-red-900/30 hover:text-red-300 transition-colors"
+                >
+                  Delete this insert
+                </button>
+                <p className="mt-1.5 text-[10px] text-slate-600 leading-tight">
+                  Removes the insert and all its cells. Items become
+                  unassigned.
+                </p>
+              </div>
             )}
           </div>
         )}
       </div>
 
-      <div className="p-6 flex items-center gap-2 border-t border-slate-700 shrink-0">
-        <button
-          onClick={openPicker}
-          className="px-3 py-1.5 bg-accent text-white rounded text-xs hover:brightness-110 transition-all"
-        >
-          {insert.locationId ? "Move to…" : "Place in…"}
-        </button>
-        {insert.locationId && (
-          <button
-            onClick={unplace}
-            className="px-3 py-1.5 border border-slate-600 text-slate-300 rounded text-xs hover:bg-slate-700/50"
-          >
-            Unplace
-          </button>
-        )}
-        <button
-          onClick={deleteInsert}
-          className="ml-auto px-3 py-1.5 border border-red-900/60 text-red-400 rounded text-xs hover:bg-red-900/20"
-        >
-          Delete insert
-        </button>
-      </div>
+      {/* Bottom action bar removed — Place/Move/Unplace live in View tab,
+          Delete insert lives at the bottom of Edit tab. */}
 
       {pickerOpen && (
         <div
@@ -1511,6 +1475,79 @@ function InsertDetail({
         </div>
       )}
     </div>
+  );
+}
+
+function PlacementSection({
+  insert,
+  openPicker,
+  unplace,
+}: {
+  insert: Insert;
+  openPicker: () => void;
+  unplace: () => void;
+}) {
+  return (
+    <div className="p-4 border-b border-slate-700">
+      <div className="text-xs font-medium text-slate-400 uppercase tracking-wider mb-1.5">
+        Placement
+      </div>
+      {insert.locationPath ? (
+        <>
+          <div className="text-sm text-slate-200 truncate">
+            {insert.locationPath}
+          </div>
+          <div className="mt-2 flex items-center gap-2">
+            <button
+              onClick={openPicker}
+              className="px-3 py-1.5 bg-accent text-white rounded text-xs hover:brightness-110"
+            >
+              Move to…
+            </button>
+            <button
+              onClick={unplace}
+              className="px-3 py-1.5 border border-slate-600 text-slate-300 rounded text-xs hover:bg-slate-700/50"
+            >
+              Unplace
+            </button>
+          </div>
+        </>
+      ) : (
+        <>
+          <div className="text-sm text-amber-400">Unplaced</div>
+          <button
+            onClick={openPicker}
+            className="mt-2 px-3 py-1.5 bg-accent text-white rounded text-xs hover:brightness-110"
+          >
+            Place in…
+          </button>
+        </>
+      )}
+    </div>
+  );
+}
+
+function ViewTabBody({
+  insert,
+  openPicker,
+  unplace,
+}: {
+  placementOnly?: boolean;
+  insert: Insert;
+  openPicker: () => void;
+  unplace: () => void;
+}) {
+  return (
+    <>
+      <PlacementSection
+        insert={insert}
+        openPicker={openPicker}
+        unplace={unplace}
+      />
+      <div className="p-6 text-center text-xs text-slate-500">
+        Pick a cell to peek inside.
+      </div>
+    </>
   );
 }
 
