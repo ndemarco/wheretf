@@ -1,4 +1,4 @@
-import { eq, inArray, sql } from "drizzle-orm";
+import { asc, eq, inArray, sql } from "drizzle-orm";
 import { db } from "@/db/connection";
 import {
   locations,
@@ -112,7 +112,8 @@ export const locationRepository = {
     return db
       .select()
       .from(locations)
-      .where(eq(locations.moduleId, moduleId));
+      .where(eq(locations.moduleId, moduleId))
+      .orderBy(asc(locations.createdAt));
   },
 
   async findByInsertId({ insertId }: { insertId: string }) {

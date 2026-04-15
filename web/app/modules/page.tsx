@@ -21,6 +21,7 @@ interface LevelRow {
   interfaceTypeAccepted: string | null;
   isDisabled: boolean;
   parentId: string | null;
+  createdAt: string;
 }
 
 interface InsertRow {
@@ -75,14 +76,16 @@ export default function ModulesPage() {
       const levelMap = new Map<string, LevelRow[]>();
       mods.forEach((m, i) => {
         const locs: LevelRow[] = allLevels[i].locations ?? [];
-        const levels = locs
-          .filter((l) => l.parentId === null)
-          .sort((a, b) => {
-            const na = Number(a.label);
-            const nb = Number(b.label);
-            if (!Number.isNaN(na) && !Number.isNaN(nb)) return na - nb;
-            return a.label.localeCompare(b.label);
-          });
+        const topLevels = locs.filter((l) => l.parentId === null);
+        const allNumeric = topLevels.every(
+          (l) => l.label.trim() !== "" && !Number.isNaN(Number(l.label))
+        );
+        const levels = topLevels.sort((a, b) => {
+          if (allNumeric) return Number(a.label) - Number(b.label);
+          return (
+            new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
+          );
+        });
         levelMap.set(m.id, levels);
       });
       setLevelsByModule(levelMap);
