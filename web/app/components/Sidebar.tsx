@@ -96,6 +96,19 @@ const navSections: NavSection[] = [
           </svg>
         ),
       },
+      {
+        href: "/tour",
+        title: "Tour",
+        icon: (
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="w-5 h-5">
+            <circle cx="12" cy="12" r="9" />
+            <path
+              d="M9.5 9a2.5 2.5 0 115 0c0 1.667-2.5 2-2.5 3.5M12 17h.01"
+              strokeLinecap="round"
+            />
+          </svg>
+        ),
+      },
     ],
   },
 ];
