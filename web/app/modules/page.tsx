@@ -215,11 +215,6 @@ export default function ModulesPage() {
                           ) : l.locationType === "receptacle" ? (
                             <span className="text-slate-500 italic truncate flex-1">
                               empty
-                              {l.interfaceTypeAccepted && (
-                                <span className="text-blue-300/80 not-italic ml-1">
-                                  · {l.interfaceTypeAccepted}
-                                </span>
-                              )}
                             </span>
                           ) : (
                             <span className="text-slate-600 truncate flex-1">
