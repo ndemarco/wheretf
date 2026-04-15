@@ -1597,21 +1597,36 @@ function InsertGrid({
           ? cell.label + "+" + aliasChildren.map((a) => a.label).join("+")
           : cell.label;
 
+        // Border conveys selection state (incl. on disabled cells so
+        // multi-select shows). Background conveys content state.
+        const borderClass = isSelected
+          ? "border-accent border-2"
+          : isMulti
+            ? "border-accent border-2 border-dashed"
+            : cell.isDisabled
+              ? "border-red-900/60"
+              : occupied
+                ? isProvisional
+                  ? "border-amber-800"
+                  : "border-blue-800"
+                : "border-slate-700 hover:border-slate-600";
+        const bgClass = cell.isDisabled
+          ? "bg-red-900/10"
+          : isSelected
+            ? "bg-accent/10"
+            : isMulti
+              ? "bg-accent/5"
+              : occupied
+                ? isProvisional
+                  ? "bg-amber-900/15"
+                  : "bg-blue-900/15"
+                : isMerged
+                  ? "bg-blue-950/20"
+                  : "bg-slate-800/30";
         const cellClasses = [
           "relative rounded border overflow-hidden transition-colors",
-          cell.isDisabled
-            ? "border-red-900/60 bg-red-900/10"
-            : isSelected
-              ? "border-accent border-2 bg-accent/10"
-              : isMulti
-                ? "border-accent border-2 border-dashed bg-accent/5"
-                : occupied
-                  ? isProvisional
-                    ? "border-amber-800 bg-amber-900/15"
-                    : "border-blue-800 bg-blue-900/15"
-                  : isMerged
-                    ? "border-slate-700 bg-blue-950/20"
-                    : "border-slate-700 bg-slate-800/30 hover:border-slate-600",
+          borderClass,
+          bgClass,
           isDivided ? "" : "cursor-pointer",
         ]
           .filter(Boolean)
