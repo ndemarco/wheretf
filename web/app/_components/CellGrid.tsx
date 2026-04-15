@@ -41,6 +41,19 @@ export interface ItemRef {
  *
  * Caller controls behavior; this component just renders + dispatches clicks.
  */
+/**
+ * Infer divide orientation from the children's labels.
+ * Vertical split (front/rear, top/bottom) when any child label hints at
+ * a near/far or up/down axis; horizontal (left/right, 1/2/3) otherwise.
+ */
+function inferDivideOrientation(children: CellRow[]): "horizontal" | "vertical" {
+  const verticalWords = /^(front|rear|back|top|bottom|up|down|upper|lower|near|far)$/i;
+  if (children.some((c) => verticalWords.test(c.label.trim()))) {
+    return "vertical";
+  }
+  return "horizontal";
+}
+
 export function CellGrid({
   cells,
   assignments,
@@ -302,8 +315,15 @@ export function CellGrid({
             )}
 
             {isDivided ? (
-              <div className="absolute inset-0 flex">
+              <div
+                className={`absolute inset-0 flex ${
+                  inferDivideOrientation(divChildren) === "vertical"
+                    ? "flex-col"
+                    : ""
+                }`}
+              >
                 {divChildren.map((child, i) => {
+                  const orientation = inferDivideOrientation(divChildren);
                   const childAssigns = assignByLoc.get(child.id) ?? [];
                   const childOccupied = childAssigns.length > 0;
                   const childItem = childOccupied
@@ -312,9 +332,14 @@ export function CellGrid({
                   const childSelected = child.id === selectedCellId;
                   const childMulti = multiSelect.has(child.id);
                   const isLast = i === divChildren.length - 1;
+                  const sepClass = isLast
+                    ? ""
+                    : orientation === "vertical"
+                      ? "border-b border-slate-700"
+                      : "border-r border-slate-700";
                   const subClasses = [
-                    "flex-1 flex flex-col items-center justify-center gap-0.5 px-1 py-1 cursor-pointer transition-colors min-w-0",
-                    !isLast ? "border-r border-slate-700" : "",
+                    "flex-1 flex flex-col items-center justify-center gap-0.5 px-1 py-1 cursor-pointer transition-colors min-w-0 min-h-0",
+                    sepClass,
                     child.isDisabled
                       ? "bg-red-900/15 text-red-300"
                       : childSelected
