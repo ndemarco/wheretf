@@ -205,7 +205,10 @@ Running list of issues and decisions for the `/modules` and `/modules/[id]` area
 ---
 
 ## Cross-cutting open questions
-- **MD-1** add-level semantics (deferred)
+- **MD-1** add-level semantics — refined: on a module, ISBAT insert a new
+  level *before* or *after* an existing level X. No drag-to-reorder
+  (too easy to foot-gun). Typically an uncommon operation since
+  module structure doesn't change often.
 - **IN-2** override UX — all 4 done (Disable, Restrict, Merge, Divide)
 - **IN-3** module level header now surfaces the insert (done)
 - **IN-4** insert-first placement (done)

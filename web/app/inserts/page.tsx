@@ -310,6 +310,10 @@ function InsertDetail({
   // Divide editor
   const [dividingOpen, setDividingOpen] = useState(false);
   const [divideLabels, setDivideLabels] = useState("");
+  const [divideOrientation, setDivideOrientation] = useState<
+    "lr" | "fb" | "tb" | "custom"
+  >("lr");
+  const [divideCount, setDivideCount] = useState(2);
 
   const loadAll = useCallback(async () => {
     try {
@@ -1188,36 +1192,21 @@ function InsertDetail({
                     })
                   </button>
                 ) : dividingOpen ? (
-                  <div className="space-y-2 p-2 rounded bg-slate-800/60 border border-slate-700">
-                    <div className="text-xs text-slate-400">
-                      Child labels, comma-separated (e.g. <code className="text-slate-300">front, rear</code>)
-                    </div>
-                    <input
-                      type="text"
-                      value={divideLabels}
-                      onChange={(e) => setDivideLabels(e.target.value)}
-                      placeholder="front, rear"
-                      autoFocus
-                      className="w-full px-2 py-1 bg-slate-900 border border-slate-600 rounded text-xs text-slate-200 focus:border-accent focus:outline-none"
-                    />
-                    <div className="flex items-center gap-2">
-                      <button
-                        onClick={submitDivide}
-                        className="px-2.5 py-1 bg-accent text-white rounded text-xs hover:brightness-110"
-                      >
-                        Divide
-                      </button>
-                      <button
-                        onClick={() => {
-                          setDividingOpen(false);
-                          setDivideLabels("");
-                        }}
-                        className="px-2.5 py-1 border border-slate-600 text-slate-300 rounded text-xs hover:bg-slate-700/50"
-                      >
-                        Cancel
-                      </button>
-                    </div>
-                  </div>
+                  <DivideForm
+                    orientation={divideOrientation}
+                    setOrientation={setDivideOrientation}
+                    count={divideCount}
+                    setCount={setDivideCount}
+                    labels={divideLabels}
+                    setLabels={setDivideLabels}
+                    onSubmit={submitDivide}
+                    onCancel={() => {
+                      setDividingOpen(false);
+                      setDivideLabels("");
+                      setDivideOrientation("lr");
+                      setDivideCount(2);
+                    }}
+                  />
                 ) : (
                   <button
                     onClick={() => setDividingOpen(true)}
@@ -1395,6 +1384,135 @@ function InsertDetail({
       {/* Bottom action bar removed — Place/Move/Unplace live in View tab,
           Delete insert lives at the bottom of Edit tab. Compat-receptacle
           picker is now inline in the View tab — no modal. */}
+    </div>
+  );
+}
+
+/**
+ * IN-8: suggest subdivision labels based on orientation + count.
+ * Templates can declare their own subdivisionOptions in future; for
+ * now we use a small built-in set of presets plus a Custom mode.
+ */
+function suggestLabels(
+  orientation: "lr" | "fb" | "tb" | "custom",
+  count: number
+): string {
+  const n = Math.max(2, Math.min(10, count));
+  if (orientation === "custom") return "";
+  if (n === 2) {
+    return orientation === "lr"
+      ? "left, right"
+      : orientation === "fb"
+        ? "front, rear"
+        : "top, bottom";
+  }
+  if (n === 3 && orientation === "lr") return "left, center, right";
+  if (n === 3 && orientation === "fb") return "front, middle, rear";
+  if (n === 3 && orientation === "tb") return "top, middle, bottom";
+  // 4+: number them along the chosen axis
+  return Array.from({ length: n }, (_, i) => String(i + 1)).join(", ");
+}
+
+function DivideForm({
+  orientation,
+  setOrientation,
+  count,
+  setCount,
+  labels,
+  setLabels,
+  onSubmit,
+  onCancel,
+}: {
+  orientation: "lr" | "fb" | "tb" | "custom";
+  setOrientation: (v: "lr" | "fb" | "tb" | "custom") => void;
+  count: number;
+  setCount: (v: number) => void;
+  labels: string;
+  setLabels: (v: string) => void;
+  onSubmit: () => void;
+  onCancel: () => void;
+}) {
+  // Whenever orientation or count changes, regenerate the suggested
+  // labels unless the user has switched to Custom.
+  useEffect(() => {
+    if (orientation === "custom") return;
+    setLabels(suggestLabels(orientation, count));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [orientation, count]);
+
+  // Seed initial labels when the form opens
+  useEffect(() => {
+    if (!labels) setLabels(suggestLabels(orientation, count));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  return (
+    <div className="space-y-2 p-2 rounded bg-slate-800/60 border border-slate-700">
+      <div className="flex items-center gap-2">
+        <span className="text-xs text-slate-400">Split</span>
+        <div className="flex items-center gap-1 text-[10px]">
+          {(
+            [
+              { v: "lr" as const, label: "← →" },
+              { v: "fb" as const, label: "front/rear" },
+              { v: "tb" as const, label: "top/bottom" },
+              { v: "custom" as const, label: "custom" },
+            ]
+          ).map((o) => (
+            <button
+              key={o.v}
+              onClick={() => setOrientation(o.v)}
+              className={`px-2 py-1 rounded border transition-colors ${
+                orientation === o.v
+                  ? "border-accent bg-accent/10 text-accent"
+                  : "border-slate-700 text-slate-400 hover:text-slate-200"
+              }`}
+            >
+              {o.label}
+            </button>
+          ))}
+        </div>
+      </div>
+      <label className="flex items-center gap-2">
+        <span className="text-xs text-slate-500">Pieces</span>
+        <input
+          type="number"
+          min={2}
+          max={10}
+          value={count}
+          onChange={(e) => setCount(Number(e.target.value) || 2)}
+          className="w-14 px-1.5 py-0.5 bg-slate-900 border border-slate-600 rounded text-xs text-slate-200 focus:border-accent focus:outline-none tabular-nums"
+        />
+      </label>
+      <label className="block">
+        <span className="text-[11px] text-slate-500 block mb-0.5">
+          Labels (comma-separated)
+        </span>
+        <input
+          type="text"
+          value={labels}
+          onChange={(e) => {
+            setLabels(e.target.value);
+            setOrientation("custom");
+          }}
+          placeholder="e.g. front, rear"
+          className="w-full px-2 py-1 bg-slate-900 border border-slate-600 rounded text-xs text-slate-200 focus:border-accent focus:outline-none"
+        />
+      </label>
+      <div className="flex items-center gap-2">
+        <button
+          onClick={onSubmit}
+          className="px-2.5 py-1 bg-accent text-white rounded text-xs hover:brightness-110"
+        >
+          Divide
+        </button>
+        <button
+          onClick={onCancel}
+          className="px-2.5 py-1 border border-slate-600 text-slate-300 rounded text-xs hover:bg-slate-700/50"
+        >
+          Cancel
+        </button>
+      </div>
     </div>
   );
 }
