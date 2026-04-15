@@ -1922,86 +1922,9 @@ function LevelPanel({
                 Cancel
               </button>
             </div>
-          </>
-        ) : (
-          <>
-            <div>
-              <div className="text-xs text-slate-500">Label</div>
-              <div className="text-sm text-slate-100">{level.label}</div>
-            </div>
-            <div>
-              <div className="text-xs text-slate-500">Type</div>
-              <div className="text-sm text-slate-300">
-                {level.locationType}
-                {level.interfaceTypeAccepted &&
-                  ` · accepts ${level.interfaceTypeAccepted}`}
-              </div>
-            </div>
-            {level.metadata &&
-              typeof level.metadata === "object" &&
-              "notes" in level.metadata &&
-              typeof (level.metadata as { notes?: string }).notes ===
-                "string" && (
-                <div>
-                  <div className="text-xs text-slate-500">Notes</div>
-                  <div className="text-sm text-slate-300 whitespace-pre-wrap">
-                    {(level.metadata as { notes: string }).notes}
-                  </div>
-                </div>
-              )}
 
-            {/* Insert — only meaningful for receptacle levels */}
-            {level.locationType === "receptacle" && (
-              <div className="pt-3 border-t border-slate-700 space-y-2">
-                <div className="text-xs font-medium text-slate-400 uppercase tracking-wider">
-                  Insert
-                </div>
-                {insert ? (
-                  <>
-                    <div className="text-sm text-slate-200 truncate">
-                      {insert.name ?? insert.templateName ?? "insert"}
-                    </div>
-                    {insert.templateName && insert.name && (
-                      <div className="text-[11px] text-slate-500">
-                        {insert.templateName}
-                      </div>
-                    )}
-                    <div className="flex items-center gap-2 pt-1">
-                      <button
-                        onClick={() => onRemoveInsert(insert.id)}
-                        className="px-3 py-1.5 border border-slate-600 text-slate-300 rounded text-xs hover:bg-slate-700/50"
-                      >
-                        Remove
-                      </button>
-                      <Link
-                        href={`/inserts?selected=${insert.id}`}
-                        className="text-xs text-slate-400 hover:text-accent"
-                      >
-                        Open in Inserts →
-                      </Link>
-                    </div>
-                  </>
-                ) : (
-                  <>
-                    <div className="text-sm text-slate-500">
-                      No insert placed.
-                    </div>
-                    <Link
-                      href={placeInsertHref}
-                      className="inline-block px-3 py-1.5 bg-accent text-white rounded text-xs hover:brightness-110"
-                    >
-                      Place insert…
-                    </Link>
-                  </>
-                )}
-              </div>
-            )}
-
-            {/* Level-scope Disable */}
+            {/* Disable / Enable at the level scope */}
             <div className="pt-3 border-t border-slate-700 space-y-2">
-              <div className="text-xs font-medium text-slate-400 uppercase tracking-wider">
-                Override
-              </div>
               {level.isDisabled ? (
                 <>
                   <div className="text-xs text-red-400">
@@ -2030,6 +1953,64 @@ function LevelPanel({
                 </button>
               )}
             </div>
+          </>
+        ) : (
+          /* Place tab: insert placement only. Notes (if any) sit here
+              as read-only context; the rest (label, type, interface) is
+              redundant with the Edit tab and the center-pane title. */
+          <>
+            {level.metadata &&
+              typeof level.metadata === "object" &&
+              "notes" in level.metadata &&
+              typeof (level.metadata as { notes?: string }).notes ===
+                "string" && (
+                <div>
+                  <div className="text-xs text-slate-500">Notes</div>
+                  <div className="text-sm text-slate-300 whitespace-pre-wrap">
+                    {(level.metadata as { notes: string }).notes}
+                  </div>
+                </div>
+              )}
+
+            {level.locationType === "receptacle" &&
+              (insert ? (
+                <div className="space-y-2">
+                  <div className="text-sm text-slate-200 truncate">
+                    {insert.name ?? insert.templateName ?? "insert"}
+                  </div>
+                  {insert.templateName && insert.name && (
+                    <div className="text-[11px] text-slate-500">
+                      {insert.templateName}
+                    </div>
+                  )}
+                  <div className="flex items-center gap-2 pt-1">
+                    <button
+                      onClick={() => onRemoveInsert(insert.id)}
+                      className="px-3 py-1.5 border border-slate-600 text-slate-300 rounded text-xs hover:bg-slate-700/50"
+                    >
+                      Remove
+                    </button>
+                    <Link
+                      href={`/inserts?selected=${insert.id}`}
+                      className="text-xs text-slate-400 hover:text-accent"
+                    >
+                      Open in Inserts →
+                    </Link>
+                  </div>
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  <div className="text-sm text-slate-500">
+                    No insert placed.
+                  </div>
+                  <Link
+                    href={placeInsertHref}
+                    className="inline-block px-3 py-1.5 bg-accent text-white rounded text-xs hover:brightness-110"
+                  >
+                    Place insert…
+                  </Link>
+                </div>
+              ))}
           </>
         )}
       </div>
