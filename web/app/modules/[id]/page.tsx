@@ -949,82 +949,85 @@ export default function ModuleDetailPage() {
                   </button>
                 </div>
               ) : (
-                <div className="flex items-center gap-2 group/title">
-                  <h2 className="text-lg font-semibold text-slate-100 truncate flex-1">
-                    {selectedLevel.label}
-                  </h2>
-                  <button
-                    onClick={startRenameLevel}
-                    title="Rename"
-                    aria-label="Rename level"
-                    className="opacity-0 group-hover/title:opacity-100 focus:opacity-100 text-slate-400 hover:text-accent transition-opacity"
-                  >
-                    <svg
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth={2}
-                      className="w-4 h-4"
-                    >
-                      <path d="M12 20h9" strokeLinecap="round" />
-                      <path
-                        d="M16.5 3.5a2.121 2.121 0 113 3L7 19l-4 1 1-4 12.5-12.5z"
-                        strokeLinejoin="round"
-                        strokeLinecap="round"
-                      />
-                    </svg>
-                  </button>
-                </div>
-              )}
-              {/* Sub-header: informational only; actions live in the
-                  right-panel Level view. */}
-              {(() => {
-                const ins = insertsByReceptacle.get(selectedLevel.id);
-                return (
-                  <div className="flex items-center gap-3 text-xs">
-                    {selectedLevel.isDisabled && (
-                      <span className="text-red-400">
-                        disabled
-                        {selectedLevel.disableReason &&
-                          `: ${selectedLevel.disableReason}`}
-                      </span>
-                    )}
-                    {ins ? (
-                      <>
-                        <span className="text-slate-500">holds</span>
-                        <Link
-                          href={`/inserts?selected=${ins.id}`}
-                          className="text-slate-200 hover:text-accent transition-colors truncate"
-                        >
-                          {ins.name ?? ins.templateName ?? "(unnamed insert)"}
-                        </Link>
-                        {ins.templateName && ins.name && (
-                          <span className="text-slate-600">
-                            ({ins.templateName})
-                          </span>
-                        )}
-                        <span className="text-slate-600">·</span>
-                        <span className="text-slate-500">
-                          {childLocations.length} positions
-                        </span>
-                      </>
-                    ) : selectedLevel.locationType === "receptacle" ? (
-                      <>
-                        <span className="text-slate-500">empty receptacle</span>
-                        {selectedLevel.interfaceTypeAccepted && (
+                (() => {
+                  const ins = insertsByReceptacle.get(selectedLevel.id);
+                  const insertName =
+                    ins?.name ?? ins?.templateName ?? null;
+                  return (
+                    <div className="flex items-center gap-2 group/title">
+                      <h2 className="text-lg font-semibold text-slate-100 truncate flex-1">
+                        {selectedLevel.label}
+                        {insertName && (
                           <>
-                            <span className="text-slate-600">·</span>
-                            <span className="text-blue-300">
-                              accepts {selectedLevel.interfaceTypeAccepted}
-                            </span>
+                            <span className="text-slate-500 mx-2">/</span>
+                            {ins ? (
+                              <Link
+                                href={`/inserts?selected=${ins.id}`}
+                                className="text-slate-100 hover:text-accent transition-colors"
+                              >
+                                {insertName}
+                              </Link>
+                            ) : (
+                              insertName
+                            )}
                           </>
                         )}
-                      </>
-                    ) : (
-                      <span className="text-slate-500">
-                        {selectedLevel.locationType}
-                      </span>
-                    )}
+                      </h2>
+                      <button
+                        onClick={startRenameLevel}
+                        title="Rename level"
+                        aria-label="Rename level"
+                        className="opacity-0 group-hover/title:opacity-100 focus:opacity-100 text-slate-400 hover:text-accent transition-opacity"
+                      >
+                        <svg
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          stroke="currentColor"
+                          strokeWidth={2}
+                          className="w-4 h-4"
+                        >
+                          <path d="M12 20h9" strokeLinecap="round" />
+                          <path
+                            d="M16.5 3.5a2.121 2.121 0 113 3L7 19l-4 1 1-4 12.5-12.5z"
+                            strokeLinejoin="round"
+                            strokeLinecap="round"
+                          />
+                        </svg>
+                      </button>
+                    </div>
+                  );
+                })()
+              )}
+              {/* Sub-header: only status signals that matter (disabled,
+                  empty receptacle interface). Type and position count
+                  live in the right panel + left level list. */}
+              {(() => {
+                const ins = insertsByReceptacle.get(selectedLevel.id);
+                const bits: React.ReactNode[] = [];
+                if (selectedLevel.isDisabled) {
+                  bits.push(
+                    <span key="dis" className="text-red-400">
+                      disabled
+                      {selectedLevel.disableReason &&
+                        `: ${selectedLevel.disableReason}`}
+                    </span>
+                  );
+                }
+                if (
+                  !ins &&
+                  selectedLevel.locationType === "receptacle" &&
+                  selectedLevel.interfaceTypeAccepted
+                ) {
+                  bits.push(
+                    <span key="iface" className="text-blue-300">
+                      empty / accepts {selectedLevel.interfaceTypeAccepted}
+                    </span>
+                  );
+                }
+                if (bits.length === 0) return null;
+                return (
+                  <div className="flex items-center gap-3 text-xs">
+                    {bits}
                   </div>
                 );
               })()}
