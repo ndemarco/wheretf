@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 
 interface Module {
   id: string;
@@ -21,81 +21,6 @@ interface LevelRow {
   interfaceTypeAccepted: string | null;
   isDisabled: boolean;
   parentId: string | null;
-}
-
-function InlineLabelEditor({
-  value,
-  onSave,
-}: {
-  value: string;
-  onSave: (next: string) => Promise<void> | void;
-}) {
-  const [editing, setEditing] = useState(false);
-  const [draft, setDraft] = useState(value);
-  const [saving, setSaving] = useState(false);
-  const inputRef = useRef<HTMLInputElement>(null);
-
-  useEffect(() => {
-    if (editing) {
-      inputRef.current?.focus();
-      inputRef.current?.select();
-    }
-  }, [editing]);
-
-  useEffect(() => {
-    if (!editing) setDraft(value);
-  }, [value, editing]);
-
-  async function commit() {
-    const next = draft.trim();
-    if (!next || next === value) {
-      setDraft(value);
-      setEditing(false);
-      return;
-    }
-    setSaving(true);
-    try {
-      await onSave(next);
-    } finally {
-      setSaving(false);
-      setEditing(false);
-    }
-  }
-
-  if (editing) {
-    return (
-      <input
-        ref={inputRef}
-        value={draft}
-        disabled={saving}
-        onChange={(e) => setDraft(e.target.value)}
-        onClick={(e) => e.stopPropagation()}
-        onBlur={commit}
-        onKeyDown={(e) => {
-          e.stopPropagation();
-          if (e.key === "Enter") commit();
-          else if (e.key === "Escape") {
-            setDraft(value);
-            setEditing(false);
-          }
-        }}
-        className="w-10 px-1 py-0 bg-slate-900 border border-accent rounded text-xs text-slate-100 text-center focus:outline-none"
-      />
-    );
-  }
-
-  return (
-    <span
-      onClick={(e) => {
-        e.stopPropagation();
-        setEditing(true);
-      }}
-      title="Click to rename"
-      className="text-slate-100 font-medium tabular-nums w-10 shrink-0 text-center px-1 py-0.5 rounded cursor-text border border-dashed border-transparent hover:border-slate-500 hover:bg-slate-700/60"
-    >
-      {value}
-    </span>
-  );
 }
 
 interface InsertRow {
@@ -179,32 +104,6 @@ export default function ModulesPage() {
   useEffect(() => {
     fetchAll();
   }, [fetchAll]);
-
-  async function renameLevel(levelId: string, nextLabel: string) {
-    const res = await fetch(`/api/locations/${levelId}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ label: nextLabel }),
-    });
-    if (!res.ok) {
-      const d = await res.json().catch(() => ({}));
-      console.error("rename failed", d);
-      return;
-    }
-    setLevelsByModule((prev) => {
-      const next = new Map(prev);
-      for (const [mid, levels] of next) {
-        const idx = levels.findIndex((l) => l.id === levelId);
-        if (idx !== -1) {
-          const updated = [...levels];
-          updated[idx] = { ...updated[idx], label: nextLabel };
-          next.set(mid, updated);
-          break;
-        }
-      }
-      return next;
-    });
-  }
 
   function openLevel(moduleId: string, levelId: string) {
     // Seed the last-selected-level so the module page opens on the clicked level
@@ -306,10 +205,9 @@ export default function ModulesPage() {
                               : "opacity-50"
                           } ${l.isDisabled ? "bg-red-950/20" : ""}`}
                         >
-                          <InlineLabelEditor
-                            value={l.label}
-                            onSave={(next) => renameLevel(l.id, next)}
-                          />
+                          <span className="text-slate-100 font-medium tabular-nums w-10 shrink-0 text-center">
+                            {l.label}
+                          </span>
                           {ins ? (
                             <span className="text-slate-200 truncate flex-1">
                               {ins.name ?? ins.templateName ?? "insert"}
