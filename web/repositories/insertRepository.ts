@@ -6,6 +6,7 @@ import {
   templates,
   templateVersions,
   modules,
+  assignments,
 } from "@/db/schema";
 import { transactionRepository } from "./transactionRepository";
 import { getGridLabel } from "@/lib/gridLabels";
@@ -301,6 +302,21 @@ export const insertRepository = {
         columnDividersFixed: templateVersions.columnDividersFixed,
         locationPath: locations.path,
         moduleName: modules.name,
+        cellCount: sql<number>`(
+          SELECT COUNT(*)::int FROM ${locations} c
+          WHERE c.insert_id = ${inserts.id}
+            AND NOT EXISTS (
+              SELECT 1 FROM ${locations} cc WHERE cc.parent_id = c.id
+            )
+        )`.as("cellCount"),
+        assignedCount: sql<number>`(
+          SELECT COUNT(DISTINCT c.id)::int FROM ${locations} c
+          INNER JOIN ${assignments} a ON a.location_id = c.id
+          WHERE c.insert_id = ${inserts.id}
+            AND NOT EXISTS (
+              SELECT 1 FROM ${locations} cc WHERE cc.parent_id = c.id
+            )
+        )`.as("assignedCount"),
       })
       .from(inserts)
       .leftJoin(templates, eq(inserts.templateId, templates.id))
@@ -322,6 +338,8 @@ export const insertRepository = {
       columnDividersFixed: r.columnDividersFixed ?? false,
       locationPath: r.locationPath,
       moduleName: r.moduleName,
+      cellCount: Number(r.cellCount ?? 0),
+      assignedCount: Number(r.assignedCount ?? 0),
     }));
   },
 

@@ -91,7 +91,7 @@ function InlineLabelEditor({
         setEditing(true);
       }}
       title="Click to rename"
-      className="text-slate-100 font-medium tabular-nums w-10 shrink-0 text-center px-1 rounded cursor-text hover:bg-slate-700/60 hover:ring-1 hover:ring-slate-600"
+      className="text-slate-100 font-medium tabular-nums w-10 shrink-0 text-center px-1 py-0.5 rounded cursor-text border border-dashed border-transparent hover:border-slate-500 hover:bg-slate-700/60"
     >
       {value}
     </span>
@@ -103,6 +103,8 @@ interface InsertRow {
   name: string | null;
   templateName: string | null;
   locationId: string | null;
+  cellCount: number;
+  assignedCount: number;
 }
 
 export default function ModulesPage() {
@@ -326,13 +328,19 @@ export default function ModulesPage() {
                               {l.locationType}
                             </span>
                           )}
-                          {/* status dot */}
-                          {l.locationType === "receptacle" && !l.isDisabled && (
+                          {ins && ins.cellCount > 0 && (
                             <span
-                              className={`w-1.5 h-1.5 rounded-full shrink-0 ${
-                                ins ? "bg-blue-400" : "bg-slate-600"
+                              className={`shrink-0 tabular-nums text-[10px] px-1.5 py-0.5 rounded ${
+                                ins.assignedCount === 0
+                                  ? "bg-slate-700/60 text-slate-400"
+                                  : ins.assignedCount >= ins.cellCount
+                                    ? "bg-accent/20 text-accent"
+                                    : "bg-blue-900/40 text-blue-300"
                               }`}
-                            />
+                              title={`${ins.assignedCount} of ${ins.cellCount} cells assigned`}
+                            >
+                              {ins.assignedCount}/{ins.cellCount}
+                            </span>
                           )}
                           {l.isDisabled && (
                             <span className="text-red-400 shrink-0 text-[10px] uppercase tracking-wider">
