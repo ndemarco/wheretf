@@ -1615,12 +1615,33 @@ function StandardsTab() {
     }
   }
 
+  const selected = standards.find((s) => s.id === selectedId) ?? null;
+
   return (
-    <div className="flex-1 flex min-h-0 overflow-hidden">
+    <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
+      {/* Breadcrumb bar (matches modules/inserts) */}
+      <div className="flex items-center gap-1.5 px-4 py-2 border-b border-slate-700 bg-slate-800/30 text-xs text-slate-400 shrink-0">
+        <span>Taxonomy</span>
+        <span className="text-slate-600">/</span>
+        <span className="text-slate-300">Standards</span>
+        {selected && (
+          <>
+            <span className="text-slate-600">/</span>
+            <span className="text-slate-100">{selected.name}</span>
+            {selected.domainTag && (
+              <span className="text-slate-500 ml-1">
+                ({selected.domainTag})
+              </span>
+            )}
+          </>
+        )}
+      </div>
+
+      <div className="flex-1 flex min-h-0 overflow-hidden">
       {/* Left: list */}
-      <div className="w-64 shrink-0 border-r border-slate-700 flex flex-col bg-slate-900/40">
+      <div className="w-72 shrink-0 border-r border-slate-700 flex flex-col bg-slate-900/40">
         <div className="p-3 border-b border-slate-700 flex items-center justify-between">
-          <span className="text-xs uppercase text-slate-500 tracking-wider">
+          <span className="text-xs uppercase text-slate-500 tracking-wider font-medium">
             Standards
           </span>
           <button
@@ -1678,8 +1699,8 @@ function StandardsTab() {
           )}
         </div>
       </div>
-      {/* Right: detail */}
-      <div className="flex-1 overflow-y-auto">
+      {/* Right: detail (center + info panel) */}
+      <div className="flex-1 flex min-w-0 overflow-hidden">
         {selectedId ? (
           <StandardDetail
             key={selectedId}
@@ -1688,10 +1709,11 @@ function StandardsTab() {
             onMutated={fetchStandards}
           />
         ) : (
-          <div className="h-full flex items-center justify-center text-slate-500 text-sm">
+          <div className="flex-1 flex items-center justify-center text-slate-500 text-sm">
             Select or create a standard.
           </div>
         )}
+      </div>
       </div>
     </div>
   );
@@ -1944,34 +1966,36 @@ function StandardDetail({
 
   return (
     <div className="flex-1 flex min-h-0 overflow-hidden">
-      <div className="flex-1 overflow-y-auto p-6 space-y-6 max-w-4xl">
-      {/* Header */}
-      {meta && (
-        <div className="space-y-1">
-          <EditableText
-            value={meta.name}
-            onSave={(name) => updateMeta({ name })}
-            className="text-base font-semibold text-slate-100"
-            placeholder="Standard name"
-          />
-          <EditableText
-            value={meta.domainTag ?? ""}
-            onSave={(domainTag) =>
-              updateMeta({ domainTag: domainTag || null })
-            }
-            className="text-xs text-slate-400"
-            placeholder="Domain tag (e.g. Metric Thread)"
-          />
-          <EditableText
-            value={meta.description ?? ""}
-            onSave={(description) =>
-              updateMeta({ description: description || null })
-            }
-            className="text-xs text-slate-500"
-            placeholder="Description…"
-          />
-        </div>
-      )}
+      <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
+        {/* Prominent standard title bar (matches module/level header style) */}
+        {meta && (
+          <div className="px-6 py-4 border-b border-slate-700 shrink-0 space-y-1">
+            <EditableText
+              value={meta.name}
+              onSave={(name) => updateMeta({ name })}
+              className="text-lg font-semibold text-slate-100"
+              placeholder="Standard name"
+            />
+            <EditableText
+              value={meta.domainTag ?? ""}
+              onSave={(domainTag) =>
+                updateMeta({ domainTag: domainTag || null })
+              }
+              className="text-xs text-slate-400"
+              placeholder="Domain tag (e.g. Metric Thread)"
+            />
+            <EditableText
+              value={meta.description ?? ""}
+              onSave={(description) =>
+                updateMeta({ description: description || null })
+              }
+              className="text-xs text-slate-500"
+              placeholder="Description…"
+            />
+          </div>
+        )}
+
+        <div className="flex-1 overflow-y-auto p-6 space-y-6 max-w-4xl">
 
       {/* Aspects */}
       <section className="space-y-2">
@@ -2236,6 +2260,7 @@ function StandardDetail({
           )}
         </div>
       </section>
+        </div>
       </div>
 
       {/* Right info panel */}
