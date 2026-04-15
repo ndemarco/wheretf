@@ -140,15 +140,7 @@ export default function ModulesPage() {
 
   return (
     <div className="flex-1 flex flex-col min-w-0 p-6 overflow-y-auto">
-      <div className="flex items-center justify-between mb-6">
-        <h1 className="text-xl font-semibold text-slate-100">Modules</h1>
-        <Link
-          href="/modules/new"
-          className="px-4 py-2 bg-accent text-white rounded-md hover:brightness-110 transition-all text-sm"
-        >
-          New Module
-        </Link>
-      </div>
+      <h1 className="text-xl font-semibold text-slate-100 mb-6">Modules</h1>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
         {modules.map((m) => {
