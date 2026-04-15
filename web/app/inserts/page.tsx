@@ -737,7 +737,7 @@ function InsertDetail({
   }
 
   return (
-    <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
+    <div className="flex-1 flex flex-col min-w-0 min-h-0 overflow-hidden">
       <div className="p-6 border-b border-slate-700 space-y-2 shrink-0">
         {editing ? (
           <div className="flex items-center gap-2">
@@ -832,19 +832,14 @@ function InsertDetail({
       </div>
 
       {/* Layout area: grid + optional cell panel */}
-      <div className="flex-1 flex min-w-0 overflow-hidden">
-        <div className="flex-1 overflow-auto p-6">
-          <div className="text-xs text-slate-500 uppercase tracking-wider mb-3">
-            Layout
-          </div>
-          {cells.length === 0 ? (
-            <div className="text-sm text-slate-500">
-              No cells. Template has no grid, or insert was created without
-              one.
+      <div className="flex-1 flex min-w-0 min-h-0 overflow-hidden">
+        <div className="flex-1 flex flex-col min-h-0 min-w-0 overflow-hidden p-6 gap-3">
+          <div className="flex items-center gap-3 shrink-0">
+            <div className="text-xs text-slate-500 uppercase tracking-wider">
+              Layout
             </div>
-          ) : (
-            <>
-              <div className="mb-3 flex items-center gap-2">
+            {cells.length > 0 && (
+              <>
                 <button
                   onClick={() => {
                     if (selectMode) {
@@ -883,16 +878,27 @@ function InsertDetail({
                     </button>
                   </>
                 )}
+              </>
+            )}
+          </div>
+          {cells.length === 0 ? (
+            <div className="text-sm text-slate-500">
+              No cells. Template has no grid, or insert was created without
+              one.
+            </div>
+          ) : (
+            <>
+              <div className="flex-1 min-h-0 flex items-center justify-center">
+                <InsertGrid
+                  cells={cells}
+                  assignments={assignments}
+                  itemsById={itemsById}
+                  selectedCellId={selectedCellId}
+                  multiSelect={multiSelect}
+                  onCellClick={selectCell}
+                />
               </div>
-              <InsertGrid
-                cells={cells}
-                assignments={assignments}
-                itemsById={itemsById}
-                selectedCellId={selectedCellId}
-                multiSelect={multiSelect}
-                onCellClick={selectCell}
-              />
-              <div className="mt-2 text-[11px] text-slate-500">
+              <div className="text-[11px] text-slate-500 shrink-0">
                 Tip: hold Ctrl/Cmd and click to add cells to the merge
                 selection.
               </div>
@@ -1455,12 +1461,16 @@ function InsertGrid({
     return String(c + 1);
   }
 
+  // The grid container fits both the available width and height
+  // using aspect-ratio. The label row/column are `auto`; cells use
+  // `1fr` so they split remaining space evenly.
   return (
     <div
-      className="grid gap-1 w-full"
+      className="h-full max-h-full max-w-full grid gap-1"
       style={{
-        gridTemplateColumns: `auto repeat(${cols}, minmax(56px, 1fr))`,
-        gridAutoRows: "minmax(56px, 1fr)",
+        gridTemplateColumns: `auto repeat(${cols}, 1fr)`,
+        gridTemplateRows: `auto repeat(${rows}, 1fr)`,
+        aspectRatio: `${cols + 0.6} / ${rows + 0.35}`,
       }}
     >
       {/* corner spacer */}
@@ -1544,7 +1554,7 @@ function InsertGrid({
         const cellStyle: React.CSSProperties = {
           gridRow: `${minR + 2} / span ${rowSpan}`,
           gridColumn: `${minC + 2} / span ${colSpan}`,
-          aspectRatio: `${colSpan} / ${rowSpan}`,
+          minWidth: 0,
           minHeight: 0,
         };
 
