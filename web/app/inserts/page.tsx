@@ -285,8 +285,9 @@ function InsertDetail({
   // Cells (grid) — full type so we can show overrides
   const [cells, setCells] = useState<CellRow[]>([]);
   const [selectedCellId, setSelectedCellId] = useState<string | null>(null);
-  // Multi-select for merge
+  // Multi-select for merge (sticky mode for discoverability)
   const [multiSelect, setMultiSelect] = useState<Set<string>>(new Set());
+  const [selectMode, setSelectMode] = useState(false);
 
   // Assignments on this insert's cells
   const [assignments, setAssignments] = useState<
@@ -368,6 +369,7 @@ function InsertDetail({
     setPickerOpen(false);
     setSelectedCellId(null);
     setMultiSelect(new Set());
+    setSelectMode(false);
     setShowItemPicker(false);
     setEditingRestrict(false);
     loadAll();
@@ -458,8 +460,8 @@ function InsertDetail({
   );
 
   function selectCell(id: string | null, additive = false) {
-    if (additive && id) {
-      // Ctrl/Cmd-click: toggle id in multi-select set (and seed with current single selection)
+    // Sticky select mode OR modifier-key additive click → multi-select
+    if ((selectMode || additive) && id) {
       const next = new Set(multiSelect);
       if (next.size === 0 && selectedCellId) next.add(selectedCellId);
       if (next.has(id)) next.delete(id);
@@ -842,25 +844,46 @@ function InsertDetail({
             </div>
           ) : (
             <>
-              {multiSelect.size >= 2 && (
-                <div className="mb-3 flex items-center gap-2 px-3 py-2 rounded bg-slate-800/60 border border-accent/40">
-                  <span className="text-sm text-slate-200">
-                    {multiSelect.size} cells selected
-                  </span>
-                  <button
-                    onClick={mergeSelected}
-                    className="ml-auto px-3 py-1 bg-accent text-white rounded text-xs hover:brightness-110"
-                  >
-                    Merge
-                  </button>
-                  <button
-                    onClick={() => setMultiSelect(new Set())}
-                    className="px-3 py-1 border border-slate-600 text-slate-300 rounded text-xs hover:bg-slate-700/50"
-                  >
-                    Clear
-                  </button>
-                </div>
-              )}
+              <div className="mb-3 flex items-center gap-2">
+                <button
+                  onClick={() => {
+                    if (selectMode) {
+                      setSelectMode(false);
+                      setMultiSelect(new Set());
+                    } else {
+                      setSelectMode(true);
+                      setSelectedCellId(null);
+                    }
+                  }}
+                  className={`px-3 py-1 rounded text-xs transition-colors ${
+                    selectMode
+                      ? "bg-accent text-white"
+                      : "border border-slate-600 text-slate-300 hover:bg-slate-700/50"
+                  }`}
+                >
+                  {selectMode ? "Selecting for merge…" : "Select cells to merge"}
+                </button>
+                {multiSelect.size > 0 && (
+                  <>
+                    <span className="text-xs text-slate-400">
+                      {multiSelect.size} selected
+                    </span>
+                    <button
+                      onClick={mergeSelected}
+                      disabled={multiSelect.size < 2}
+                      className="px-3 py-1 bg-accent text-white rounded text-xs hover:brightness-110 disabled:opacity-40 disabled:cursor-not-allowed"
+                    >
+                      Merge
+                    </button>
+                    <button
+                      onClick={() => setMultiSelect(new Set())}
+                      className="px-3 py-1 border border-slate-600 text-slate-300 rounded text-xs hover:bg-slate-700/50"
+                    >
+                      Clear
+                    </button>
+                  </>
+                )}
+              </div>
               <InsertGrid
                 cells={cells}
                 assignments={assignments}
@@ -870,7 +893,8 @@ function InsertDetail({
                 onCellClick={selectCell}
               />
               <div className="mt-2 text-[11px] text-slate-500">
-                Ctrl/Cmd-click cells to multi-select for merge.
+                Tip: hold Ctrl/Cmd and click to add cells to the merge
+                selection.
               </div>
             </>
           )}
@@ -1374,6 +1398,16 @@ function InsertGrid({
     assignByLoc.set(a.locationId, list);
   }
 
+  // parent id → child cells (for divided cells)
+  const childrenByParent = new Map<string, CellRow[]>();
+  for (const c of cells) {
+    if (c.parentId) {
+      const list = childrenByParent.get(c.parentId) ?? [];
+      list.push(c);
+      childrenByParent.set(c.parentId, list);
+    }
+  }
+
   const gridCells = cells.filter(
     (c) => c.gridRow != null && c.gridColumn != null
   );
@@ -1501,14 +1535,13 @@ function InsertGrid({
           ? cell.label + "+" + aliasChildren.map((a) => a.label).join("+")
           : cell.label;
 
+        // Divided — render child sub-rects instead of a single rect
+        const divChildren = childrenByParent.get(cell.id) ?? [];
+        const isDivided = divChildren.length > 0;
+
         return (
-          <g
-            key={cell.id}
-            onClick={(e) =>
-              onCellClick(cell.id, e.ctrlKey || e.metaKey)
-            }
-            className="cursor-pointer"
-          >
+          <g key={cell.id}>
+            {/* Parent bounding rect (always drawn; non-interactive when divided) */}
             <rect
               x={x}
               y={y}
@@ -1519,19 +1552,31 @@ function InsertGrid({
               strokeWidth={strokeWidth}
               strokeDasharray={strokeDash}
               rx={3}
+              onClick={
+                isDivided
+                  ? undefined
+                  : (e) => onCellClick(cell.id, e.ctrlKey || e.metaKey)
+              }
+              className={isDivided ? undefined : "cursor-pointer"}
             />
+            {/* Parent label on top when divided, centered otherwise */}
             <text
               x={x + w / 2}
-              y={occupied ? y + 14 : y + h / 2}
+              y={isDivided ? y + 10 : occupied ? y + 14 : y + h / 2}
               textAnchor="middle"
-              dominantBaseline={occupied ? "auto" : "central"}
+              dominantBaseline={
+                isDivided ? "hanging" : occupied ? "auto" : "central"
+              }
               fill={cell.isDisabled ? "#f87171" : "#64748b"}
-              fontSize={10}
+              fontSize={isDivided ? 9 : 10}
               fontWeight={isSelected ? 600 : 400}
+              className="pointer-events-none"
             >
               {displayLabel}
             </text>
-            {itemName && (
+
+            {/* Item name on undivided cell */}
+            {!isDivided && itemName && (
               <text
                 x={x + w / 2}
                 y={y + h / 2 + 4}
@@ -1546,7 +1591,99 @@ function InsertGrid({
                   : itemName}
               </text>
             )}
-            {occupied && (
+
+            {/* Child sub-rects when divided */}
+            {isDivided && (() => {
+              const pad = 4;
+              const labelStripe = 14;
+              const subCount = divChildren.length;
+              const subW = (w - pad * 2 - (subCount - 1) * 2) / subCount;
+              const subH = h - labelStripe - pad;
+              return divChildren.map((child, i) => {
+                const cx = x + pad + i * (subW + 2);
+                const cy = y + labelStripe;
+                const childAssigns = assignByLoc.get(child.id) ?? [];
+                const childOccupied = childAssigns.length > 0;
+                const childItem = childOccupied
+                  ? itemsById.get(childAssigns[0].itemId)?.name
+                  : null;
+                const childSelected = child.id === selectedCellId;
+                const childMulti = multiSelect.has(child.id);
+                const childFill = child.isDisabled
+                  ? "rgba(248,113,113,0.12)"
+                  : childSelected
+                    ? "rgba(255,102,0,0.15)"
+                    : childMulti
+                      ? "rgba(255,102,0,0.06)"
+                      : childOccupied
+                        ? "rgba(96,165,250,0.12)"
+                        : "transparent";
+                const childStroke = child.isDisabled
+                  ? "#7f1d1d"
+                  : childSelected
+                    ? "#ff6600"
+                    : childMulti
+                      ? "#ff6600"
+                      : "#475569";
+                return (
+                  <g
+                    key={child.id}
+                    onClick={(e) =>
+                      onCellClick(child.id, e.ctrlKey || e.metaKey)
+                    }
+                    className="cursor-pointer"
+                  >
+                    <rect
+                      x={cx}
+                      y={cy}
+                      width={subW}
+                      height={subH}
+                      fill={childFill}
+                      stroke={childStroke}
+                      strokeWidth={childSelected || childMulti ? 2 : 1}
+                      strokeDasharray={childMulti ? "4 2" : undefined}
+                      rx={2}
+                    />
+                    <text
+                      x={cx + subW / 2}
+                      y={cy + subH / 2}
+                      textAnchor="middle"
+                      dominantBaseline="central"
+                      fill={child.isDisabled ? "#f87171" : "#94a3b8"}
+                      fontSize={9}
+                      className="pointer-events-none"
+                    >
+                      {child.label}
+                    </text>
+                    {childItem && (
+                      <text
+                        x={cx + subW / 2}
+                        y={cy + subH / 2 + 10}
+                        textAnchor="middle"
+                        dominantBaseline="central"
+                        fill="#93c5fd"
+                        fontSize={7}
+                        className="select-none pointer-events-none"
+                      >
+                        {childItem.length > 8
+                          ? childItem.substring(0, 7) + "…"
+                          : childItem}
+                      </text>
+                    )}
+                    {childOccupied && (
+                      <circle
+                        cx={cx + subW - 4}
+                        cy={cy + 4}
+                        r={2}
+                        fill="#60a5fa"
+                      />
+                    )}
+                  </g>
+                );
+              });
+            })()}
+
+            {occupied && !isDivided && (
               <circle
                 cx={x + w - 6}
                 cy={y + 6}
@@ -1554,7 +1691,7 @@ function InsertGrid({
                 fill={isProvisional ? "#fbbf24" : "#60a5fa"}
               />
             )}
-            {isRestricted && !cell.isDisabled && (
+            {isRestricted && !cell.isDisabled && !isDivided && (
               <circle cx={x + 6} cy={y + 6} r={3} fill="#fbbf24" />
             )}
           </g>
