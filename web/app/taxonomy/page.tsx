@@ -43,16 +43,16 @@ interface Category {
 // --- Main Page ---
 
 export default function TaxonomyPage() {
-  const [tab, setTab] = useState<"aspects" | "parameters" | "categories">(
-    "aspects"
-  );
+  const [tab, setTab] = useState<
+    "aspects" | "standards" | "parameters" | "categories"
+  >("aspects");
 
   return (
     <div className="flex-1 flex flex-col overflow-hidden">
       {/* Tab header */}
       <div className="flex items-center gap-1 px-6 py-3 border-b border-slate-700">
         <h1 className="text-lg font-semibold text-slate-100 mr-4">Taxonomy</h1>
-        {(["aspects", "parameters", "categories"] as const).map((t) => (
+        {(["aspects", "standards", "parameters", "categories"] as const).map((t) => (
           <button
             key={t}
             onClick={() => setTab(t)}
@@ -68,6 +68,7 @@ export default function TaxonomyPage() {
       </div>
 
       {tab === "aspects" && <AspectsTab />}
+      {tab === "standards" && <StandardsTab />}
       {tab === "parameters" && <ParametersTab />}
       {tab === "categories" && <CategoriesTab />}
     </div>
@@ -861,6 +862,599 @@ function CategoriesTab() {
           ))}
         </div>
       )}
+    </div>
+  );
+}
+
+// --- Standards Tab ---
+
+interface StandardSummary {
+  id: string;
+  name: string;
+  description: string | null;
+  domainTag: string | null;
+  aspectCount?: number;
+}
+
+interface StandardAspectLink {
+  aspectId: string;
+  aspectName: string;
+  parameterCount: number;
+  coveredCount: number;
+}
+
+interface StandardParameter {
+  id: string;
+  parameterDefinitionId: string;
+  parameterName: string;
+  dataType: string;
+  unit: string | null;
+  role: string;
+  sortOrder: number;
+}
+
+interface Designation {
+  id: string;
+  designation: string;
+  values: Record<string, unknown>;
+  metadata: unknown;
+}
+
+function StandardsTab() {
+  const [standards, setStandards] = useState<StandardSummary[]>([]);
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [showCreate, setShowCreate] = useState(false);
+  const [newName, setNewName] = useState("");
+  const [newDomainTag, setNewDomainTag] = useState("");
+
+  const fetchStandards = useCallback(async () => {
+    setLoading(true);
+    try {
+      const res = await fetch("/api/standards");
+      const data = await res.json();
+      setStandards(data.standards || []);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchStandards();
+  }, [fetchStandards]);
+
+  async function createStandard() {
+    if (!newName.trim()) return;
+    const res = await fetch("/api/standards", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        name: newName.trim(),
+        domainTag: newDomainTag.trim() || undefined,
+      }),
+    });
+    if (res.ok) {
+      const data = await res.json();
+      setNewName("");
+      setNewDomainTag("");
+      setShowCreate(false);
+      await fetchStandards();
+      setSelectedId(data.standard?.id ?? null);
+    }
+  }
+
+  async function deleteStandard(id: string) {
+    if (!confirm("Delete this standard? Designations will be removed.")) return;
+    const res = await fetch(`/api/standards/${id}`, { method: "DELETE" });
+    if (res.ok) {
+      if (selectedId === id) setSelectedId(null);
+      fetchStandards();
+    }
+  }
+
+  return (
+    <div className="flex-1 flex min-h-0 overflow-hidden">
+      {/* Left: list */}
+      <div className="w-64 shrink-0 border-r border-slate-700 flex flex-col bg-slate-900/40">
+        <div className="p-3 border-b border-slate-700 flex items-center justify-between">
+          <span className="text-xs uppercase text-slate-500 tracking-wider">
+            Standards
+          </span>
+          <button
+            onClick={() => setShowCreate(!showCreate)}
+            className="text-[11px] text-accent hover:brightness-110"
+          >
+            {showCreate ? "Cancel" : "+ New"}
+          </button>
+        </div>
+        {showCreate && (
+          <div className="p-3 border-b border-slate-700 space-y-2">
+            <input
+              autoFocus
+              value={newName}
+              onChange={(e) => setNewName(e.target.value)}
+              placeholder="Name (e.g. ISO 4762)"
+              className="w-full px-2 py-1 bg-slate-800 border border-slate-600 rounded text-xs text-slate-200 focus:border-accent focus:outline-none"
+            />
+            <input
+              value={newDomainTag}
+              onChange={(e) => setNewDomainTag(e.target.value)}
+              placeholder="Domain tag (optional)"
+              className="w-full px-2 py-1 bg-slate-800 border border-slate-600 rounded text-xs text-slate-200 focus:border-accent focus:outline-none"
+            />
+            <button
+              onClick={createStandard}
+              className="w-full px-2 py-1 bg-accent text-white rounded text-xs hover:brightness-110"
+            >
+              Create
+            </button>
+          </div>
+        )}
+        <div className="flex-1 overflow-y-auto">
+          {loading ? (
+            <div className="p-3 text-xs text-slate-500">Loading…</div>
+          ) : standards.length === 0 ? (
+            <div className="p-3 text-xs text-slate-500 italic">None yet</div>
+          ) : (
+            standards.map((s) => (
+              <button
+                key={s.id}
+                onClick={() => setSelectedId(s.id)}
+                className={`w-full text-left px-3 py-2 border-b border-slate-800 hover:bg-slate-800/60 transition-colors ${
+                  selectedId === s.id
+                    ? "bg-slate-800 text-accent"
+                    : "text-slate-300"
+                }`}
+              >
+                <div className="text-xs font-medium">{s.name}</div>
+                {s.domainTag && (
+                  <div className="text-[10px] text-slate-500">{s.domainTag}</div>
+                )}
+              </button>
+            ))
+          )}
+        </div>
+      </div>
+      {/* Right: detail */}
+      <div className="flex-1 overflow-y-auto">
+        {selectedId ? (
+          <StandardDetail
+            key={selectedId}
+            standardId={selectedId}
+            onDelete={() => deleteStandard(selectedId)}
+            onMutated={fetchStandards}
+          />
+        ) : (
+          <div className="h-full flex items-center justify-center text-slate-500 text-sm">
+            Select or create a standard.
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function StandardDetail({
+  standardId,
+  onDelete,
+  onMutated,
+}: {
+  standardId: string;
+  onDelete: () => void;
+  onMutated: () => void;
+}) {
+  const [aspects, setAspects] = useState<StandardAspectLink[]>([]);
+  const [parameters, setParameters] = useState<StandardParameter[]>([]);
+  const [designations, setDesignations] = useState<Designation[]>([]);
+  const [designationTotal, setDesignationTotal] = useState(0);
+  const [allAspects, setAllAspects] = useState<Aspect[]>([]);
+  const [aspectParamsById, setAspectParamsById] = useState<
+    Map<string, AspectParameter[]>
+  >(new Map());
+  const [designationQuery, setDesignationQuery] = useState("");
+  const [showDesignationForm, setShowDesignationForm] = useState(false);
+
+  const refreshAll = useCallback(async () => {
+    const [stdRes, paramsRes, desRes, aspectsRes] = await Promise.all([
+      fetch(`/api/standards/${standardId}`),
+      fetch(`/api/standards/${standardId}/parameters`),
+      fetch(
+        `/api/standards/${standardId}/designations?${new URLSearchParams({
+          limit: "100",
+          ...(designationQuery.trim() ? { q: designationQuery.trim() } : {}),
+        })}`
+      ),
+      fetch(`/api/aspects`),
+    ]);
+    const std = await stdRes.json();
+    const pData = await paramsRes.json();
+    const dData = await desRes.json();
+    const aData = await aspectsRes.json();
+    setAspects(std.aspects ?? []);
+    setParameters(pData.parameters ?? []);
+    setDesignations(dData.designations ?? []);
+    setDesignationTotal(dData.total ?? 0);
+    setAllAspects(aData.aspects ?? []);
+  }, [standardId, designationQuery]);
+
+  useEffect(() => {
+    refreshAll();
+  }, [refreshAll]);
+
+  const fetchAspectParams = useCallback(async (aspectId: string) => {
+    if (aspectParamsById.has(aspectId)) return;
+    const res = await fetch(`/api/aspects/${aspectId}/parameters`);
+    const data = await res.json();
+    setAspectParamsById((prev) => {
+      const next = new Map(prev);
+      next.set(aspectId, data.parameters ?? []);
+      return next;
+    });
+  }, [aspectParamsById]);
+
+  useEffect(() => {
+    for (const a of aspects) fetchAspectParams(a.aspectId);
+  }, [aspects, fetchAspectParams]);
+
+  async function linkAspect(aspectId: string) {
+    await fetch(`/api/standards/${standardId}/aspects`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ aspectId }),
+    });
+    refreshAll();
+    onMutated();
+  }
+
+  async function unlinkAspect(aspectId: string) {
+    await fetch(
+      `/api/standards/${standardId}/aspects?aspectId=${aspectId}`,
+      { method: "DELETE" }
+    );
+    refreshAll();
+    onMutated();
+  }
+
+  async function addParameter(parameterDefinitionId: string, role = "key") {
+    await fetch(`/api/standards/${standardId}/parameters`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ parameterDefinitionId, role }),
+    });
+    refreshAll();
+  }
+
+  async function removeParameter(parameterDefinitionId: string) {
+    await fetch(
+      `/api/standards/${standardId}/parameters?parameterDefinitionId=${parameterDefinitionId}`,
+      { method: "DELETE" }
+    );
+    refreshAll();
+  }
+
+  async function deleteDesignation(id: string) {
+    await fetch(`/api/standards/${standardId}/designations?id=${id}`, {
+      method: "DELETE",
+    });
+    refreshAll();
+  }
+
+  const linkedAspectIds = new Set(aspects.map((a) => a.aspectId));
+  const linkableAspects = allAspects.filter((a) => !linkedAspectIds.has(a.id));
+  const parameterIds = new Set(parameters.map((p) => p.parameterDefinitionId));
+  const availableParams: { id: string; name: string; dataType: string; unit: string | null }[] = [];
+  for (const a of aspects) {
+    const aspectParams = aspectParamsById.get(a.aspectId) ?? [];
+    for (const ap of aspectParams) {
+      if (
+        !parameterIds.has(ap.parameterDefinitionId) &&
+        !availableParams.some((p) => p.id === ap.parameterDefinitionId)
+      ) {
+        availableParams.push({
+          id: ap.parameterDefinitionId,
+          name: ap.parameterName,
+          dataType: ap.dataType,
+          unit: ap.unit,
+        });
+      }
+    }
+  }
+
+  return (
+    <div className="p-6 space-y-6 max-w-4xl">
+      {/* Header */}
+      <div className="flex items-center justify-between">
+        <h2 className="text-base font-semibold text-slate-100">
+          Standard details
+        </h2>
+        <button
+          onClick={onDelete}
+          className="text-xs text-red-400 hover:text-red-300"
+        >
+          Delete standard
+        </button>
+      </div>
+
+      {/* Aspects */}
+      <section className="space-y-2">
+        <h3 className="text-xs uppercase tracking-wider text-slate-500">
+          Aspects ({aspects.length})
+        </h3>
+        <div className="flex flex-wrap gap-2">
+          {aspects.map((a) => (
+            <span
+              key={a.aspectId}
+              className="inline-flex items-center gap-2 px-2.5 py-1 bg-slate-800 border border-slate-700 rounded text-xs text-slate-200 group"
+            >
+              {a.aspectName}
+              <span className="text-[10px] text-slate-500">
+                {a.coveredCount}/{a.parameterCount}
+              </span>
+              <button
+                onClick={() => unlinkAspect(a.aspectId)}
+                className="text-red-400 hover:text-red-300 opacity-0 group-hover:opacity-100 text-[10px]"
+              >
+                ×
+              </button>
+            </span>
+          ))}
+          {linkableAspects.length > 0 && (
+            <select
+              onChange={(e) => {
+                if (e.target.value) {
+                  linkAspect(e.target.value);
+                  e.target.value = "";
+                }
+              }}
+              defaultValue=""
+              className="px-2 py-1 bg-slate-800 border border-dashed border-slate-600 rounded text-xs text-slate-400"
+            >
+              <option value="" disabled>
+                + Link aspect…
+              </option>
+              {linkableAspects.map((a) => (
+                <option key={a.id} value={a.id}>
+                  {a.name}
+                </option>
+              ))}
+            </select>
+          )}
+        </div>
+      </section>
+
+      {/* Parameters */}
+      <section className="space-y-2">
+        <h3 className="text-xs uppercase tracking-wider text-slate-500">
+          Parameters ({parameters.length})
+        </h3>
+        <div className="flex flex-wrap gap-2">
+          {parameters.map((p) => (
+            <span
+              key={p.id}
+              className="inline-flex items-center gap-2 px-2.5 py-1 bg-slate-800 border border-slate-700 rounded text-xs text-slate-200 group"
+            >
+              <span className="font-mono">{p.parameterName}</span>
+              <span className="text-[10px] text-slate-500">{p.role}</span>
+              <button
+                onClick={() => removeParameter(p.parameterDefinitionId)}
+                className="text-red-400 hover:text-red-300 opacity-0 group-hover:opacity-100 text-[10px]"
+              >
+                ×
+              </button>
+            </span>
+          ))}
+          {availableParams.length > 0 && (
+            <select
+              onChange={(e) => {
+                if (e.target.value) {
+                  addParameter(e.target.value);
+                  e.target.value = "";
+                }
+              }}
+              defaultValue=""
+              className="px-2 py-1 bg-slate-800 border border-dashed border-slate-600 rounded text-xs text-slate-400"
+            >
+              <option value="" disabled>
+                + Add parameter…
+              </option>
+              {availableParams.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.name}
+                </option>
+              ))}
+            </select>
+          )}
+        </div>
+        {parameters.length === 0 && availableParams.length === 0 && (
+          <p className="text-xs text-slate-500 italic">
+            Link an aspect first so its parameters become available here.
+          </p>
+        )}
+      </section>
+
+      {/* Designations */}
+      <section className="space-y-2">
+        <div className="flex items-center justify-between">
+          <h3 className="text-xs uppercase tracking-wider text-slate-500">
+            Designations ({designationTotal})
+          </h3>
+          <button
+            onClick={() => setShowDesignationForm(!showDesignationForm)}
+            className="text-[11px] text-accent hover:brightness-110"
+          >
+            {showDesignationForm ? "Cancel" : "+ New designation"}
+          </button>
+        </div>
+
+        {showDesignationForm && parameters.length > 0 && (
+          <DesignationForm
+            standardId={standardId}
+            parameters={parameters}
+            onCreated={() => {
+              setShowDesignationForm(false);
+              refreshAll();
+            }}
+          />
+        )}
+        {showDesignationForm && parameters.length === 0 && (
+          <p className="text-xs text-amber-400">
+            Add parameters to this standard before creating designations.
+          </p>
+        )}
+
+        <input
+          value={designationQuery}
+          onChange={(e) => setDesignationQuery(e.target.value)}
+          placeholder="Filter designations…"
+          className="w-full max-w-xs px-2 py-1 bg-slate-800 border border-slate-600 rounded text-xs text-slate-200 focus:border-accent focus:outline-none"
+        />
+
+        {designations.length === 0 ? (
+          <p className="text-xs text-slate-500 italic">No designations.</p>
+        ) : (
+          <div className="overflow-x-auto border border-slate-700 rounded">
+            <table className="w-full text-xs">
+              <thead className="bg-slate-800/60 text-slate-400">
+                <tr>
+                  <th className="text-left px-2 py-1.5">Designation</th>
+                  {parameters.map((p) => (
+                    <th key={p.id} className="text-left px-2 py-1.5">
+                      {p.parameterName}
+                      {p.unit && (
+                        <span className="text-slate-600 ml-1">({p.unit})</span>
+                      )}
+                    </th>
+                  ))}
+                  <th className="w-8" />
+                </tr>
+              </thead>
+              <tbody>
+                {designations.map((d) => (
+                  <tr
+                    key={d.id}
+                    className="border-t border-slate-700 hover:bg-slate-800/30 group"
+                  >
+                    <td className="px-2 py-1 font-mono text-slate-200">
+                      {d.designation}
+                    </td>
+                    {parameters.map((p) => {
+                      const raw = d.values?.[p.parameterDefinitionId];
+                      const scalar =
+                        raw && typeof raw === "object" && "value" in raw
+                          ? (raw as { value: unknown }).value
+                          : raw;
+                      return (
+                        <td key={p.id} className="px-2 py-1 text-slate-300">
+                          {scalar === undefined || scalar === null
+                            ? <span className="text-slate-600">—</span>
+                            : String(scalar)}
+                        </td>
+                      );
+                    })}
+                    <td className="px-2 py-1 text-right">
+                      <button
+                        onClick={() => deleteDesignation(d.id)}
+                        className="text-red-400 hover:text-red-300 opacity-0 group-hover:opacity-100 text-[10px]"
+                      >
+                        ×
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </section>
+    </div>
+  );
+}
+
+function DesignationForm({
+  standardId,
+  parameters,
+  onCreated,
+}: {
+  standardId: string;
+  parameters: StandardParameter[];
+  onCreated: () => void;
+}) {
+  const [designation, setDesignation] = useState("");
+  const [values, setValues] = useState<Record<string, string>>({});
+  const [saving, setSaving] = useState(false);
+
+  async function submit() {
+    if (!designation.trim()) return;
+    setSaving(true);
+    try {
+      const payloadValues: Record<string, unknown> = {};
+      for (const p of parameters) {
+        const raw = values[p.parameterDefinitionId];
+        if (raw === undefined || raw === "") continue;
+        if (p.dataType === "numeric") {
+          const num = Number(raw);
+          if (!Number.isNaN(num)) payloadValues[p.parameterDefinitionId] = num;
+        } else if (p.dataType === "boolean") {
+          payloadValues[p.parameterDefinitionId] = raw === "true";
+        } else {
+          payloadValues[p.parameterDefinitionId] = raw;
+        }
+      }
+      await fetch(`/api/standards/${standardId}/designations`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          designation: designation.trim(),
+          values: payloadValues,
+        }),
+      });
+      setDesignation("");
+      setValues({});
+      onCreated();
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <div className="p-3 bg-slate-800/50 border border-slate-700 rounded space-y-2">
+      <input
+        autoFocus
+        value={designation}
+        onChange={(e) => setDesignation(e.target.value)}
+        placeholder="Designation (e.g. M3x0.5)"
+        className="w-full max-w-xs px-2 py-1 bg-slate-900 border border-slate-600 rounded text-xs text-slate-100 focus:border-accent focus:outline-none"
+      />
+      <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+        {parameters.map((p) => (
+          <label key={p.id} className="flex flex-col gap-0.5">
+            <span className="text-[10px] uppercase tracking-wider text-slate-500">
+              {p.parameterName}
+              {p.unit && (
+                <span className="text-slate-600 ml-1">({p.unit})</span>
+              )}
+            </span>
+            <input
+              value={values[p.parameterDefinitionId] ?? ""}
+              onChange={(e) =>
+                setValues((prev) => ({
+                  ...prev,
+                  [p.parameterDefinitionId]: e.target.value,
+                }))
+              }
+              placeholder={p.dataType === "numeric" ? "0" : "…"}
+              className="px-2 py-1 bg-slate-900 border border-slate-600 rounded text-xs text-slate-100 focus:border-accent focus:outline-none"
+            />
+          </label>
+        ))}
+      </div>
+      <button
+        onClick={submit}
+        disabled={saving || !designation.trim()}
+        className="px-3 py-1 bg-accent text-white rounded text-xs hover:brightness-110 disabled:opacity-50"
+      >
+        {saving ? "Saving…" : "Create"}
+      </button>
     </div>
   );
 }

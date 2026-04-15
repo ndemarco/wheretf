@@ -61,3 +61,21 @@ export async function POST(
     );
   }
 }
+
+export async function DELETE(request: NextRequest) {
+  try {
+    const designationId = new URL(request.url).searchParams.get("id");
+    if (!designationId) {
+      return NextResponse.json(
+        { error: "id query parameter is required" },
+        { status: 400 }
+      );
+    }
+    await standardRepository.removeDesignation({ id: designationId });
+    return NextResponse.json({ success: true });
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : "Unknown error";
+    const status = message.includes("not found") ? 404 : 500;
+    return NextResponse.json({ error: message }, { status });
+  }
+}
