@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import CreateFromDesignationDialog from "@/app/items/CreateFromDesignationDialog";
+import GenerateSetDialog from "@/app/items/GenerateSetDialog";
 
 // --- Types ---
 
@@ -1832,6 +1833,10 @@ function StandardDetail({
     designationId: string;
     designation: string;
   } | null>(null);
+  const [generateSetFrom, setGenerateSetFrom] = useState<{
+    designationId: string;
+    designation: string;
+  } | null>(null);
   const [aspects, setAspects] = useState<StandardAspectLink[]>([]);
   const [parameters, setParameters] = useState<StandardParameter[]>([]);
   const [designations, setDesignations] = useState<Designation[]>([]);
@@ -2274,9 +2279,21 @@ function StandardDetail({
                           })
                         }
                         className="text-accent hover:brightness-110 text-[10px] mr-2 opacity-0 group-hover:opacity-100 transition-opacity"
-                        title="Create an item using this designation"
+                        title="Create one item using this designation"
                       >
                         + item
+                      </button>
+                      <button
+                        onClick={() =>
+                          setGenerateSetFrom({
+                            designationId: d.id,
+                            designation: d.designation,
+                          })
+                        }
+                        className="text-accent hover:brightness-110 text-[10px] mr-2 opacity-0 group-hover:opacity-100 transition-opacity"
+                        title="Generate a set of items varying one parameter"
+                      >
+                        + set
                       </button>
                       <button
                         onClick={() => deleteDesignation(d.id)}
@@ -2395,6 +2412,16 @@ function StandardDetail({
           standardId={standardId}
           standardName={meta.name}
           onClose={() => setCreateFromDesignation(null)}
+          onCreated={() => refreshAll()}
+        />
+      )}
+      {generateSetFrom && meta && (
+        <GenerateSetDialog
+          designationId={generateSetFrom.designationId}
+          designation={generateSetFrom.designation}
+          standardId={standardId}
+          standardName={meta.name}
+          onClose={() => setGenerateSetFrom(null)}
           onCreated={() => refreshAll()}
         />
       )}
