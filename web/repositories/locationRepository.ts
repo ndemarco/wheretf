@@ -351,6 +351,13 @@ export const locationRepository = {
       throw new Error("One or more cells are already merged");
     }
 
+    // Disabled-cell check: a disabled cell represents a structural
+    // problem, not just a content state. Merging it away would lose
+    // that signal. Enable it first if you really want it merged.
+    if (rows.some((r) => r.isDisabled)) {
+      throw new Error("Cannot merge disabled cells. Enable them first.");
+    }
+
     // Adjacency: every cell must be reachable from origin via 4-neighbor
     // adjacency within the selected set.
     const grid = new Map<string, typeof rows[number]>();

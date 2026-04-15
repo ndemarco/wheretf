@@ -24,7 +24,8 @@ export async function POST(request: NextRequest) {
       message.includes("contiguous") ||
       message.includes("same parent") ||
       message.includes("same insert") ||
-      message.includes("already merged")
+      message.includes("already merged") ||
+      message.includes("disabled cells")
     ) {
       return NextResponse.json({ error: message }, { status: 409 });
     }

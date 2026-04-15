@@ -848,48 +848,6 @@ function InsertDetail({
             <div className="text-xs text-slate-500 uppercase tracking-wider">
               Layout
             </div>
-            {cells.length > 0 && (
-              <>
-                <button
-                  onClick={() => {
-                    if (selectMode) {
-                      setSelectMode(false);
-                      setMultiSelect(new Set());
-                    } else {
-                      setSelectMode(true);
-                      setSelectedCellId(null);
-                    }
-                  }}
-                  className={`px-3 py-1 rounded text-xs transition-colors ${
-                    selectMode
-                      ? "bg-accent text-white"
-                      : "border border-slate-600 text-slate-300 hover:bg-slate-700/50"
-                  }`}
-                >
-                  {selectMode ? "Selecting for merge…" : "Select cells to merge"}
-                </button>
-                {multiSelect.size > 0 && (
-                  <>
-                    <span className="text-xs text-slate-400">
-                      {multiSelect.size} selected
-                    </span>
-                    <button
-                      onClick={mergeSelected}
-                      disabled={multiSelect.size < 2}
-                      className="px-3 py-1 bg-accent text-white rounded text-xs hover:brightness-110 disabled:opacity-40 disabled:cursor-not-allowed"
-                    >
-                      Merge
-                    </button>
-                    <button
-                      onClick={() => setMultiSelect(new Set())}
-                      className="px-3 py-1 border border-slate-600 text-slate-300 rounded text-xs hover:bg-slate-700/50"
-                    >
-                      Clear
-                    </button>
-                  </>
-                )}
-              </>
-            )}
           </div>
           {cells.length === 0 ? (
             <div className="text-sm text-slate-500">
@@ -910,16 +868,98 @@ function InsertDetail({
                   columnDividersFixed={!!insert.columnDividersFixed}
                 />
               </div>
-              <div className="text-[11px] text-slate-500 shrink-0">
-                Tip: hold Ctrl/Cmd and click to add cells to the merge
-                selection.
-              </div>
             </>
           )}
         </div>
 
-        {selectedCell && (
-          <div className="w-80 shrink-0 border-l border-slate-700 bg-slate-800/20 overflow-y-auto">
+        {cells.length > 0 && (
+          <div className="w-80 shrink-0 border-l border-slate-700 bg-slate-800/20 overflow-y-auto flex flex-col">
+            {/* Always-visible toolbar header */}
+            <div className="p-4 border-b border-slate-700 space-y-2">
+              <button
+                onClick={() => {
+                  if (selectMode) {
+                    setSelectMode(false);
+                    setMultiSelect(new Set());
+                  } else {
+                    setSelectMode(true);
+                    setSelectedCellId(null);
+                  }
+                }}
+                className={`w-full px-3 py-1.5 rounded text-xs transition-colors ${
+                  selectMode
+                    ? "bg-accent text-white"
+                    : "border border-slate-600 text-slate-300 hover:bg-slate-700/50"
+                }`}
+              >
+                {selectMode
+                  ? "Selecting for merge — click cells in grid"
+                  : "Select cells to merge"}
+              </button>
+              {selectMode && (
+                <p className="text-[11px] text-slate-500 leading-tight">
+                  Tip: hold Ctrl/Cmd and click to add or remove cells
+                  without entering this mode.
+                </p>
+              )}
+            </div>
+
+            {/* Body */}
+            {multiSelect.size > 0 ? (
+              /* Merge action panel */
+              <div className="p-4 space-y-3">
+                <div className="text-sm text-slate-200">
+                  {multiSelect.size}{" "}
+                  {multiSelect.size === 1 ? "cell" : "cells"} selected
+                </div>
+                {(() => {
+                  const picked = cells.filter((c) =>
+                    multiSelect.has(c.id)
+                  );
+                  const labels = picked.map((c) => c.label).join(", ");
+                  const anyDisabled = picked.some((c) => c.isDisabled);
+                  return (
+                    <>
+                      <div className="text-xs text-slate-500 break-words">
+                        {labels}
+                      </div>
+                      {anyDisabled && (
+                        <div className="text-xs text-red-400">
+                          Selection includes a disabled cell. Enable it
+                          first to include it in the merge.
+                        </div>
+                      )}
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={mergeSelected}
+                          disabled={
+                            multiSelect.size < 2 || anyDisabled
+                          }
+                          className="px-3 py-1.5 bg-accent text-white rounded text-xs hover:brightness-110 disabled:opacity-40 disabled:cursor-not-allowed"
+                        >
+                          Merge
+                        </button>
+                        <button
+                          onClick={() => setMultiSelect(new Set())}
+                          className="px-3 py-1.5 border border-slate-600 text-slate-300 rounded text-xs hover:bg-slate-700/50"
+                        >
+                          Clear
+                        </button>
+                      </div>
+                    </>
+                  );
+                })()}
+              </div>
+            ) : selectMode ? (
+              <div className="p-6 text-center text-xs text-slate-500">
+                Click cells in the grid to select them for merging.
+              </div>
+            ) : !selectedCell ? (
+              <div className="p-6 text-center text-xs text-slate-500">
+                Click a cell in the grid to view its details.
+              </div>
+            ) : (
+              <>
             <div className="p-4 border-b border-slate-700 flex items-center justify-between">
               <div className="min-w-0">
                 <div className="text-sm font-medium text-slate-200 truncate">
@@ -1276,6 +1316,8 @@ function InsertDetail({
                 )}
               </div>
             </div>
+              </>
+            )}
           </div>
         )}
       </div>

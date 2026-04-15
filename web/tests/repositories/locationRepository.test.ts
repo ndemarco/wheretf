@@ -613,6 +613,24 @@ describe("locationRepository", () => {
       ).rejects.toThrow(/same parent/);
     });
 
+    it("refuses merge when any cell is disabled", async () => {
+      const module = await createTestModule();
+      const parent = await locationRepository.create({
+        moduleId: module.id,
+        label: "1",
+        pathSegments: ["MUSE", "1"],
+        locationType: "receptacle",
+      });
+      const [a, b] = await createGridCells(module.id, parent.id, [
+        [0, 0, "A1"],
+        [0, 1, "A2"],
+      ]);
+      await locationRepository.disable({ id: b.id, reason: "cracked" });
+      await expect(
+        locationRepository.merge({ originId: a.id, aliasIds: [b.id] })
+      ).rejects.toThrow(/disabled/);
+    });
+
     it("refuses merge with active assignments", async () => {
       const { assignmentRepository } = await import(
         "@/repositories/assignmentRepository"
