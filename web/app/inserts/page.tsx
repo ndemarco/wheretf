@@ -1559,21 +1559,23 @@ function InsertGrid({
               }
               className={isDivided ? undefined : "cursor-pointer"}
             />
-            {/* Parent label on top when divided, centered otherwise */}
-            <text
-              x={x + w / 2}
-              y={isDivided ? y + 10 : occupied ? y + 14 : y + h / 2}
-              textAnchor="middle"
-              dominantBaseline={
-                isDivided ? "hanging" : occupied ? "auto" : "central"
-              }
-              fill={cell.isDisabled ? "#f87171" : "#64748b"}
-              fontSize={isDivided ? 9 : 10}
-              fontWeight={isSelected ? 600 : 400}
-              className="pointer-events-none"
-            >
-              {displayLabel}
-            </text>
+            {/* Parent label: centered when undivided. When divided, the
+                child labels fill the interior and the parent label is
+                omitted to keep the grid rhythm clean. */}
+            {!isDivided && (
+              <text
+                x={x + w / 2}
+                y={occupied ? y + 14 : y + h / 2}
+                textAnchor="middle"
+                dominantBaseline={occupied ? "auto" : "central"}
+                fill={cell.isDisabled ? "#f87171" : "#64748b"}
+                fontSize={10}
+                fontWeight={isSelected ? 600 : 400}
+                className="pointer-events-none"
+              >
+                {displayLabel}
+              </text>
+            )}
 
             {/* Item name on undivided cell */}
             {!isDivided && itemName && (
@@ -1592,95 +1594,113 @@ function InsertGrid({
               </text>
             )}
 
-            {/* Child sub-rects when divided */}
+            {/* Divided: full-size rect bisected by interior divider
+                lines. Child sections are click targets (hit rects)
+                without their own borders — the parent rect is the
+                only outline, preserving grid rhythm. */}
             {isDivided && (() => {
-              const pad = 4;
-              const labelStripe = 14;
               const subCount = divChildren.length;
-              const subW = (w - pad * 2 - (subCount - 1) * 2) / subCount;
-              const subH = h - labelStripe - pad;
-              return divChildren.map((child, i) => {
-                const cx = x + pad + i * (subW + 2);
-                const cy = y + labelStripe;
-                const childAssigns = assignByLoc.get(child.id) ?? [];
-                const childOccupied = childAssigns.length > 0;
-                const childItem = childOccupied
-                  ? itemsById.get(childAssigns[0].itemId)?.name
-                  : null;
-                const childSelected = child.id === selectedCellId;
-                const childMulti = multiSelect.has(child.id);
-                const childFill = child.isDisabled
-                  ? "rgba(248,113,113,0.12)"
-                  : childSelected
-                    ? "rgba(255,102,0,0.15)"
-                    : childMulti
-                      ? "rgba(255,102,0,0.06)"
-                      : childOccupied
-                        ? "rgba(96,165,250,0.12)"
-                        : "transparent";
-                const childStroke = child.isDisabled
-                  ? "#7f1d1d"
-                  : childSelected
-                    ? "#ff6600"
-                    : childMulti
-                      ? "#ff6600"
-                      : "#475569";
-                return (
-                  <g
-                    key={child.id}
-                    onClick={(e) =>
-                      onCellClick(child.id, e.ctrlKey || e.metaKey)
-                    }
-                    className="cursor-pointer"
-                  >
-                    <rect
-                      x={cx}
-                      y={cy}
-                      width={subW}
-                      height={subH}
-                      fill={childFill}
-                      stroke={childStroke}
-                      strokeWidth={childSelected || childMulti ? 2 : 1}
-                      strokeDasharray={childMulti ? "4 2" : undefined}
-                      rx={2}
-                    />
-                    <text
-                      x={cx + subW / 2}
-                      y={cy + subH / 2}
-                      textAnchor="middle"
-                      dominantBaseline="central"
-                      fill={child.isDisabled ? "#f87171" : "#94a3b8"}
-                      fontSize={9}
-                      className="pointer-events-none"
-                    >
-                      {child.label}
-                    </text>
-                    {childItem && (
-                      <text
-                        x={cx + subW / 2}
-                        y={cy + subH / 2 + 10}
-                        textAnchor="middle"
-                        dominantBaseline="central"
-                        fill="#93c5fd"
-                        fontSize={7}
-                        className="select-none pointer-events-none"
+              const subW = w / subCount;
+              return (
+                <>
+                  {/* Click-target hit rects + child labels + item names */}
+                  {divChildren.map((child, i) => {
+                    const cx = x + i * subW;
+                    const childAssigns = assignByLoc.get(child.id) ?? [];
+                    const childOccupied = childAssigns.length > 0;
+                    const childItem = childOccupied
+                      ? itemsById.get(childAssigns[0].itemId)?.name
+                      : null;
+                    const childSelected = child.id === selectedCellId;
+                    const childMulti = multiSelect.has(child.id);
+                    const childHighlight =
+                      child.isDisabled
+                        ? "rgba(248,113,113,0.12)"
+                        : childSelected
+                          ? "rgba(255,102,0,0.18)"
+                          : childMulti
+                            ? "rgba(255,102,0,0.08)"
+                            : childOccupied
+                              ? "rgba(96,165,250,0.12)"
+                              : "transparent";
+                    return (
+                      <g
+                        key={child.id}
+                        onClick={(e) =>
+                          onCellClick(child.id, e.ctrlKey || e.metaKey)
+                        }
+                        className="cursor-pointer"
                       >
-                        {childItem.length > 8
-                          ? childItem.substring(0, 7) + "…"
-                          : childItem}
-                      </text>
-                    )}
-                    {childOccupied && (
-                      <circle
-                        cx={cx + subW - 4}
-                        cy={cy + 4}
-                        r={2}
-                        fill="#60a5fa"
+                        {/* Highlight fill stays inside the parent rect */}
+                        <rect
+                          x={cx + 1}
+                          y={y + 1}
+                          width={subW - 2}
+                          height={h - 2}
+                          fill={childHighlight}
+                        />
+                        <text
+                          x={cx + subW / 2}
+                          y={childItem ? y + h / 2 - 5 : y + h / 2}
+                          textAnchor="middle"
+                          dominantBaseline="central"
+                          fill={
+                            child.isDisabled
+                              ? "#f87171"
+                              : childSelected
+                                ? "#ff6600"
+                                : "#94a3b8"
+                          }
+                          fontSize={9}
+                          fontWeight={childSelected ? 600 : 400}
+                          className="pointer-events-none"
+                        >
+                          {child.label}
+                        </text>
+                        {childItem && (
+                          <text
+                            x={cx + subW / 2}
+                            y={y + h / 2 + 7}
+                            textAnchor="middle"
+                            dominantBaseline="central"
+                            fill="#93c5fd"
+                            fontSize={7}
+                            className="select-none pointer-events-none"
+                          >
+                            {childItem.length > 7
+                              ? childItem.substring(0, 6) + "…"
+                              : childItem}
+                          </text>
+                        )}
+                        {childOccupied && (
+                          <circle
+                            cx={cx + subW - 4}
+                            cy={y + 4}
+                            r={2}
+                            fill="#60a5fa"
+                          />
+                        )}
+                      </g>
+                    );
+                  })}
+                  {/* Interior divider lines (N-1) */}
+                  {Array.from({ length: subCount - 1 }, (_, i) => {
+                    const lx = x + (i + 1) * subW;
+                    return (
+                      <line
+                        key={`div-${i}`}
+                        x1={lx}
+                        y1={y}
+                        x2={lx}
+                        y2={y + h}
+                        stroke={strokeColor}
+                        strokeWidth={1}
+                        className="pointer-events-none"
                       />
-                    )}
-                  </g>
-                );
-              });
+                    );
+                  })}
+                </>
+              );
             })()}
 
             {occupied && !isDivided && (
