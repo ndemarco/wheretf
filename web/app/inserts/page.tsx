@@ -1589,6 +1589,28 @@ function InsertGrid({
                 : (e) => onCellClick(cell.id, e.ctrlKey || e.metaKey)
             }
           >
+            {/* Disabled hatch overlay + reason text */}
+            {cell.isDisabled && !isDivided && (
+              <>
+                <div
+                  aria-hidden
+                  className="absolute inset-0 pointer-events-none"
+                  style={{
+                    backgroundImage:
+                      "repeating-linear-gradient(45deg, transparent 0 7px, rgba(248,113,113,0.16) 7px 8px)",
+                  }}
+                />
+                {cell.disableReason && (
+                  <div
+                    className="absolute inset-x-1 bottom-1 text-[9px] leading-tight text-red-200/90 italic text-center break-words pointer-events-none z-10"
+                    title={cell.disableReason}
+                  >
+                    {cell.disableReason}
+                  </div>
+                )}
+              </>
+            )}
+
             {/* Indicator dots */}
             {occupied && !isDivided && (
               <span
@@ -1634,10 +1656,30 @@ function InsertGrid({
                         e.stopPropagation();
                         onCellClick(child.id, e.ctrlKey || e.metaKey);
                       }}
-                      className={subClasses}
+                      className={`${subClasses} relative`}
                     >
+                      {child.isDisabled && (
+                        <>
+                          <div
+                            aria-hidden
+                            className="absolute inset-0 pointer-events-none"
+                            style={{
+                              backgroundImage:
+                                "repeating-linear-gradient(45deg, transparent 0 6px, rgba(248,113,113,0.16) 6px 7px)",
+                            }}
+                          />
+                          {child.disableReason && (
+                            <div
+                              className="absolute inset-x-0.5 bottom-0.5 text-[8px] leading-tight text-red-200/90 italic text-center break-words pointer-events-none z-10"
+                              title={child.disableReason}
+                            >
+                              {child.disableReason}
+                            </div>
+                          )}
+                        </>
+                      )}
                       <div
-                        className={`text-[10px] font-medium leading-tight text-center break-words ${
+                        className={`relative z-0 text-[10px] font-medium leading-tight text-center break-words ${
                           childSelected
                             ? "text-accent"
                             : child.isDisabled
@@ -1648,7 +1690,7 @@ function InsertGrid({
                         {child.label}
                       </div>
                       {childItem && (
-                        <div className="text-[9px] text-blue-300 leading-tight text-center break-words overflow-hidden">
+                        <div className="relative z-0 text-[9px] text-blue-300 leading-tight text-center break-words overflow-hidden">
                           {childItem}
                         </div>
                       )}
