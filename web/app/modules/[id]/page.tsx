@@ -1456,7 +1456,6 @@ export default function ModuleDetailPage() {
           onEdit={() => setEditingLevel(true)}
           onSave={saveLevel}
           onCancel={cancelLevelEdit}
-          onClose={() => selectLevel(null)}
           onRemoveInsert={removeInsertFromLevel}
           onDisableLevel={disableLevel}
           onEnableLevel={enableLevel}
@@ -1794,7 +1793,6 @@ function LevelPanel({
   onEdit,
   onSave,
   onCancel,
-  onClose,
   onRemoveInsert,
   onDisableLevel,
   onEnableLevel,
@@ -1817,40 +1815,47 @@ function LevelPanel({
   onEdit: () => void;
   onSave: () => void;
   onCancel: () => void;
-  onClose: () => void;
   onRemoveInsert: (insertId: string) => void;
   onDisableLevel: () => void;
   onEnableLevel: () => void;
 }) {
+  // panelMode mirrors the inserts-page right-pane tabs.
+  // 'place' = read-only info + Insert placement actions.
+  // 'edit'  = level form (label / interface / notes / disable).
+  // Parent owns the `editing` flag; tab buttons here toggle it.
+  const panelMode: "place" | "edit" = editing ? "edit" : "place";
   return (
     <>
-      <div className="p-4 border-b border-slate-700">
-        <div className="flex items-center justify-between">
-          <h3 className="text-sm font-medium text-slate-200">
-            Level {level.label}
-          </h3>
-          <div className="flex items-center gap-3">
-            {!editing && (
-              <button
-                onClick={onEdit}
-                className="text-xs text-slate-400 hover:text-accent transition-colors"
-              >
-                Edit
-              </button>
-            )}
-            <button
-              onClick={onClose}
-              className="text-slate-500 hover:text-slate-300 text-xs"
-            >
-              Close
-            </button>
-          </div>
-        </div>
-        <p className="text-xs text-slate-500 mt-1">{level.path}</p>
+      {/* Tabs */}
+      <div className="flex border-b border-slate-700 shrink-0">
+        <button
+          onClick={() => {
+            if (panelMode !== "place") onCancel();
+          }}
+          className={`flex-1 px-3 py-2 text-xs font-medium transition-colors ${
+            panelMode === "place"
+              ? "text-accent border-b-2 border-accent -mb-px"
+              : "text-slate-400 hover:text-slate-200"
+          }`}
+        >
+          Place
+        </button>
+        <button
+          onClick={() => {
+            if (panelMode !== "edit") onEdit();
+          }}
+          className={`flex-1 px-3 py-2 text-xs font-medium transition-colors ${
+            panelMode === "edit"
+              ? "text-accent border-b-2 border-accent -mb-px"
+              : "text-slate-400 hover:text-slate-200"
+          }`}
+        >
+          Edit
+        </button>
       </div>
 
       <div className="p-4 space-y-4">
-        {editing ? (
+        {panelMode === "edit" ? (
           <>
             <div>
               <label className="text-xs text-slate-500 block mb-1">Label</label>
