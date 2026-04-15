@@ -40,6 +40,136 @@ interface Category {
   sortOrder: number;
 }
 
+// --- Inline new parameter-definition creator (reusable in-place form) ---
+
+function InlineNewParamDef({
+  onCreated,
+}: {
+  onCreated: (def: ParameterDefinition) => void | Promise<void>;
+}) {
+  const [open, setOpen] = useState(false);
+  const [name, setName] = useState("");
+  const [dataType, setDataType] = useState("text");
+  const [unit, setUnit] = useState("");
+  const [enumValues, setEnumValues] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  function reset() {
+    setName("");
+    setDataType("text");
+    setUnit("");
+    setEnumValues("");
+    setError(null);
+  }
+
+  async function create() {
+    if (!name.trim()) return;
+    setSaving(true);
+    setError(null);
+    try {
+      const body: Record<string, unknown> = {
+        name: name.trim(),
+        dataType,
+      };
+      if (unit.trim()) body.unit = unit.trim();
+      if (dataType === "enum") {
+        const vals = enumValues
+          .split(",")
+          .map((v) => v.trim())
+          .filter(Boolean);
+        if (vals.length > 0) body.constraints = { enumValues: vals };
+      }
+      const res = await fetch("/api/parameter-definitions", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Create failed");
+      const def: ParameterDefinition =
+        data.parameterDefinition ?? data.definition ?? data;
+      await onCreated(def);
+      reset();
+      setOpen(false);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Create failed");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  if (!open) {
+    return (
+      <button
+        onClick={() => setOpen(true)}
+        className="mt-2 w-full text-left px-3 py-2 rounded border border-dashed border-slate-700 text-xs text-slate-500 hover:text-accent hover:border-accent transition-colors"
+      >
+        + Create new parameter…
+      </button>
+    );
+  }
+
+  return (
+    <div className="mt-2 p-3 bg-slate-900/60 border border-accent/40 rounded space-y-2">
+      <div className="grid grid-cols-3 gap-2">
+        <input
+          autoFocus
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          placeholder="name (e.g. thread_pitch)"
+          className="col-span-2 px-2 py-1 bg-slate-800 border border-slate-600 rounded text-xs text-slate-200 focus:border-accent focus:outline-none"
+        />
+        <select
+          value={dataType}
+          onChange={(e) => setDataType(e.target.value)}
+          className="px-2 py-1 bg-slate-800 border border-slate-600 rounded text-xs text-slate-200 focus:border-accent focus:outline-none"
+        >
+          <option value="text">text</option>
+          <option value="numeric">numeric</option>
+          <option value="boolean">boolean</option>
+          <option value="enum">enum</option>
+        </select>
+      </div>
+      <div className="grid grid-cols-2 gap-2">
+        <input
+          value={unit}
+          onChange={(e) => setUnit(e.target.value)}
+          placeholder="unit (optional)"
+          className="px-2 py-1 bg-slate-800 border border-slate-600 rounded text-xs text-slate-200 focus:border-accent focus:outline-none"
+        />
+        {dataType === "enum" && (
+          <input
+            value={enumValues}
+            onChange={(e) => setEnumValues(e.target.value)}
+            placeholder="enum values (comma-separated)"
+            className="px-2 py-1 bg-slate-800 border border-slate-600 rounded text-xs text-slate-200 focus:border-accent focus:outline-none"
+          />
+        )}
+      </div>
+      {error && <p className="text-[11px] text-red-400">{error}</p>}
+      <div className="flex items-center gap-2">
+        <button
+          onClick={create}
+          disabled={saving || !name.trim()}
+          className="px-3 py-1 bg-accent text-white rounded text-xs hover:brightness-110 disabled:opacity-50"
+        >
+          {saving ? "Creating…" : "Create + add"}
+        </button>
+        <button
+          onClick={() => {
+            reset();
+            setOpen(false);
+          }}
+          className="text-xs text-slate-500 hover:text-slate-300"
+        >
+          Cancel
+        </button>
+      </div>
+    </div>
+  );
+}
+
 // --- Main Page ---
 
 export default function TaxonomyPage() {
@@ -372,37 +502,39 @@ function AspectsTab() {
             </div>
 
             {/* Add parameter */}
-            {availableParamDefs.length > 0 && (
-              <div>
-                <h3 className="text-xs font-medium text-slate-400 uppercase tracking-wider mb-2">
-                  Add Parameter
-                </h3>
-                <div className="space-y-1 max-h-48 overflow-y-auto">
-                  {availableParamDefs.map((pd) => (
-                    <button
-                      key={pd.id}
-                      onClick={() => addParamToAspect(pd.id)}
-                      className="w-full text-left flex items-center justify-between px-3 py-2 rounded border border-dashed border-slate-600 hover:border-slate-500 transition-colors"
-                    >
-                      <div className="flex items-center gap-2">
-                        <span className="text-sm text-slate-300">
-                          {pd.name}
+            <div>
+              <h3 className="text-xs font-medium text-slate-400 uppercase tracking-wider mb-2">
+                Add Parameter
+              </h3>
+              <div className="space-y-1 max-h-48 overflow-y-auto">
+                {availableParamDefs.map((pd) => (
+                  <button
+                    key={pd.id}
+                    onClick={() => addParamToAspect(pd.id)}
+                    className="w-full text-left flex items-center justify-between px-3 py-2 rounded border border-dashed border-slate-600 hover:border-slate-500 transition-colors"
+                  >
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm text-slate-300">{pd.name}</span>
+                      <span className="text-[10px] px-1.5 py-0.5 rounded bg-slate-700 text-slate-400">
+                        {pd.dataType}
+                      </span>
+                      {pd.unit && (
+                        <span className="text-[10px] text-slate-500">
+                          {pd.unit}
                         </span>
-                        <span className="text-[10px] px-1.5 py-0.5 rounded bg-slate-700 text-slate-400">
-                          {pd.dataType}
-                        </span>
-                        {pd.unit && (
-                          <span className="text-[10px] text-slate-500">
-                            {pd.unit}
-                          </span>
-                        )}
-                      </div>
-                      <span className="text-xs text-accent">+ Add</span>
-                    </button>
-                  ))}
-                </div>
+                      )}
+                    </div>
+                    <span className="text-xs text-accent">+ Add</span>
+                  </button>
+                ))}
               </div>
-            )}
+
+              <InlineNewParamDef
+                onCreated={async (newDef) => {
+                  await addParamToAspect(newDef.id);
+                }}
+              />
+            </div>
           </div>
         )}
       </div>
