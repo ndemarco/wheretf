@@ -188,8 +188,19 @@ Running list of issues and decisions for the `/modules` and `/modules/[id]` area
 
 ---
 
+### IN-8 — Smart subdivision label suggestions
+- **Problem:** divide dialog accepts any comma-separated strings. User pointed out the template already knows enough to suggest the right terms. A drawer's front/back axis, a shelf's left/right, or a template-declared subdivision accessory (e.g. Akro-Mils 40716 divider → front + rear) all imply better defaults.
+- **Direction:**
+  - If the cell's template version has a non-empty `subdivisionOptions` JSONB (already a schema field), populate a dropdown of those as the first UI offering. User picks one → children created with predeclared labels. "Custom…" route stays available.
+  - If no subdivision option exists: fall back to a heuristic based on cell orientation (aspect ratio + primary axis + template kind) to propose `left, right` vs `front, rear` vs `top, bottom` as the placeholder. User can still type anything.
+- **Work:** backend already has the JSONB field, nothing to add there. Need: TS type for the JSONB shape, a small helper that picks a suggestion, UI refactor from single text input to "dropdown of presets + custom" component.
+- **Status:** deferred — not trivial (heuristic wants thought, options schema wants a type, UI wants a real picker).
+
+---
+
 ## Cross-cutting open questions
 - **MD-1** add-level semantics (deferred)
-- **IN-2** override UX — 2 of 4 done (Disable, Restrict); Merge / Divide remain
-- **IN-3** module level header needs to surface the insert as a first-class object
-- **IN-4** insert-first placement (Place in… / Move to… from insert detail)
+- **IN-2** override UX — all 4 done (Disable, Restrict, Merge, Divide)
+- **IN-3** module level header now surfaces the insert (done)
+- **IN-4** insert-first placement (done)
+- **IN-8** smart subdivision label suggestions from template
