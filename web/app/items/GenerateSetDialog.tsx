@@ -49,6 +49,13 @@ interface PreviewRow {
   value: string | number | boolean;
   display: string;
   name: string;
+  duplicateOf?: string; // existing item name
+}
+
+interface SimilarCandidate {
+  itemId: string;
+  itemName: string;
+  paramValues: Record<string, unknown>;
 }
 
 export default function GenerateSetDialog({
@@ -81,6 +88,7 @@ export default function GenerateSetDialog({
   const [nameTemplate, setNameTemplate] = useState("");
   const [preview, setPreview] = useState<PreviewRow[]>([]);
 
+  const [similar, setSimilar] = useState<SimilarCandidate[]>([]);
   const [creating, setCreating] = useState(false);
   const [progress, setProgress] = useState<{ done: number; total: number }>({
     done: 0,
@@ -114,12 +122,17 @@ export default function GenerateSetDialog({
         const sugParams = new URLSearchParams();
         sugParams.set("standardId", standardId);
         for (const a of aspects) sugParams.append("aspectId", a.aspectId);
-        const sugRes = await fetch(
-          `/api/items/suggest-categories?${sugParams.toString()}`
-        );
+        const [sugRes, simRes] = await Promise.all([
+          fetch(`/api/items/suggest-categories?${sugParams.toString()}`),
+          fetch(
+            `/api/items/find-similar?standardId=${standardId}&designationId=${designationId}`
+          ),
+        ]);
         const sug = await sugRes.json();
+        const sim = await simRes.json();
         if (cancelled) return;
         setSuggestions(sug.suggestions ?? []);
+        setSimilar(sim.candidates ?? []);
 
         // Aggregate all params across linked aspects
         const paramsList: ParameterOption[] = [];
@@ -242,17 +255,26 @@ export default function GenerateSetDialog({
   useEffect(() => {
     const values = buildValues();
     setPreview(
-      values.map((v) => ({
-        included: true,
-        value: v,
-        display:
-          typeof v === "number" && !Number.isInteger(v)
-            ? v.toString()
-            : String(v),
-        name: substituteTemplate(nameTemplate, v, variableParam?.unit ?? ""),
-      }))
+      values.map((v) => {
+        const dup = variableParam
+          ? similar.find((s) => {
+              const existing = s.paramValues[variableParam.parameterDefinitionId];
+              return existing !== undefined && String(existing) === String(v);
+            })
+          : undefined;
+        return {
+          included: !dup,
+          value: v,
+          display:
+            typeof v === "number" && !Number.isInteger(v)
+              ? v.toString()
+              : String(v),
+          name: substituteTemplate(nameTemplate, v, variableParam?.unit ?? ""),
+          duplicateOf: dup?.itemName,
+        };
+      })
     );
-  }, [buildValues, nameTemplate, variableParam]);
+  }, [buildValues, nameTemplate, variableParam, similar]);
 
   function substituteTemplate(
     tpl: string,
@@ -631,6 +653,14 @@ export default function GenerateSetDialog({
                         </td>
                         <td className="px-2 py-1 font-mono text-slate-100">
                           {r.name}
+                          {r.duplicateOf && (
+                            <span
+                              className="ml-2 text-[10px] text-amber-400"
+                              title={`Already exists: ${r.duplicateOf}`}
+                            >
+                              dup of {r.duplicateOf}
+                            </span>
+                          )}
                         </td>
                         <td className="px-2 py-1 text-slate-500 text-right tabular-nums">
                           {r.display}

@@ -326,6 +326,59 @@ export const itemRepository = {
   // --- Category counts (respects active filters) ---
 
   /**
+   * Return items that *might* be duplicates of an item described by the
+   * given standard+designation (plus their parameter values so the caller
+   * can refine per-row for set generation). Simple first cut: any item
+   * that has the same (standardId, designationId) applied.
+   */
+  async findSimilar({
+    standardId,
+    designationId,
+  }: {
+    standardId: string;
+    designationId: string;
+  }) {
+    const matches = await db
+      .select({
+        itemId: items.id,
+        itemName: items.name,
+      })
+      .from(items)
+      .innerJoin(itemStandards, eq(itemStandards.itemId, items.id))
+      .where(
+        and(
+          eq(itemStandards.standardId, standardId),
+          eq(itemStandards.designationId, designationId)
+        )
+      );
+
+    if (matches.length === 0) return [];
+
+    const ids = matches.map((m) => m.itemId);
+    const pvRows = await db
+      .select({
+        itemId: itemParameterValues.itemId,
+        parameterDefinitionId: itemParameterValues.parameterDefinitionId,
+        value: itemParameterValues.value,
+      })
+      .from(itemParameterValues)
+      .where(inArray(itemParameterValues.itemId, ids));
+
+    const byItem = new Map<string, Record<string, unknown>>();
+    for (const r of pvRows) {
+      const bag = byItem.get(r.itemId) ?? {};
+      bag[r.parameterDefinitionId] = r.value;
+      byItem.set(r.itemId, bag);
+    }
+
+    return matches.map((m) => ({
+      itemId: m.itemId,
+      itemName: m.itemName,
+      paramValues: byItem.get(m.itemId) ?? {},
+    }));
+  },
+
+  /**
    * Rank categories by co-occurrence with the supplied aspects/standards.
    * For each category, score = count of items in that category that share at
    * least one of the given aspects or standards, divided by the total number

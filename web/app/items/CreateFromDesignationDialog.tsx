@@ -53,6 +53,10 @@ export default function CreateFromDesignationDialog({
   const [name, setName] = useState("");
   const [creating, setCreating] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [similar, setSimilar] = useState<
+    { itemId: string; itemName: string }[]
+  >([]);
+  const [acknowledged, setAcknowledged] = useState(false);
 
   // Load everything the dialog needs.
   useEffect(() => {
@@ -80,12 +84,24 @@ export default function CreateFromDesignationDialog({
         const params = new URLSearchParams();
         params.set("standardId", standardId);
         for (const a of aspects) params.append("aspectId", a.aspectId);
-        const sugRes = await fetch(
-          `/api/items/suggest-categories?${params.toString()}`
-        );
+        const [sugRes, simRes] = await Promise.all([
+          fetch(`/api/items/suggest-categories?${params.toString()}`),
+          fetch(
+            `/api/items/find-similar?standardId=${standardId}&designationId=${designationId}`
+          ),
+        ]);
         const sug = await sugRes.json();
+        const sim = await simRes.json();
         if (cancelled) return;
         setSuggestions(sug.suggestions ?? []);
+        setSimilar(
+          (sim.candidates ?? []).map(
+            (c: { itemId: string; itemName: string }) => ({
+              itemId: c.itemId,
+              itemName: c.itemName,
+            })
+          )
+        );
       } catch (err) {
         if (!cancelled)
           setError(err instanceof Error ? err.message : "Failed to load");
@@ -193,6 +209,40 @@ export default function CreateFromDesignationDialog({
           {error && (
             <div className="px-3 py-2 bg-red-900/30 border border-red-700/50 rounded text-red-300 text-xs">
               {error}
+            </div>
+          )}
+
+          {similar.length > 0 && (
+            <div className="px-3 py-2 bg-amber-900/20 border border-amber-700/50 rounded space-y-1.5">
+              <div className="flex items-start justify-between gap-3">
+                <div className="text-xs text-amber-200">
+                  <span className="font-semibold">
+                    {similar.length} existing item
+                    {similar.length === 1 ? "" : "s"}
+                  </span>{" "}
+                  already use{similar.length === 1 ? "s" : ""} this
+                  designation. Double-check before creating another.
+                </div>
+                <label className="inline-flex items-center gap-1.5 text-[11px] text-amber-200 shrink-0">
+                  <input
+                    type="checkbox"
+                    checked={acknowledged}
+                    onChange={(e) => setAcknowledged(e.target.checked)}
+                    className="accent-accent"
+                  />
+                  Create anyway
+                </label>
+              </div>
+              <ul className="text-[11px] text-amber-100/80 pl-4 list-disc">
+                {similar.slice(0, 5).map((c) => (
+                  <li key={c.itemId}>{c.itemName}</li>
+                ))}
+                {similar.length > 5 && (
+                  <li className="text-amber-100/50">
+                    + {similar.length - 5} more
+                  </li>
+                )}
+              </ul>
             </div>
           )}
 
@@ -314,10 +364,18 @@ export default function CreateFromDesignationDialog({
           </button>
           <button
             onClick={handleCreate}
-            disabled={creating || !name.trim()}
+            disabled={
+              creating ||
+              !name.trim() ||
+              (similar.length > 0 && !acknowledged)
+            }
             className="px-4 py-1.5 bg-accent text-white rounded text-xs hover:brightness-110 disabled:opacity-50"
           >
-            {creating ? "Creating…" : "Create item"}
+            {creating
+              ? "Creating…"
+              : similar.length > 0 && !acknowledged
+                ? "Acknowledge duplicates"
+                : "Create item"}
           </button>
         </div>
       </div>
