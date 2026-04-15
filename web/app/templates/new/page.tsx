@@ -2,24 +2,9 @@
 
 import { useRouter } from "next/navigation";
 import { useState, useMemo } from "react";
+import { getGridLabel } from "@/lib/gridLabels";
 
 type Origin = "top-left" | "top-right" | "bottom-left" | "bottom-right";
-
-function getLabel(
-  scheme: string,
-  index: number,
-  count: number,
-  origin: Origin,
-  axis: "row" | "col"
-): string {
-  const reversed =
-    (axis === "row" && origin.startsWith("bottom")) ||
-    (axis === "col" && origin.endsWith("right"));
-  const i = reversed ? count - 1 - index : index;
-  return scheme === "alpha"
-    ? String.fromCharCode(65 + i)
-    : String(i + 1);
-}
 
 function GridPreview({
   rows,
@@ -53,8 +38,8 @@ function GridPreview({
     for (let c = 0; c < columns; c++) {
       const x = labelPad + c * (cellSize + gap);
       const y = labelPad + r * (cellSize + gap);
-      const rl = getLabel(rowLabelScheme, r, rows, origin, "row");
-      const cl = getLabel(columnLabelScheme, c, columns, origin, "col");
+      const rl = getGridLabel(rowLabelScheme, r, rows, origin, "row");
+      const cl = getGridLabel(columnLabelScheme, c, columns, origin, "col");
       cells.push(
         <g key={`${r}-${c}`}>
           <rect
@@ -96,7 +81,7 @@ function GridPreview({
         fill="#64748b"
         fontSize={14}
       >
-        {getLabel(rowLabelScheme, r, rows, origin, "row")}
+        {getGridLabel(rowLabelScheme, r, rows, origin, "row")}
       </text>
     );
   }
@@ -115,7 +100,7 @@ function GridPreview({
         fill="#64748b"
         fontSize={14}
       >
-        {getLabel(columnLabelScheme, c, columns, origin, "col")}
+        {getGridLabel(columnLabelScheme, c, columns, origin, "col")}
       </text>
     );
   }

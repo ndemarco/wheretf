@@ -8,6 +8,7 @@ import {
   modules,
 } from "@/db/schema";
 import { transactionRepository } from "./transactionRepository";
+import { getGridLabel } from "@/lib/gridLabels";
 
 function generateUid(): string {
   const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"; // no I/O/0/1 to avoid confusion
@@ -32,20 +33,6 @@ type InsertParentLocation = {
  * (insert_id same, parent_id pointing at a cell) ride along via their
  * parent cell's new path.
  */
-function getLabel(
-  scheme: string,
-  index: number,
-  count: number,
-  origin: string,
-  axis: "row" | "col"
-): string {
-  const reversed =
-    (axis === "row" && origin.startsWith("bottom")) ||
-    (axis === "col" && origin.endsWith("right"));
-  const i = reversed ? count - 1 - index : index;
-  return scheme === "alpha" ? String.fromCharCode(65 + i) : String(i + 1);
-}
-
 async function reparentInsertCells(
   tx: Parameters<Parameters<typeof db.transaction>[0]>[0],
   insertId: string,
@@ -144,14 +131,14 @@ export const insertRepository = {
           const colScheme = tv.columnLabelScheme || "numeric";
           for (let r = 0; r < gridRows; r++) {
             for (let c = 0; c < gridCols; c++) {
-              const rowLabel = getLabel(
+              const rowLabel = getGridLabel(
                 rowScheme,
                 r,
                 gridRows,
                 origin,
                 "row"
               );
-              const colLabel = getLabel(
+              const colLabel = getGridLabel(
                 colScheme,
                 c,
                 gridCols,
