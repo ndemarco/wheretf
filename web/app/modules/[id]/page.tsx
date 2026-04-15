@@ -130,6 +130,41 @@ export default function ModuleDetailPage() {
     Map<string, Insert>
   >(new Map());
 
+  // Compatible inserts for the selected (empty) level
+  const [candidateInserts, setCandidateInserts] = useState<
+    Array<{
+      id: string;
+      name: string | null;
+      templateId: string | null;
+      templateName: string | null;
+      interfaceType: string | null;
+      rows: number | null;
+      columns: number | null;
+    }>
+  >([]);
+  const [candidatesLoading, setCandidatesLoading] = useState(false);
+  const [candidatesShowAll, setCandidatesShowAll] = useState(false);
+  const [placingInsert, setPlacingInsert] = useState(false);
+
+  // Compatible templates (for the Create-new-insert sub-flow)
+  const [candidateTemplates, setCandidateTemplates] = useState<
+    Array<{
+      id: string;
+      name: string;
+      currentVersionData: {
+        id: string;
+        isParametric: boolean;
+        rows: number | null;
+        columns: number | null;
+        minRows: number | null;
+        maxRows: number | null;
+        minColumns: number | null;
+        maxColumns: number | null;
+        interfaceTypeProvided: string | null;
+      } | null;
+    }>
+  >([]);
+
   // Item picker
   const [showItemPicker, setShowItemPicker] = useState(false);
   const [itemSearchQuery, setItemSearchQuery] = useState("");
@@ -253,6 +288,68 @@ export default function ModuleDetailPage() {
       }
     })();
   }, []);
+
+  // Candidate inserts/templates for the currently-selected empty level.
+  // Refetched whenever selection, placement status, or the show-all toggle
+  // changes.
+  useEffect(() => {
+    const level = locations.find((l) => l.id === selectedLevelId) ?? null;
+    if (!level || level.locationType !== "receptacle") {
+      setCandidateInserts([]);
+      setCandidateTemplates([]);
+      return;
+    }
+    // Don't bother loading when the level already has an insert.
+    const alreadyHolds = insertsByReceptacle.has(level.id);
+    if (alreadyHolds) {
+      setCandidateInserts([]);
+      setCandidateTemplates([]);
+      return;
+    }
+    const iface = level.interfaceTypeAccepted;
+    setCandidatesLoading(true);
+    (async () => {
+      try {
+        const qs = new URLSearchParams({
+          placement: candidatesShowAll ? "all" : "unplaced",
+        });
+        if (iface) qs.set("interfaceType", iface);
+        const [insRes, tplRes] = await Promise.all([
+          fetch(`/api/inserts?${qs}`),
+          fetch("/api/templates"),
+        ]);
+        const insData = await insRes.json();
+        const tplData = await tplRes.json();
+        setCandidateInserts(
+          (insData.inserts ?? []).filter(
+            (i: { locationId?: string | null }) => i.locationId !== level.id
+          )
+        );
+        const allT = tplData.templates ?? [];
+        setCandidateTemplates(
+          iface
+            ? allT.filter(
+                (t: {
+                  currentVersionData?: {
+                    interfaceTypeProvided?: string | null;
+                  } | null;
+                }) =>
+                  t.currentVersionData?.interfaceTypeProvided === iface
+              )
+            : allT
+        );
+      } catch (err) {
+        console.error(err);
+      } finally {
+        setCandidatesLoading(false);
+      }
+    })();
+  }, [
+    selectedLevelId,
+    locations,
+    insertsByReceptacle,
+    candidatesShowAll,
+  ]);
 
   // Top-level locations (levels)
   const levels = locations.filter((l) => l.parentId === null);
@@ -625,6 +722,67 @@ export default function ModuleDetailPage() {
       await fetchData();
     } catch (err) {
       console.error(err);
+    }
+  }
+
+  async function placeInsertAtLevel(insertId: string) {
+    if (!selectedLevel) return;
+    setPlacingInsert(true);
+    try {
+      const r = await fetch(`/api/inserts/${insertId}/place`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ locationId: selectedLevel.id }),
+      });
+      if (!r.ok) {
+        const d = await r.json();
+        alert(d.error || "Place failed");
+        return;
+      }
+      await fetchData();
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setPlacingInsert(false);
+    }
+  }
+
+  async function createAndPlaceAtLevel(args: {
+    templateId: string;
+    templateVersionId: string;
+    name?: string;
+    rows?: number;
+    columns?: number;
+  }) {
+    if (!selectedLevel) return;
+    setPlacingInsert(true);
+    try {
+      const cRes = await fetch("/api/inserts", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(args),
+      });
+      if (!cRes.ok) {
+        const d = await cRes.json();
+        alert(d.error || "Create failed");
+        return;
+      }
+      const cData = await cRes.json();
+      const pRes = await fetch(`/api/inserts/${cData.insert.id}/place`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ locationId: selectedLevel.id }),
+      });
+      if (!pRes.ok) {
+        const d = await pRes.json();
+        alert(d.error || "Place failed after create");
+        return;
+      }
+      await fetchData();
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setPlacingInsert(false);
     }
   }
 
@@ -1452,11 +1610,18 @@ export default function ModuleDetailPage() {
           setDraft={setLevelDraft}
           interfaceOptions={interfaceOptions}
           insert={insertsByReceptacle.get(selectedLevel.id) ?? null}
-          placeInsertHref={`/modules/${id}/levels/${selectedLevel.id}/place-insert`}
+          candidateInserts={candidateInserts}
+          candidateTemplates={candidateTemplates}
+          candidatesLoading={candidatesLoading}
+          candidatesShowAll={candidatesShowAll}
+          setCandidatesShowAll={setCandidatesShowAll}
+          placingInsert={placingInsert}
           onEdit={() => setEditingLevel(true)}
           onSave={saveLevel}
           onCancel={cancelLevelEdit}
           onRemoveInsert={removeInsertFromLevel}
+          onPlaceInsertHere={placeInsertAtLevel}
+          onCreateAndPlace={createAndPlaceAtLevel}
           onDisableLevel={disableLevel}
           onEnableLevel={enableLevel}
         />
@@ -1782,6 +1947,269 @@ function ModulePanel({
 
 // --- Level Panel (right) ---
 
+interface CandidateInsert {
+  id: string;
+  name: string | null;
+  templateId: string | null;
+  templateName: string | null;
+  interfaceType: string | null;
+  rows: number | null;
+  columns: number | null;
+}
+
+interface CandidateTemplate {
+  id: string;
+  name: string;
+  currentVersionData: {
+    id: string;
+    isParametric: boolean;
+    rows: number | null;
+    columns: number | null;
+    minRows: number | null;
+    maxRows: number | null;
+    minColumns: number | null;
+    maxColumns: number | null;
+    interfaceTypeProvided: string | null;
+  } | null;
+}
+
+function PlaceInsertInline({
+  level,
+  inserts,
+  templates,
+  loading,
+  showAll,
+  setShowAll,
+  placing,
+  onPlace,
+  onCreateAndPlace,
+}: {
+  level: Location;
+  inserts: CandidateInsert[];
+  templates: CandidateTemplate[];
+  loading: boolean;
+  showAll: boolean;
+  setShowAll: (v: boolean) => void;
+  placing: boolean;
+  onPlace: (insertId: string) => void;
+  onCreateAndPlace: (args: {
+    templateId: string;
+    templateVersionId: string;
+    name?: string;
+    rows?: number;
+    columns?: number;
+  }) => void;
+}) {
+  const [createOpen, setCreateOpen] = useState(false);
+  const [newTemplateId, setNewTemplateId] = useState("");
+  const [newName, setNewName] = useState("");
+  const [newRows, setNewRows] = useState<number | "">("");
+  const [newCols, setNewCols] = useState<number | "">("");
+  const selectedTpl = templates.find((t) => t.id === newTemplateId);
+  const ver = selectedTpl?.currentVersionData ?? null;
+  useEffect(() => {
+    if (!ver) {
+      setNewRows("");
+      setNewCols("");
+      return;
+    }
+    if (ver.isParametric) {
+      setNewRows(ver.minRows ?? 1);
+      setNewCols(ver.minColumns ?? 1);
+    } else {
+      setNewRows(ver.rows ?? 1);
+      setNewCols(ver.columns ?? 1);
+    }
+  }, [newTemplateId, ver]);
+
+  return (
+    <div className="space-y-3">
+      <div className="flex items-center justify-between">
+        <div className="text-sm text-slate-500">No insert placed.</div>
+        <label className="flex items-center gap-1 text-[11px] text-slate-400 cursor-pointer">
+          <input
+            type="checkbox"
+            checked={showAll}
+            onChange={(e) => setShowAll(e.target.checked)}
+            className="accent-accent"
+          />
+          Show placed
+        </label>
+      </div>
+
+      {loading ? (
+        <div className="text-xs text-slate-500">Loading…</div>
+      ) : inserts.length === 0 ? (
+        <div className="text-xs text-slate-500">
+          No compatible {showAll ? "" : "unplaced "}inserts
+          {level.interfaceTypeAccepted
+            ? ` for ${level.interfaceTypeAccepted}.`
+            : "."}
+        </div>
+      ) : (
+        <ul className="flex flex-col gap-1 max-h-60 overflow-y-auto">
+          {inserts.map((ins) => {
+            const dims =
+              ins.rows != null && ins.columns != null
+                ? `${ins.rows}×${ins.columns}`
+                : null;
+            return (
+              <li key={ins.id}>
+                <button
+                  onClick={() => onPlace(ins.id)}
+                  disabled={placing}
+                  className="w-full text-left px-2 py-1.5 rounded border border-slate-700 hover:border-accent/60 hover:bg-slate-800/50 disabled:opacity-50"
+                >
+                  <div className="text-sm text-slate-100 truncate">
+                    {ins.name ?? ins.templateName ?? "Insert"}
+                  </div>
+                  <div className="text-[11px] text-slate-500 truncate">
+                    {ins.templateName && <>{ins.templateName}</>}
+                    {dims && (
+                      <>
+                        {ins.templateName ? " · " : ""}
+                        <span className="tabular-nums">{dims}</span>
+                      </>
+                    )}
+                  </div>
+                </button>
+              </li>
+            );
+          })}
+        </ul>
+      )}
+
+      {/* Create-new expander — same form as /inserts/new, filtered by compat */}
+      <div className="pt-2 border-t border-slate-700">
+        {!createOpen ? (
+          <button
+            onClick={() => setCreateOpen(true)}
+            className="text-xs text-slate-300 hover:text-accent"
+          >
+            + Create a new insert from a template
+          </button>
+        ) : (
+          <div className="space-y-2">
+            <div className="text-xs font-medium text-slate-400 uppercase tracking-wider">
+              New insert
+            </div>
+            {templates.length === 0 ? (
+              <p className="text-xs text-slate-500">
+                No templates match this receptacle&apos;s interface.
+              </p>
+            ) : (
+              <>
+                <label className="block">
+                  <span className="text-[11px] text-slate-500 block mb-0.5">
+                    Template
+                  </span>
+                  <select
+                    value={newTemplateId}
+                    onChange={(e) => setNewTemplateId(e.target.value)}
+                    className="w-full px-2 py-1 bg-slate-800 border border-slate-700 rounded text-xs text-slate-200 focus:border-accent focus:outline-none"
+                  >
+                    <option value="">Select a template…</option>
+                    {templates.map((t) => (
+                      <option key={t.id} value={t.id}>
+                        {t.name}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label className="block">
+                  <span className="text-[11px] text-slate-500 block mb-0.5">
+                    Name (optional)
+                  </span>
+                  <input
+                    type="text"
+                    value={newName}
+                    onChange={(e) => setNewName(e.target.value)}
+                    placeholder={
+                      selectedTpl
+                        ? `e.g., ${selectedTpl.name} #1`
+                        : "Name this insert"
+                    }
+                    className="w-full px-2 py-1 bg-slate-800 border border-slate-700 rounded text-xs text-slate-200 focus:border-accent focus:outline-none"
+                  />
+                </label>
+                {ver?.isParametric && (
+                  <div className="flex gap-2">
+                    <label className="flex flex-col gap-0.5 flex-1">
+                      <span className="text-[10px] text-slate-500">Rows</span>
+                      <input
+                        type="number"
+                        min={ver.minRows ?? 1}
+                        max={ver.maxRows ?? 26}
+                        value={newRows}
+                        onChange={(e) =>
+                          setNewRows(
+                            e.target.value === "" ? "" : Number(e.target.value)
+                          )
+                        }
+                        className="px-2 py-1 bg-slate-800 border border-slate-700 rounded text-xs text-slate-200 focus:border-accent focus:outline-none tabular-nums"
+                      />
+                    </label>
+                    <label className="flex flex-col gap-0.5 flex-1">
+                      <span className="text-[10px] text-slate-500">Cols</span>
+                      <input
+                        type="number"
+                        min={ver.minColumns ?? 1}
+                        max={ver.maxColumns ?? 26}
+                        value={newCols}
+                        onChange={(e) =>
+                          setNewCols(
+                            e.target.value === "" ? "" : Number(e.target.value)
+                          )
+                        }
+                        className="px-2 py-1 bg-slate-800 border border-slate-700 rounded text-xs text-slate-200 focus:border-accent focus:outline-none tabular-nums"
+                      />
+                    </label>
+                  </div>
+                )}
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => {
+                      if (!selectedTpl || !ver) return;
+                      onCreateAndPlace({
+                        templateId: selectedTpl.id,
+                        templateVersionId: ver.id,
+                        name: newName.trim() || undefined,
+                        rows: ver.isParametric
+                          ? Number(newRows) || 1
+                          : undefined,
+                        columns: ver.isParametric
+                          ? Number(newCols) || 1
+                          : undefined,
+                      });
+                      setCreateOpen(false);
+                      setNewTemplateId("");
+                      setNewName("");
+                    }}
+                    disabled={placing || !newTemplateId}
+                    className="px-2.5 py-1 bg-accent text-white rounded text-xs hover:brightness-110 disabled:opacity-50"
+                  >
+                    Create + place
+                  </button>
+                  <button
+                    onClick={() => {
+                      setCreateOpen(false);
+                      setNewTemplateId("");
+                      setNewName("");
+                    }}
+                    className="px-2.5 py-1 border border-slate-600 text-slate-300 rounded text-xs hover:bg-slate-700/50"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 function LevelPanel({
   level,
   editing,
@@ -1789,11 +2217,18 @@ function LevelPanel({
   setDraft,
   interfaceOptions,
   insert,
-  placeInsertHref,
+  candidateInserts,
+  candidateTemplates,
+  candidatesLoading,
+  candidatesShowAll,
+  setCandidatesShowAll,
+  placingInsert,
   onEdit,
   onSave,
   onCancel,
   onRemoveInsert,
+  onPlaceInsertHere,
+  onCreateAndPlace,
   onDisableLevel,
   onEnableLevel,
 }: {
@@ -1811,11 +2246,24 @@ function LevelPanel({
   }) => void;
   interfaceOptions: Array<{ identifier: string; description: string | null }>;
   insert: Insert | null;
-  placeInsertHref: string;
+  candidateInserts: CandidateInsert[];
+  candidateTemplates: CandidateTemplate[];
+  candidatesLoading: boolean;
+  candidatesShowAll: boolean;
+  setCandidatesShowAll: (v: boolean) => void;
+  placingInsert: boolean;
   onEdit: () => void;
   onSave: () => void;
   onCancel: () => void;
   onRemoveInsert: (insertId: string) => void;
+  onPlaceInsertHere: (insertId: string) => void;
+  onCreateAndPlace: (args: {
+    templateId: string;
+    templateVersionId: string;
+    name?: string;
+    rows?: number;
+    columns?: number;
+  }) => void;
   onDisableLevel: () => void;
   onEnableLevel: () => void;
 }) {
@@ -1999,17 +2447,17 @@ function LevelPanel({
                   </div>
                 </div>
               ) : (
-                <div className="space-y-2">
-                  <div className="text-sm text-slate-500">
-                    No insert placed.
-                  </div>
-                  <Link
-                    href={placeInsertHref}
-                    className="inline-block px-3 py-1.5 bg-accent text-white rounded text-xs hover:brightness-110"
-                  >
-                    Place insert…
-                  </Link>
-                </div>
+                <PlaceInsertInline
+                  level={level}
+                  inserts={candidateInserts}
+                  templates={candidateTemplates}
+                  loading={candidatesLoading}
+                  showAll={candidatesShowAll}
+                  setShowAll={setCandidatesShowAll}
+                  placing={placingInsert}
+                  onPlace={onPlaceInsertHere}
+                  onCreateAndPlace={onCreateAndPlace}
+                />
               ))}
           </>
         )}

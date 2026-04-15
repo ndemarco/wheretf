@@ -262,10 +262,9 @@ function InsertDetail({
   const [editing, setEditing] = useState(false);
   const [saving, setSaving] = useState(false);
 
-  // Place/Move picker
-  const [pickerOpen, setPickerOpen] = useState(false);
+  // Compatible receptacles (inline in Place section of View tab)
   const [receptacles, setReceptacles] = useState<Receptacle[]>([]);
-  const [pickerLoading, setPickerLoading] = useState(false);
+  const [receptaclesLoading, setReceptaclesLoading] = useState(false);
   const [placing, setPlacing] = useState(false);
 
   // Cells (grid) — full type so we can show overrides
@@ -356,7 +355,6 @@ function InsertDetail({
   useEffect(() => {
     setDraftName(insert.name ?? "");
     setEditing(false);
-    setPickerOpen(false);
     setSelectedCellId(null);
     setMultiSelect(new Set());
     setSelectMode(false);
@@ -366,9 +364,8 @@ function InsertDetail({
     loadAll();
   }, [insert.id, insert.name, loadAll]);
 
-  async function openPicker() {
-    setPickerOpen(true);
-    setPickerLoading(true);
+  const loadReceptacles = useCallback(async () => {
+    setReceptaclesLoading(true);
     try {
       const res = await fetch(
         `/api/inserts/${insert.id}/compatible-receptacles`
@@ -378,9 +375,14 @@ function InsertDetail({
     } catch (err) {
       console.error(err);
     } finally {
-      setPickerLoading(false);
+      setReceptaclesLoading(false);
     }
-  }
+  }, [insert.id]);
+
+  // Keep the candidate list fresh as the user moves the insert around.
+  useEffect(() => {
+    loadReceptacles();
+  }, [loadReceptacles, insert.locationId]);
 
   async function placeAt(locationId: string) {
     setPlacing(true);
@@ -395,8 +397,8 @@ function InsertDetail({
         alert(data.error || "Failed to place");
         return;
       }
-      setPickerOpen(false);
       onChanged();
+      await loadReceptacles();
     } catch (err) {
       console.error(err);
     } finally {
@@ -942,8 +944,11 @@ function InsertDetail({
               <ViewTabBody
                 placementOnly
                 insert={insert}
-                openPicker={openPicker}
                 unplace={unplace}
+                receptacles={receptacles}
+                receptaclesLoading={receptaclesLoading}
+                placing={placing}
+                onPlace={placeAt}
               />
             ) : !selectedCell ? (
               <div className="p-6 text-center text-xs text-slate-500">
@@ -954,8 +959,11 @@ function InsertDetail({
             {panelMode === "view" && (
               <PlacementSection
                 insert={insert}
-                openPicker={openPicker}
                 unplace={unplace}
+                receptacles={receptacles}
+                receptaclesLoading={receptaclesLoading}
+                placing={placing}
+                onPlace={placeAt}
               />
             )}
             <div className="p-4 border-b border-slate-700">
@@ -1385,148 +1393,124 @@ function InsertDetail({
       </div>
 
       {/* Bottom action bar removed — Place/Move/Unplace live in View tab,
-          Delete insert lives at the bottom of Edit tab. */}
-
-      {pickerOpen && (
-        <div
-          className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4"
-          onClick={() => !placing && setPickerOpen(false)}
-        >
-          <div
-            className="bg-slate-900 border border-slate-700 rounded-lg w-full max-w-md flex flex-col max-h-[80vh]"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="p-4 border-b border-slate-700">
-              <h2 className="text-base font-semibold text-slate-100">
-                {insert.locationId ? "Move insert to…" : "Place insert in…"}
-              </h2>
-              <p className="text-xs text-slate-500 mt-1">
-                Compatible empty receptacles
-                {insert.interfaceType && (
-                  <> (interface <span className="font-mono text-slate-400">{insert.interfaceType}</span>)</>
-                )}
-              </p>
-            </div>
-            <div className="flex-1 overflow-y-auto">
-              {pickerLoading ? (
-                <div className="p-6 text-center text-slate-500 text-sm">
-                  Loading…
-                </div>
-              ) : receptacles.length === 0 ? (
-                <div className="p-6 text-center text-slate-500 text-sm">
-                  No compatible empty receptacles. Either all candidates
-                  are occupied or none accept this insert&apos;s interface.
-                </div>
-              ) : (
-                <ul className="flex flex-col">
-                  {receptacles.map((r) => (
-                    <li key={r.id}>
-                      <button
-                        onClick={() => placeAt(r.id)}
-                        disabled={placing}
-                        className="w-full text-left px-4 py-3 border-b border-slate-700/50 hover:bg-slate-800/40 disabled:opacity-50 transition-colors"
-                      >
-                        <div className="text-sm text-slate-100 truncate">
-                          {r.moduleName} &nbsp;
-                          <span className="text-slate-400">
-                            {r.path.replace(
-                              r.moduleName ? r.moduleName + ":" : "",
-                              ""
-                            )}
-                          </span>
-                        </div>
-                        {r.interfaceTypeAccepted && (
-                          <div className="text-[10px] text-slate-500 mt-0.5">
-                            accepts {r.interfaceTypeAccepted}
-                          </div>
-                        )}
-                      </button>
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </div>
-            <div className="p-3 border-t border-slate-700 flex items-center justify-end">
-              <button
-                onClick={() => setPickerOpen(false)}
-                disabled={placing}
-                className="px-3 py-1.5 border border-slate-600 text-slate-300 rounded text-xs hover:bg-slate-700/50 disabled:opacity-50"
-              >
-                Cancel
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+          Delete insert lives at the bottom of Edit tab. Compat-receptacle
+          picker is now inline in the View tab — no modal. */}
     </div>
   );
 }
 
 function PlacementSection({
   insert,
-  openPicker,
   unplace,
+  receptacles,
+  receptaclesLoading,
+  placing,
+  onPlace,
 }: {
   insert: Insert;
-  openPicker: () => void;
   unplace: () => void;
+  receptacles: Receptacle[];
+  receptaclesLoading: boolean;
+  placing: boolean;
+  onPlace: (locationId: string) => void;
 }) {
   return (
-    <div className="p-4 border-b border-slate-700">
-      <div className="text-xs font-medium text-slate-400 uppercase tracking-wider mb-1.5">
-        Placement
-      </div>
-      {insert.locationPath ? (
-        <>
-          <div className="text-sm text-slate-200 truncate">
-            {insert.locationPath}
-          </div>
-          <div className="mt-2 flex items-center gap-2">
-            <button
-              onClick={openPicker}
-              className="px-3 py-1.5 bg-accent text-white rounded text-xs hover:brightness-110"
-            >
-              Move to…
-            </button>
+    <div className="p-4 border-b border-slate-700 space-y-3">
+      <div>
+        <div className="text-xs font-medium text-slate-400 uppercase tracking-wider mb-1.5">
+          Placement
+        </div>
+        {insert.locationPath ? (
+          <div className="flex items-center gap-2">
+            <span className="text-sm text-slate-200 truncate flex-1">
+              {insert.locationPath}
+            </span>
             <button
               onClick={unplace}
-              className="px-3 py-1.5 border border-slate-600 text-slate-300 rounded text-xs hover:bg-slate-700/50"
+              className="px-2.5 py-1 border border-slate-600 text-slate-300 rounded text-xs hover:bg-slate-700/50"
             >
               Unplace
             </button>
           </div>
-        </>
-      ) : (
-        <>
+        ) : (
           <div className="text-sm text-amber-400">Unplaced</div>
-          <button
-            onClick={openPicker}
-            className="mt-2 px-3 py-1.5 bg-accent text-white rounded text-xs hover:brightness-110"
-          >
-            Place in…
-          </button>
-        </>
-      )}
+        )}
+      </div>
+
+      {/* Inline candidate list — compatible empty receptacles. */}
+      <div>
+        <div className="text-[11px] text-slate-500 mb-1.5">
+          {insert.locationPath ? "Move to…" : "Place in…"}
+          {insert.interfaceType && (
+            <>
+              {" "}
+              <span className="text-slate-600">(accepts</span>{" "}
+              <span className="font-mono text-slate-400">
+                {insert.interfaceType}
+              </span>
+              <span className="text-slate-600">)</span>
+            </>
+          )}
+        </div>
+        {receptaclesLoading ? (
+          <div className="text-xs text-slate-500">Loading…</div>
+        ) : receptacles.length === 0 ? (
+          <div className="text-xs text-slate-500">
+            No compatible empty receptacles.
+          </div>
+        ) : (
+          <ul className="flex flex-col gap-1 max-h-64 overflow-y-auto">
+            {receptacles.map((r) => (
+              <li key={r.id}>
+                <button
+                  onClick={() => onPlace(r.id)}
+                  disabled={placing}
+                  className="w-full text-left px-2 py-1.5 rounded border border-slate-700 hover:border-accent/60 hover:bg-slate-800/50 disabled:opacity-50"
+                >
+                  <div className="text-sm text-slate-200 truncate">
+                    {r.moduleName ? `${r.moduleName} ` : ""}
+                    <span className="text-slate-400">
+                      {r.path.replace(
+                        r.moduleName ? r.moduleName + ":" : "",
+                        ""
+                      )}
+                    </span>
+                  </div>
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
     </div>
   );
 }
 
 function ViewTabBody({
   insert,
-  openPicker,
   unplace,
+  receptacles,
+  receptaclesLoading,
+  placing,
+  onPlace,
 }: {
   placementOnly?: boolean;
   insert: Insert;
-  openPicker: () => void;
   unplace: () => void;
+  receptacles: Receptacle[];
+  receptaclesLoading: boolean;
+  placing: boolean;
+  onPlace: (locationId: string) => void;
 }) {
   return (
     <>
       <PlacementSection
         insert={insert}
-        openPicker={openPicker}
         unplace={unplace}
+        receptacles={receptacles}
+        receptaclesLoading={receptaclesLoading}
+        placing={placing}
+        onPlace={onPlace}
       />
       <div className="p-6 text-center text-xs text-slate-500">
         Pick a cell to peek inside.
