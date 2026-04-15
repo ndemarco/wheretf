@@ -8,6 +8,10 @@ Thumbs.db
 *.swo
 *~
 
+# Claude Code local state
+.claude/settings.local.json
+.claude/project-context.json
+
 # Environment
 .env
 .env.*
