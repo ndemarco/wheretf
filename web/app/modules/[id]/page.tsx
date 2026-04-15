@@ -121,6 +121,10 @@ export default function ModuleDetailPage() {
     Array<{ identifier: string; description: string | null }>
   >([]);
 
+  // Inline rename for the selected level's label (pencil on center header)
+  const [renamingLevel, setRenamingLevel] = useState(false);
+  const [renameDraft, setRenameDraft] = useState("");
+
   // Inserts in this module (key: receptacle location id → insert)
   const [insertsByReceptacle, setInsertsByReceptacle] = useState<
     Map<string, Insert>
@@ -453,6 +457,7 @@ export default function ModuleDetailPage() {
     setSelectedCellId(null);
     setShowItemPicker(false);
     setEditingLevel(false);
+    setRenamingLevel(false);
     if (level) {
       const notes =
         level.metadata &&
@@ -550,6 +555,37 @@ export default function ModuleDetailPage() {
       reason: selectedCell.restrictReason ?? "",
     });
     setEditingRestrict(true);
+  }
+
+  function startRenameLevel() {
+    if (!selectedLevel) return;
+    setRenameDraft(selectedLevel.label);
+    setRenamingLevel(true);
+  }
+
+  async function saveRenameLevel() {
+    if (!selectedLevel) return;
+    const next = renameDraft.trim();
+    if (!next || next === selectedLevel.label) {
+      setRenamingLevel(false);
+      return;
+    }
+    try {
+      const r = await fetch(`/api/locations/${selectedLevel.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ label: next }),
+      });
+      if (!r.ok) {
+        const d = await r.json();
+        alert(d.error || "Rename failed");
+        return;
+      }
+      setRenamingLevel(false);
+      await fetchData();
+    } catch (err) {
+      console.error(err);
+    }
   }
 
   async function removeInsertFromLevel(insertId: string) {
@@ -819,106 +855,165 @@ export default function ModuleDetailPage() {
         </div>
       </div>
 
-      {/* Center — Grid */}
+      {/* Center — Level header + Grid */}
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
         {!selectedLevel ? (
           <div className="flex-1 flex items-center justify-center text-slate-500 text-sm px-6 text-center">
             Select a {module_.primaryDimensionLabel} to view its layout.
           </div>
-        ) : childLocations.length > 0 ? (
+        ) : (
           <>
-            {/* Grid toolbar — IN-3: show insert as first-class */}
-            <div className="flex items-center gap-3 px-4 py-2 border-b border-slate-700 bg-slate-800/30">
-              <h3 className="text-sm font-medium text-slate-200">
-                {module_.primaryDimensionLabel.charAt(0).toUpperCase() +
-                  module_.primaryDimensionLabel.slice(1)}{" "}
-                {selectedLevel.label}
-              </h3>
+            {/* Prominent level header (matches insert detail header style) */}
+            <div className="px-6 py-4 border-b border-slate-700 shrink-0 space-y-2">
+              {renamingLevel ? (
+                <div className="flex items-center gap-2">
+                  <input
+                    type="text"
+                    value={renameDraft}
+                    onChange={(e) => setRenameDraft(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") saveRenameLevel();
+                      if (e.key === "Escape") setRenamingLevel(false);
+                    }}
+                    autoFocus
+                    className="flex-1 text-lg font-semibold text-slate-100 bg-slate-800 border border-slate-600 rounded px-2 py-1 focus:border-accent focus:outline-none"
+                  />
+                  <button
+                    onClick={saveRenameLevel}
+                    className="px-3 py-1 bg-accent text-white rounded text-xs hover:brightness-110"
+                  >
+                    Save
+                  </button>
+                  <button
+                    onClick={() => setRenamingLevel(false)}
+                    className="px-3 py-1 border border-slate-600 text-slate-300 rounded text-xs hover:bg-slate-700/50"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              ) : (
+                <div className="flex items-center gap-2 group/title">
+                  <h2 className="text-lg font-semibold text-slate-100 truncate flex-1">
+                    {selectedLevel.label}
+                  </h2>
+                  <button
+                    onClick={startRenameLevel}
+                    title="Rename"
+                    aria-label="Rename level"
+                    className="opacity-0 group-hover/title:opacity-100 focus:opacity-100 text-slate-400 hover:text-accent transition-opacity"
+                  >
+                    <svg
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth={2}
+                      className="w-4 h-4"
+                    >
+                      <path d="M12 20h9" strokeLinecap="round" />
+                      <path
+                        d="M16.5 3.5a2.121 2.121 0 113 3L7 19l-4 1 1-4 12.5-12.5z"
+                        strokeLinejoin="round"
+                        strokeLinecap="round"
+                      />
+                    </svg>
+                  </button>
+                </div>
+              )}
+              {/* Sub-header: insert / interface / actions */}
               {(() => {
                 const ins = insertsByReceptacle.get(selectedLevel.id);
                 return (
-                  <>
+                  <div className="flex items-center gap-3 text-xs">
                     {ins ? (
                       <>
-                        <span className="text-slate-600 text-xs">·</span>
+                        <span className="text-slate-500">holds</span>
                         <Link
                           href={`/inserts?selected=${ins.id}`}
-                          className="text-sm text-slate-100 hover:text-accent transition-colors truncate"
+                          className="text-slate-200 hover:text-accent transition-colors truncate"
                         >
-                          {ins.name ?? "(unnamed insert)"}
+                          {ins.name ?? ins.templateName ?? "(unnamed insert)"}
                         </Link>
-                        {ins.templateName && (
-                          <span className="text-xs text-slate-500 truncate">
+                        {ins.templateName && ins.name && (
+                          <span className="text-slate-600">
                             ({ins.templateName})
                           </span>
                         )}
+                        <span className="text-slate-600">·</span>
+                        <span className="text-slate-500">
+                          {childLocations.length} positions
+                        </span>
+                        <div className="ml-auto flex items-center gap-2">
+                          <button
+                            onClick={() => removeInsertFromLevel(ins.id)}
+                            className="px-2.5 py-1 rounded border border-slate-600 text-slate-300 hover:bg-slate-700/50 transition-colors"
+                          >
+                            Remove insert
+                          </button>
+                        </div>
                       </>
-                    ) : null}
-                    <span className="text-xs text-slate-500">
-                      · {childLocations.length} positions
-                    </span>
-                    <div className="ml-auto flex items-center gap-2">
-                      {ins ? (
-                        <button
-                          onClick={() => removeInsertFromLevel(ins.id)}
-                          className="text-xs px-2.5 py-1 rounded border border-slate-600 text-slate-300 hover:bg-slate-700/50 transition-colors"
-                        >
-                          Remove insert
-                        </button>
-                      ) : (
+                    ) : selectedLevel.locationType === "receptacle" ? (
+                      <>
+                        <span className="text-slate-500">empty receptacle</span>
+                        {selectedLevel.interfaceTypeAccepted && (
+                          <>
+                            <span className="text-slate-600">·</span>
+                            <span className="text-blue-300">
+                              accepts {selectedLevel.interfaceTypeAccepted}
+                            </span>
+                          </>
+                        )}
                         <Link
                           href={`/modules/${id}/levels/${selectedLevel.id}/place-insert`}
-                          className="text-xs px-2.5 py-1 rounded bg-slate-700 text-slate-300 hover:bg-slate-600 transition-colors"
+                          className="ml-auto px-2.5 py-1 rounded bg-accent text-white hover:brightness-110 transition-colors"
                         >
                           Place Insert
                         </Link>
-                      )}
-                    </div>
-                  </>
+                      </>
+                    ) : (
+                      <span className="text-slate-500">
+                        {selectedLevel.locationType}
+                      </span>
+                    )}
+                  </div>
                 );
               })()}
             </div>
-
-            {/* Grid */}
-            <div className="flex-1 flex items-center justify-center p-6 overflow-auto">
-              <CellGrid
-                cells={childLocations}
-                assignments={assignments.filter((a) =>
-                  childLocations.some((c) => c.id === a.locationId)
+            {childLocations.length === 0 ? (
+              <div className="flex-1 flex flex-col items-center justify-center gap-3 px-6 text-center">
+                {selectedLevel.locationType === "receptacle" ? (
+                  <p className="text-slate-500 text-sm">
+                    No insert placed.
+                  </p>
+                ) : (
+                  <p className="text-slate-500 text-sm">
+                    No structure defined for this{" "}
+                    {module_.primaryDimensionLabel}.
+                  </p>
                 )}
-                itemsById={items}
-                selectedCellId={selectedCellId}
-                onCellClick={(cellId) => {
-                  setSelectedCellId(cellId === selectedCellId ? null : cellId);
-                  setShowItemPicker(false);
-                }}
-              />
-            </div>
-          </>
-        ) : (
-          <div className="flex-1 flex flex-col items-center justify-center gap-3 px-6 text-center">
-            {selectedLevel.locationType === "receptacle" ? (
-              <>
-                <p className="text-slate-500 text-sm">
-                  No insert placed. Place an insert to define this{" "}
-                  {module_.primaryDimensionLabel}&apos;s internal structure.
-                </p>
-                <Link
-                  href={`/modules/${id}/levels/${selectedLevel.id}/place-insert`}
-                  className="px-4 py-2 bg-accent text-white rounded-md hover:brightness-110 transition-all text-sm"
-                >
-                  Place Insert
-                </Link>
-              </>
+              </div>
             ) : (
               <>
-                <p className="text-slate-500 text-sm">
-                  No structure defined for this{" "}
-                  {module_.primaryDimensionLabel}.
-                </p>
+
+                {/* Grid */}
+                <div className="flex-1 flex items-center justify-center p-6 overflow-auto">
+                  <CellGrid
+                    cells={childLocations}
+                    assignments={assignments.filter((a) =>
+                      childLocations.some((c) => c.id === a.locationId)
+                    )}
+                    itemsById={items}
+                    selectedCellId={selectedCellId}
+                    onCellClick={(cellId) => {
+                      setSelectedCellId(
+                        cellId === selectedCellId ? null : cellId
+                      );
+                      setShowItemPicker(false);
+                    }}
+                  />
+                </div>
               </>
             )}
-          </div>
+          </>
         )}
       </div>
 
