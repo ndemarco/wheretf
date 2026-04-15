@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 // --- Types ---
 
@@ -97,41 +97,77 @@ function EditableText({
   );
 }
 
-// --- Inline new parameter-definition creator (reusable in-place form) ---
+// --- Parameter typeahead (attach existing or inline-create) ---
 
-function InlineNewParamDef({
-  onCreated,
+function ParamTypeahead({
+  available,
+  onAdd,
+  onCreateAndAdd,
+  placeholder = "Search to add parameter…",
 }: {
-  onCreated: (def: ParameterDefinition) => void | Promise<void>;
+  available: ParameterDefinition[];
+  onAdd: (pd: ParameterDefinition) => Promise<void> | void;
+  onCreateAndAdd: (def: ParameterDefinition) => Promise<void> | void;
+  placeholder?: string;
 }) {
+  const [query, setQuery] = useState("");
   const [open, setOpen] = useState(false);
-  const [name, setName] = useState("");
-  const [dataType, setDataType] = useState("text");
-  const [unit, setUnit] = useState("");
-  const [enumValues, setEnumValues] = useState("");
-  const [saving, setSaving] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [highlight, setHighlight] = useState(0);
+  const [creating, setCreating] = useState(false);
+  const [createSaving, setCreateSaving] = useState(false);
+  const [createDataType, setCreateDataType] = useState("text");
+  const [createUnit, setCreateUnit] = useState("");
+  const [createEnumValues, setCreateEnumValues] = useState("");
+  const [createError, setCreateError] = useState<string | null>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
 
-  function reset() {
-    setName("");
-    setDataType("text");
-    setUnit("");
-    setEnumValues("");
-    setError(null);
+  const q = query.trim().toLowerCase();
+  const filtered = q
+    ? available.filter(
+        (pd) =>
+          pd.name.toLowerCase().includes(q) ||
+          (pd.unit ?? "").toLowerCase().includes(q) ||
+          pd.dataType.toLowerCase().includes(q)
+      )
+    : available.slice(0, 8);
+
+  const exactMatch = filtered.some(
+    (pd) => pd.name.toLowerCase() === q
+  );
+  const canCreate = q.length > 0 && !exactMatch;
+  // Total selectable items in dropdown
+  const total = filtered.length + (canCreate ? 1 : 0);
+  const clampedHighlight = total === 0 ? -1 : Math.min(highlight, total - 1);
+
+  useEffect(() => {
+    setHighlight(0);
+  }, [q, available.length]);
+
+  async function addAt(idx: number) {
+    if (idx < filtered.length) {
+      const pd = filtered[idx];
+      await onAdd(pd);
+      setQuery("");
+      setHighlight(0);
+      inputRef.current?.focus();
+    } else if (canCreate && idx === filtered.length) {
+      // Open inline create form with query as name seed
+      setCreating(true);
+    }
   }
 
-  async function create() {
-    if (!name.trim()) return;
-    setSaving(true);
-    setError(null);
+  async function performCreate() {
+    if (!query.trim()) return;
+    setCreateSaving(true);
+    setCreateError(null);
     try {
       const body: Record<string, unknown> = {
-        name: name.trim(),
-        dataType,
+        name: query.trim(),
+        dataType: createDataType,
       };
-      if (unit.trim()) body.unit = unit.trim();
-      if (dataType === "enum") {
-        const vals = enumValues
+      if (createUnit.trim()) body.unit = createUnit.trim();
+      if (createDataType === "enum") {
+        const vals = createEnumValues
           .split(",")
           .map((v) => v.trim())
           .filter(Boolean);
@@ -146,86 +182,171 @@ function InlineNewParamDef({
       if (!res.ok) throw new Error(data.error || "Create failed");
       const def: ParameterDefinition =
         data.parameterDefinition ?? data.definition ?? data;
-      await onCreated(def);
-      reset();
-      setOpen(false);
+      await onCreateAndAdd(def);
+      setQuery("");
+      setCreateDataType("text");
+      setCreateUnit("");
+      setCreateEnumValues("");
+      setCreating(false);
+      inputRef.current?.focus();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Create failed");
+      setCreateError(err instanceof Error ? err.message : "Create failed");
     } finally {
-      setSaving(false);
+      setCreateSaving(false);
     }
   }
 
-  if (!open) {
+  if (creating) {
     return (
-      <button
-        onClick={() => setOpen(true)}
-        className="mt-2 w-full text-left px-3 py-2 rounded border border-dashed border-slate-700 text-xs text-slate-500 hover:text-accent hover:border-accent transition-colors"
-      >
-        + Create new parameter…
-      </button>
+      <div className="p-3 bg-slate-900/60 border border-accent/40 rounded space-y-2">
+        <div className="text-[11px] text-slate-400">
+          Create parameter{" "}
+          <span className="font-mono text-slate-100 bg-slate-800 px-1.5 py-0.5 rounded">
+            {query}
+          </span>
+        </div>
+        <div className="grid grid-cols-2 gap-2">
+          <select
+            autoFocus
+            value={createDataType}
+            onChange={(e) => setCreateDataType(e.target.value)}
+            className="px-2 py-1 bg-slate-800 border border-slate-600 rounded text-xs text-slate-200 focus:border-accent focus:outline-none"
+          >
+            <option value="text">text</option>
+            <option value="numeric">numeric</option>
+            <option value="boolean">boolean</option>
+            <option value="enum">enum</option>
+          </select>
+          <input
+            value={createUnit}
+            onChange={(e) => setCreateUnit(e.target.value)}
+            placeholder="unit (optional)"
+            className="px-2 py-1 bg-slate-800 border border-slate-600 rounded text-xs text-slate-200 focus:border-accent focus:outline-none"
+          />
+        </div>
+        {createDataType === "enum" && (
+          <input
+            value={createEnumValues}
+            onChange={(e) => setCreateEnumValues(e.target.value)}
+            placeholder="enum values (comma-separated)"
+            className="w-full px-2 py-1 bg-slate-800 border border-slate-600 rounded text-xs text-slate-200 focus:border-accent focus:outline-none"
+          />
+        )}
+        {createError && (
+          <p className="text-[11px] text-red-400">{createError}</p>
+        )}
+        <div className="flex items-center gap-2">
+          <button
+            onClick={performCreate}
+            disabled={createSaving}
+            className="px-3 py-1 bg-accent text-white rounded text-xs hover:brightness-110 disabled:opacity-50"
+          >
+            {createSaving ? "Creating…" : "Create + add"}
+          </button>
+          <button
+            onClick={() => {
+              setCreating(false);
+              inputRef.current?.focus();
+            }}
+            className="text-[11px] text-slate-500 hover:text-slate-300"
+          >
+            Back
+          </button>
+        </div>
+      </div>
     );
   }
 
   return (
-    <div className="mt-2 p-3 bg-slate-900/60 border border-accent/40 rounded space-y-2">
-      <div className="grid grid-cols-3 gap-2">
-        <input
-          autoFocus
-          value={name}
-          onChange={(e) => setName(e.target.value)}
-          placeholder="name (e.g. thread_pitch)"
-          className="col-span-2 px-2 py-1 bg-slate-800 border border-slate-600 rounded text-xs text-slate-200 focus:border-accent focus:outline-none"
-        />
-        <select
-          value={dataType}
-          onChange={(e) => setDataType(e.target.value)}
-          className="px-2 py-1 bg-slate-800 border border-slate-600 rounded text-xs text-slate-200 focus:border-accent focus:outline-none"
-        >
-          <option value="text">text</option>
-          <option value="numeric">numeric</option>
-          <option value="boolean">boolean</option>
-          <option value="enum">enum</option>
-        </select>
-      </div>
-      <div className="grid grid-cols-2 gap-2">
-        <input
-          value={unit}
-          onChange={(e) => setUnit(e.target.value)}
-          placeholder="unit (optional)"
-          className="px-2 py-1 bg-slate-800 border border-slate-600 rounded text-xs text-slate-200 focus:border-accent focus:outline-none"
-        />
-        {dataType === "enum" && (
-          <input
-            value={enumValues}
-            onChange={(e) => setEnumValues(e.target.value)}
-            placeholder="enum values (comma-separated)"
-            className="px-2 py-1 bg-slate-800 border border-slate-600 rounded text-xs text-slate-200 focus:border-accent focus:outline-none"
-          />
-        )}
-      </div>
-      {error && <p className="text-[11px] text-red-400">{error}</p>}
-      <div className="flex items-center gap-2">
-        <button
-          onClick={create}
-          disabled={saving || !name.trim()}
-          className="px-3 py-1 bg-accent text-white rounded text-xs hover:brightness-110 disabled:opacity-50"
-        >
-          {saving ? "Creating…" : "Create + add"}
-        </button>
-        <button
-          onClick={() => {
-            reset();
+    <div className="relative">
+      <input
+        ref={inputRef}
+        value={query}
+        onChange={(e) => setQuery(e.target.value)}
+        onFocus={() => setOpen(true)}
+        onBlur={() => setTimeout(() => setOpen(false), 150)}
+        onKeyDown={(e) => {
+          if (e.key === "ArrowDown") {
+            e.preventDefault();
+            setHighlight((h) => (total === 0 ? 0 : (h + 1) % total));
+          } else if (e.key === "ArrowUp") {
+            e.preventDefault();
+            setHighlight((h) => (total === 0 ? 0 : (h - 1 + total) % total));
+          } else if (e.key === "Enter") {
+            e.preventDefault();
+            if (clampedHighlight >= 0) addAt(clampedHighlight);
+          } else if (e.key === "Escape") {
             setOpen(false);
-          }}
-          className="text-xs text-slate-500 hover:text-slate-300"
-        >
-          Cancel
-        </button>
-      </div>
+          }
+        }}
+        placeholder={placeholder}
+        className="w-full px-3 py-2 bg-slate-800 border border-slate-600 rounded text-sm text-slate-200 placeholder:text-slate-500 focus:border-accent focus:outline-none"
+      />
+
+      {open && (filtered.length > 0 || canCreate) && (
+        <div className="absolute left-0 right-0 top-full mt-1 z-20 max-h-64 overflow-y-auto bg-slate-900 border border-slate-600 rounded shadow-lg">
+          {filtered.map((pd, i) => (
+            <button
+              key={pd.id}
+              onMouseDown={(e) => e.preventDefault()}
+              onClick={() => addAt(i)}
+              onMouseEnter={() => setHighlight(i)}
+              className={`w-full text-left flex items-center justify-between px-3 py-1.5 ${
+                i === clampedHighlight ? "bg-slate-700/70" : "hover:bg-slate-800/80"
+              }`}
+            >
+              <span className="flex items-center gap-2 min-w-0">
+                <span className="text-sm text-slate-200 font-mono truncate">
+                  {pd.name}
+                </span>
+                <span className="text-[10px] px-1.5 py-0.5 rounded bg-slate-700 text-slate-400">
+                  {pd.dataType}
+                </span>
+                {pd.unit && (
+                  <span className="text-[10px] text-slate-500">{pd.unit}</span>
+                )}
+              </span>
+              <span className="text-[10px] text-accent shrink-0">+ add</span>
+            </button>
+          ))}
+          {filtered.length === 0 && !canCreate && (
+            <div className="px-3 py-2 text-xs text-slate-500 italic">
+              No matches
+            </div>
+          )}
+          {canCreate && (
+            <button
+              onMouseDown={(e) => e.preventDefault()}
+              onClick={() => addAt(filtered.length)}
+              onMouseEnter={() => setHighlight(filtered.length)}
+              className={`w-full text-left flex items-center gap-2 px-3 py-2 border-t border-slate-700 ${
+                clampedHighlight === filtered.length
+                  ? "bg-slate-700/70"
+                  : "hover:bg-slate-800/80"
+              }`}
+            >
+              <span className="text-accent text-sm">+</span>
+              <span className="text-xs text-slate-300">
+                Create new parameter{" "}
+                <span className="font-mono text-slate-100 bg-slate-800 px-1 rounded">
+                  {query}
+                </span>
+                …
+              </span>
+            </button>
+          )}
+        </div>
+      )}
+      {!open && available.length === 0 && (
+        <p className="mt-1.5 text-[11px] text-slate-500">
+          No parameters defined yet. Type a name and press Enter to create
+          one.
+        </p>
+      )}
     </div>
   );
 }
+
 
 // --- Main Page ---
 
@@ -573,38 +694,15 @@ function AspectsTab() {
               )}
             </div>
 
-            {/* Add parameter */}
+            {/* Add parameter (typeahead + inline create) */}
             <div>
               <h3 className="text-xs font-medium text-slate-400 uppercase tracking-wider mb-2">
                 Add Parameter
               </h3>
-              <div className="space-y-1 max-h-48 overflow-y-auto">
-                {availableParamDefs.map((pd) => (
-                  <button
-                    key={pd.id}
-                    onClick={() => addParamToAspect(pd.id)}
-                    className="w-full text-left flex items-center justify-between px-3 py-2 rounded border border-dashed border-slate-600 hover:border-slate-500 transition-colors"
-                  >
-                    <div className="flex items-center gap-2">
-                      <span className="text-sm text-slate-300">{pd.name}</span>
-                      <span className="text-[10px] px-1.5 py-0.5 rounded bg-slate-700 text-slate-400">
-                        {pd.dataType}
-                      </span>
-                      {pd.unit && (
-                        <span className="text-[10px] text-slate-500">
-                          {pd.unit}
-                        </span>
-                      )}
-                    </div>
-                    <span className="text-xs text-accent">+ Add</span>
-                  </button>
-                ))}
-              </div>
-
-              <InlineNewParamDef
-                onCreated={async (newDef) => {
-                  await addParamToAspect(newDef.id);
-                }}
+              <ParamTypeahead
+                available={availableParamDefs}
+                onAdd={async (pd) => addParamToAspect(pd.id)}
+                onCreateAndAdd={async (newDef) => addParamToAspect(newDef.id)}
               />
             </div>
           </div>
