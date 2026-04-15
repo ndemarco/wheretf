@@ -297,6 +297,8 @@ export const insertRepository = {
         insert: inserts,
         templateName: templates.name,
         templateInterfaceProvided: templateVersions.interfaceTypeProvided,
+        rowDividersFixed: templateVersions.rowDividersFixed,
+        columnDividersFixed: templateVersions.columnDividersFixed,
         locationPath: locations.path,
         moduleName: modules.name,
       })
@@ -316,6 +318,8 @@ export const insertRepository = {
       // effective interface type: insert-override first, else template default
       interfaceType:
         r.insert.interfaceTypeProvided ?? r.templateInterfaceProvided ?? null,
+      rowDividersFixed: r.rowDividersFixed ?? false,
+      columnDividersFixed: r.columnDividersFixed ?? false,
       locationPath: r.locationPath,
       moduleName: r.moduleName,
     }));

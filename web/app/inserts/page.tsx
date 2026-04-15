@@ -15,6 +15,8 @@ interface Insert {
   columns: number | null;
   templateName: string | null;
   interfaceType: string | null;
+  rowDividersFixed?: boolean;
+  columnDividersFixed?: boolean;
   locationPath: string | null;
   moduleName: string | null;
 }
@@ -904,6 +906,8 @@ function InsertDetail({
                   selectedCellId={selectedCellId}
                   multiSelect={multiSelect}
                   onCellClick={selectCell}
+                  rowDividersFixed={!!insert.rowDividersFixed}
+                  columnDividersFixed={!!insert.columnDividersFixed}
                 />
               </div>
               <div className="text-[11px] text-slate-500 shrink-0">
@@ -1398,6 +1402,8 @@ function InsertGrid({
   selectedCellId,
   multiSelect,
   onCellClick,
+  rowDividersFixed = false,
+  columnDividersFixed = false,
 }: {
   cells: CellRow[];
   assignments: Array<{
@@ -1413,6 +1419,8 @@ function InsertGrid({
   selectedCellId: string | null;
   multiSelect: Set<string>;
   onCellClick: (id: string, additive?: boolean) => void;
+  rowDividersFixed?: boolean;
+  columnDividersFixed?: boolean;
 }): React.ReactElement {
   const assignByLoc = new Map<
     string,
@@ -1515,6 +1523,44 @@ function InsertGrid({
           {rowLabelFor(r)}
         </div>
       ))}
+
+      {/* Fixed-divider overlays (from template). Rendered as thin slate
+          stripes sitting at the edge between tracks, extended into the
+          gap via a negative margin so they bridge the grid's gap. */}
+      {rowDividersFixed &&
+        Array.from({ length: rows - 1 }, (_, r) => (
+          <div
+            key={`rdiv-${r}`}
+            aria-hidden
+            style={{
+              gridRow: r + 2,
+              gridColumn: `2 / span ${cols}`,
+              alignSelf: "end",
+              height: "3px",
+              marginBottom: "-3.5px",
+              zIndex: 2,
+            }}
+            className="bg-slate-400/80 pointer-events-none rounded-sm"
+            title="Fixed row divider (template-defined)"
+          />
+        ))}
+      {columnDividersFixed &&
+        Array.from({ length: cols - 1 }, (_, c) => (
+          <div
+            key={`cdiv-${c}`}
+            aria-hidden
+            style={{
+              gridRow: `2 / span ${rows}`,
+              gridColumn: c + 2,
+              justifySelf: "end",
+              width: "3px",
+              marginRight: "-3.5px",
+              zIndex: 2,
+            }}
+            className="bg-slate-400/80 pointer-events-none rounded-sm"
+            title="Fixed column divider (template-defined)"
+          />
+        ))}
 
       {/* cells — aliases skipped; merged origins span via grid-column/row */}
       {gridCells.map((cell) => {
