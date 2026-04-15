@@ -25,6 +25,7 @@ interface Location {
   isDisabled: boolean;
   disableReason: string | null;
   templateVersionId: string | null;
+  insertId: string | null;
   gridRow: number | null;
   gridColumn: number | null;
   // Capacity clamps (Restrict override)
@@ -971,35 +972,78 @@ export default function ModuleDetailPage() {
                 Overrides
               </h4>
 
-              {/* Disable / Enable */}
-              {selectedCell.isDisabled ? (
-                <div className="space-y-2">
-                  <div className="text-xs text-red-400">
-                    Disabled
-                    {selectedCell.disableReason &&
-                      `: ${selectedCell.disableReason}`}
-                  </div>
-                  <button
-                    onClick={enableCell}
-                    className="w-full px-3 py-1.5 border border-slate-600 text-slate-300 rounded text-xs hover:bg-slate-700/50 transition-colors"
+              {selectedCell.insertId ? (
+                <>
+                  {/* Read-only summary when the cell belongs to an insert.
+                      Structural overrides (disable / restrict / merge /
+                      divide) live on the insert page. */}
+                  {selectedCell.isDisabled && (
+                    <div className="text-xs text-red-400">
+                      Disabled
+                      {selectedCell.disableReason &&
+                        `: ${selectedCell.disableReason}`}
+                    </div>
+                  )}
+                  {(selectedCell.maxWidthMm ||
+                    selectedCell.maxHeightMm ||
+                    selectedCell.maxDepthMm) && (
+                    <div className="text-xs text-amber-300">
+                      Restricted:{" "}
+                      {[
+                        selectedCell.maxWidthMm &&
+                          `W≤${selectedCell.maxWidthMm}mm`,
+                        selectedCell.maxHeightMm &&
+                          `H≤${selectedCell.maxHeightMm}mm`,
+                        selectedCell.maxDepthMm &&
+                          `D≤${selectedCell.maxDepthMm}mm`,
+                      ]
+                        .filter(Boolean)
+                        .join(", ")}
+                    </div>
+                  )}
+                  <Link
+                    href={`/inserts?selected=${selectedCell.insertId}`}
+                    className="block text-center w-full px-3 py-1.5 border border-accent/60 text-accent rounded text-xs hover:bg-accent/10 transition-colors"
                   >
-                    Enable
-                  </button>
-                </div>
+                    Edit layout on insert →
+                  </Link>
+                  <p className="text-[11px] text-slate-500 leading-tight">
+                    This cell is part of an insert. Structure changes
+                    (merge, divide, disable, restrict) travel with the
+                    insert and are edited on its page.
+                  </p>
+                </>
               ) : (
-                <button
-                  onClick={disableCell}
-                  disabled={selectedCellAssignments.length > 0}
-                  title={
-                    selectedCellAssignments.length > 0
-                      ? "Unassign items before disabling this location"
-                      : undefined
-                  }
-                  className="w-full px-3 py-1.5 border border-slate-600 text-slate-300 rounded text-xs hover:bg-slate-700/50 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
-                >
-                  Disable…
-                </button>
-              )}
+                /* Module-owned cell: full structural editing stays */
+                <>
+                  {selectedCell.isDisabled ? (
+                    <div className="space-y-2">
+                      <div className="text-xs text-red-400">
+                        Disabled
+                        {selectedCell.disableReason &&
+                          `: ${selectedCell.disableReason}`}
+                      </div>
+                      <button
+                        onClick={enableCell}
+                        className="w-full px-3 py-1.5 border border-slate-600 text-slate-300 rounded text-xs hover:bg-slate-700/50 transition-colors"
+                      >
+                        Enable
+                      </button>
+                    </div>
+                  ) : (
+                    <button
+                      onClick={disableCell}
+                      disabled={selectedCellAssignments.length > 0}
+                      title={
+                        selectedCellAssignments.length > 0
+                          ? "Unassign items before disabling this location"
+                          : undefined
+                      }
+                      className="w-full px-3 py-1.5 border border-slate-600 text-slate-300 rounded text-xs hover:bg-slate-700/50 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                    >
+                      Disable…
+                    </button>
+                  )}
 
               {/* Restrict */}
               {editingRestrict ? (
@@ -1130,6 +1174,8 @@ export default function ModuleDetailPage() {
                 >
                   Restrict dimensions…
                 </button>
+              )}
+                </>
               )}
             </div>
 
