@@ -12,6 +12,7 @@ import {
   aspects,
   assignments,
   locations,
+  itemStandards,
 } from "@/db/schema";
 import { transactionRepository } from "./transactionRepository";
 
@@ -323,6 +324,104 @@ export const itemRepository = {
   },
 
   // --- Category counts (respects active filters) ---
+
+  /**
+   * Rank categories by co-occurrence with the supplied aspects/standards.
+   * For each category, score = count of items in that category that share at
+   * least one of the given aspects or standards, divided by the total number
+   * of items in the category (so small specialized categories aren't
+   * penalized). Empty catalog or zero overlap → empty result.
+   *
+   * Used by the "Create item from designation" flow to suggest where the new
+   * item fits.
+   */
+  async suggestCategories({
+    aspectIds = [],
+    standardIds = [],
+    limit = 3,
+  }: {
+    aspectIds?: string[];
+    standardIds?: string[];
+    limit?: number;
+  }) {
+    if (aspectIds.length === 0 && standardIds.length === 0) return [];
+
+    // Items that share at least one aspect or standard with the input.
+    const matchingItemIds = new Set<string>();
+    if (aspectIds.length > 0) {
+      const rows = await db
+        .select({ itemId: itemAspects.itemId })
+        .from(itemAspects)
+        .where(inArray(itemAspects.aspectId, aspectIds));
+      for (const r of rows) matchingItemIds.add(r.itemId);
+    }
+    if (standardIds.length > 0) {
+      const rows = await db
+        .select({ itemId: itemStandards.itemId })
+        .from(itemStandards)
+        .where(inArray(itemStandards.standardId, standardIds));
+      for (const r of rows) matchingItemIds.add(r.itemId);
+    }
+
+    if (matchingItemIds.size === 0) return [];
+
+    // For each category, count matching items and total items.
+    const matchingRows = await db
+      .select({
+        categoryId: itemCategories.categoryId,
+        itemId: itemCategories.itemId,
+      })
+      .from(itemCategories)
+      .where(inArray(itemCategories.itemId, Array.from(matchingItemIds)));
+
+    const matchByCat = new Map<string, number>();
+    for (const r of matchingRows) {
+      matchByCat.set(r.categoryId, (matchByCat.get(r.categoryId) ?? 0) + 1);
+    }
+    if (matchByCat.size === 0) return [];
+
+    const totalRows = await db
+      .select({
+        categoryId: itemCategories.categoryId,
+        count: sql<number>`COUNT(*)::int`,
+      })
+      .from(itemCategories)
+      .where(inArray(itemCategories.categoryId, Array.from(matchByCat.keys())))
+      .groupBy(itemCategories.categoryId);
+    const totalByCat = new Map<string, number>();
+    for (const r of totalRows) totalByCat.set(r.categoryId, Number(r.count));
+
+    const catRows = await db
+      .select({
+        id: categories.id,
+        name: categories.name,
+        icon: categories.icon,
+        color: categories.color,
+      })
+      .from(categories)
+      .where(inArray(categories.id, Array.from(matchByCat.keys())));
+    const byId = new Map(catRows.map((c) => [c.id, c]));
+
+    const scored = Array.from(matchByCat.entries()).map(
+      ([categoryId, matched]) => {
+        const total = totalByCat.get(categoryId) ?? matched;
+        const score = total === 0 ? 0 : matched / total;
+        const cat = byId.get(categoryId);
+        return {
+          categoryId,
+          name: cat?.name ?? "",
+          icon: cat?.icon ?? null,
+          color: cat?.color ?? null,
+          matched,
+          total,
+          score,
+        };
+      }
+    );
+
+    scored.sort((a, b) => b.score - a.score || b.matched - a.matched);
+    return scored.slice(0, limit);
+  },
 
   async getCategoryCounts({
     query,

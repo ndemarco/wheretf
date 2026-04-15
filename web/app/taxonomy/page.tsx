@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import CreateFromDesignationDialog from "@/app/items/CreateFromDesignationDialog";
 
 // --- Types ---
 
@@ -1827,6 +1828,10 @@ function StandardDetail({
   onMutated: () => void;
 }) {
   const [meta, setMeta] = useState<StandardSummary | null>(null);
+  const [createFromDesignation, setCreateFromDesignation] = useState<{
+    designationId: string;
+    designation: string;
+  } | null>(null);
   const [aspects, setAspects] = useState<StandardAspectLink[]>([]);
   const [parameters, setParameters] = useState<StandardParameter[]>([]);
   const [designations, setDesignations] = useState<Designation[]>([]);
@@ -2260,7 +2265,19 @@ function StandardDetail({
                         </td>
                       );
                     })}
-                    <td className="px-2 py-1 text-right">
+                    <td className="px-2 py-1 text-right whitespace-nowrap">
+                      <button
+                        onClick={() =>
+                          setCreateFromDesignation({
+                            designationId: d.id,
+                            designation: d.designation,
+                          })
+                        }
+                        className="text-accent hover:brightness-110 text-[10px] mr-2 opacity-0 group-hover:opacity-100 transition-opacity"
+                        title="Create an item using this designation"
+                      >
+                        + item
+                      </button>
                       <button
                         onClick={() => deleteDesignation(d.id)}
                         className="text-red-400 hover:text-red-300 opacity-0 group-hover:opacity-100 text-[10px]"
@@ -2370,6 +2387,17 @@ function StandardDetail({
         designationTotal={designationTotal}
         onDelete={onDelete}
       />
+
+      {createFromDesignation && meta && (
+        <CreateFromDesignationDialog
+          designationId={createFromDesignation.designationId}
+          designation={createFromDesignation.designation}
+          standardId={standardId}
+          standardName={meta.name}
+          onClose={() => setCreateFromDesignation(null)}
+          onCreated={() => refreshAll()}
+        />
+      )}
     </div>
   );
 }

@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import CreateFromDesignationDialog from "./CreateFromDesignationDialog";
 
 interface RichItem {
   id: string;
@@ -177,6 +178,9 @@ function AppliedStandardRow({
     { id: string; designation: string }[]
   >([]);
   const [searching, setSearching] = useState(false);
+  const [spawnDesignation, setSpawnDesignation] = useState<
+    { id: string; label: string } | null
+  >(null);
 
   useEffect(() => {
     if (!picking) return;
@@ -254,18 +258,32 @@ function AppliedStandardRow({
                 </div>
               ) : (
                 hits.map((h) => (
-                  <button
+                  <div
                     key={h.id}
-                    onMouseDown={(e) => e.preventDefault()}
-                    onClick={() => selectDesignation(h.id)}
-                    className={`w-full text-left px-2 py-1 text-[11px] hover:bg-slate-700/50 ${
-                      h.id === standard.designationId
-                        ? "text-accent"
-                        : "text-slate-300"
-                    }`}
+                    className="group flex items-stretch border-b border-slate-800 last:border-b-0"
                   >
-                    {h.designation}
-                  </button>
+                    <button
+                      onMouseDown={(e) => e.preventDefault()}
+                      onClick={() => selectDesignation(h.id)}
+                      className={`flex-1 text-left px-2 py-1 text-[11px] hover:bg-slate-700/50 ${
+                        h.id === standard.designationId
+                          ? "text-accent"
+                          : "text-slate-300"
+                      }`}
+                    >
+                      {h.designation}
+                    </button>
+                    <button
+                      onMouseDown={(e) => e.preventDefault()}
+                      onClick={() =>
+                        setSpawnDesignation({ id: h.id, label: h.designation })
+                      }
+                      title="Create a new item using this designation"
+                      className="shrink-0 px-2 text-[10px] text-slate-600 hover:text-accent opacity-0 group-hover:opacity-100 transition-opacity"
+                    >
+                      + new
+                    </button>
+                  </div>
                 ))
               )}
               {standard.designationId && (
@@ -303,6 +321,16 @@ function AppliedStandardRow({
           </span>
         )}
       </div>
+
+      {spawnDesignation && (
+        <CreateFromDesignationDialog
+          designationId={spawnDesignation.id}
+          designation={spawnDesignation.label}
+          standardId={standard.standardId}
+          standardName={standard.standardName}
+          onClose={() => setSpawnDesignation(null)}
+        />
+      )}
     </div>
   );
 }
