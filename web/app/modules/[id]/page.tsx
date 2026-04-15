@@ -2005,6 +2005,12 @@ function PlaceInsertInline({
   const [newName, setNewName] = useState("");
   const [newRows, setNewRows] = useState<number | "">("");
   const [newCols, setNewCols] = useState<number | "">("");
+  const [pendingInsertId, setPendingInsertId] = useState<string | null>(null);
+
+  // Reset pending selection when the level or its insert list changes
+  useEffect(() => {
+    setPendingInsertId(null);
+  }, [level.id, inserts.length]);
   const selectedTpl = templates.find((t) => t.id === newTemplateId);
   const ver = selectedTpl?.currentVersionData ?? null;
   useEffect(() => {
@@ -2053,12 +2059,19 @@ function PlaceInsertInline({
               ins.rows != null && ins.columns != null
                 ? `${ins.rows}×${ins.columns}`
                 : null;
+            const isPending = pendingInsertId === ins.id;
             return (
               <li key={ins.id}>
                 <button
-                  onClick={() => onPlace(ins.id)}
+                  onClick={() =>
+                    setPendingInsertId(isPending ? null : ins.id)
+                  }
                   disabled={placing}
-                  className="w-full text-left px-2 py-1.5 rounded border border-slate-700 hover:border-accent/60 hover:bg-slate-800/50 disabled:opacity-50"
+                  className={`w-full text-left px-2 py-1.5 rounded border transition-colors ${
+                    isPending
+                      ? "border-accent bg-accent/10"
+                      : "border-slate-700 hover:border-accent/60 hover:bg-slate-800/50"
+                  } disabled:opacity-50`}
                 >
                   <div className="text-sm text-slate-100 truncate">
                     {ins.name ?? ins.templateName ?? "Insert"}
@@ -2077,6 +2090,27 @@ function PlaceInsertInline({
             );
           })}
         </ul>
+      )}
+      {pendingInsertId && (
+        <div className="mt-2 flex items-center gap-2">
+          <button
+            onClick={() => {
+              onPlace(pendingInsertId);
+              setPendingInsertId(null);
+            }}
+            disabled={placing}
+            className="px-3 py-1.5 bg-accent text-white rounded text-xs hover:brightness-110 disabled:opacity-50"
+          >
+            Place here
+          </button>
+          <button
+            onClick={() => setPendingInsertId(null)}
+            disabled={placing}
+            className="px-3 py-1.5 border border-slate-600 text-slate-300 rounded text-xs hover:bg-slate-700/50"
+          >
+            Cancel
+          </button>
+        </div>
       )}
 
       {/* Create-new expander — same form as /inserts/new, filtered by compat */}

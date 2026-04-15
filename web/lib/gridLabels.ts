@@ -1,8 +1,8 @@
 /**
  * Compute the display label for a grid cell given the template's
  * labeling scheme and origin. Shared by the template editor, the
- * place-insert flow, the insert repository (for cell materialization),
- * and anywhere else a grid is rendered.
+ * insert repository (for cell materialization), and anywhere else
+ * a grid is rendered.
  *
  * scheme: "alpha" | "numeric"
  * origin: "top-left" | "top-right" | "bottom-left" | "bottom-right"

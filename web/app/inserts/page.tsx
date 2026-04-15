@@ -1414,6 +1414,15 @@ function PlacementSection({
   placing: boolean;
   onPlace: (locationId: string) => void;
 }) {
+  // Two-step confirm: click a candidate to select it, then press
+  // Place/Move to commit. Avoids accidental single-click moves.
+  const [pendingId, setPendingId] = useState<string | null>(null);
+  useEffect(() => {
+    setPendingId(null);
+  }, [insert.id, insert.locationId]);
+
+  const verb = insert.locationPath ? "Move" : "Place";
+
   return (
     <div className="p-4 border-b border-slate-700 space-y-3">
       <div>
@@ -1440,7 +1449,7 @@ function PlacementSection({
       {/* Inline candidate list — compatible empty receptacles. */}
       <div>
         <div className="text-[11px] text-slate-500 mb-1.5">
-          {insert.locationPath ? "Move to…" : "Place in…"}
+          {verb} to…
           {insert.interfaceType && (
             <>
               {" "}
@@ -1459,27 +1468,55 @@ function PlacementSection({
             No compatible empty receptacles.
           </div>
         ) : (
-          <ul className="flex flex-col gap-1 max-h-64 overflow-y-auto">
-            {receptacles.map((r) => (
-              <li key={r.id}>
-                <button
-                  onClick={() => onPlace(r.id)}
-                  disabled={placing}
-                  className="w-full text-left px-2 py-1.5 rounded border border-slate-700 hover:border-accent/60 hover:bg-slate-800/50 disabled:opacity-50"
-                >
-                  <div className="text-sm text-slate-200 truncate">
-                    {r.moduleName ? `${r.moduleName} ` : ""}
-                    <span className="text-slate-400">
-                      {r.path.replace(
-                        r.moduleName ? r.moduleName + ":" : "",
-                        ""
-                      )}
-                    </span>
-                  </div>
-                </button>
-              </li>
-            ))}
+          <ul className="flex flex-col gap-1 max-h-60 overflow-y-auto">
+            {receptacles.map((r) => {
+              const isPending = pendingId === r.id;
+              return (
+                <li key={r.id}>
+                  <button
+                    onClick={() => setPendingId(isPending ? null : r.id)}
+                    disabled={placing}
+                    className={`w-full text-left px-2 py-1.5 rounded border transition-colors ${
+                      isPending
+                        ? "border-accent bg-accent/10"
+                        : "border-slate-700 hover:border-accent/60 hover:bg-slate-800/50"
+                    } disabled:opacity-50`}
+                  >
+                    <div className="text-sm text-slate-200 truncate">
+                      {r.moduleName ? `${r.moduleName} ` : ""}
+                      <span className="text-slate-400">
+                        {r.path.replace(
+                          r.moduleName ? r.moduleName + ":" : "",
+                          ""
+                        )}
+                      </span>
+                    </div>
+                  </button>
+                </li>
+              );
+            })}
           </ul>
+        )}
+        {pendingId && (
+          <div className="mt-2 flex items-center gap-2">
+            <button
+              onClick={() => {
+                onPlace(pendingId);
+                setPendingId(null);
+              }}
+              disabled={placing}
+              className="px-3 py-1.5 bg-accent text-white rounded text-xs hover:brightness-110 disabled:opacity-50"
+            >
+              {verb}
+            </button>
+            <button
+              onClick={() => setPendingId(null)}
+              disabled={placing}
+              className="px-3 py-1.5 border border-slate-600 text-slate-300 rounded text-xs hover:bg-slate-700/50"
+            >
+              Cancel
+            </button>
+          </div>
         )}
       </div>
     </div>
