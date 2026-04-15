@@ -588,6 +588,46 @@ export default function ModuleDetailPage() {
     }
   }
 
+  async function disableLevel() {
+    if (!selectedLevel) return;
+    const reason =
+      window.prompt(
+        "Disable this level. Reason (optional):",
+        selectedLevel.disableReason ?? ""
+      );
+    if (reason === null) return;
+    try {
+      const r = await fetch(
+        `/api/locations/${selectedLevel.id}/disable`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ reason: reason.trim() || undefined }),
+        }
+      );
+      if (!r.ok) {
+        const d = await r.json();
+        alert(d.error || "Failed to disable level");
+        return;
+      }
+      await fetchData();
+    } catch (err) {
+      console.error(err);
+    }
+  }
+
+  async function enableLevel() {
+    if (!selectedLevel) return;
+    try {
+      await fetch(`/api/locations/${selectedLevel.id}/disable`, {
+        method: "DELETE",
+      });
+      await fetchData();
+    } catch (err) {
+      console.error(err);
+    }
+  }
+
   async function removeInsertFromLevel(insertId: string) {
     if (
       !confirm(
@@ -743,7 +783,7 @@ export default function ModuleDetailPage() {
 
       <div className="flex-1 flex min-w-0 overflow-hidden">
       {/* Left Panel — Module Header (read-only) + Level Table */}
-      <div className="w-72 flex flex-col min-w-0 overflow-y-auto border-r border-slate-700 shrink-0">
+      <div className="w-72 flex flex-col min-w-0 overflow-hidden border-r border-slate-700 shrink-0">
         <div className="p-4 border-b border-slate-700">
           <h2 className="text-lg font-semibold text-slate-100 truncate">
             {module_.name}
@@ -825,26 +865,21 @@ export default function ModuleDetailPage() {
                         {notes}
                       </span>
                     )}
-                    {hasChildren && occ && (
-                      <div className="mt-1.5 flex items-center gap-2">
-                        <div className="flex-1 h-1 bg-slate-700 rounded-full overflow-hidden">
-                          <div
-                            className="h-full bg-accent/70 rounded-full transition-all"
-                            style={{
-                              width: occ.total > 0
-                                ? `${(occ.occupied / occ.total) * 100}%`
-                                : "0%",
-                            }}
-                          />
-                        </div>
+                    {hasChildren && occ && occ.total > 0 && (
+                      <div className="mt-1 text-right">
                         <span className="text-[10px] text-slate-500 tabular-nums">
-                          {occ.occupied}/{occ.total}
+                          {Math.round((occ.occupied / occ.total) * 100)}%{" "}
+                          <span className="text-slate-600">
+                            ({occ.occupied}/{occ.total})
+                          </span>
                         </span>
                       </div>
                     )}
                     {!hasChildren && (
                       <span className="text-[10px] text-slate-600 mt-0.5 block">
-                        No structure
+                        {level.locationType === "receptacle"
+                          ? "empty"
+                          : "no subdivisions"}
                       </span>
                     )}
                   </button>
@@ -853,6 +888,28 @@ export default function ModuleDetailPage() {
             </div>
           )}
         </div>
+        {/* Module-wide utilization footer (Google-Drive style) */}
+        {(() => {
+          let total = 0;
+          let occupied = 0;
+          for (const [, occ] of levelOccupancy) {
+            total += occ.total;
+            occupied += occ.occupied;
+          }
+          if (total === 0) return null;
+          const pct = Math.round((occupied / total) * 100);
+          return (
+            <div className="shrink-0 border-t border-slate-700 px-4 py-2 text-[11px] text-slate-400 flex items-center justify-between">
+              <span className="text-slate-500">Module utilization</span>
+              <span className="tabular-nums">
+                {pct}%{" "}
+                <span className="text-slate-600">
+                  ({occupied}/{total})
+                </span>
+              </span>
+            </div>
+          );
+        })()}
       </div>
 
       {/* Center — Level header + Grid */}
@@ -919,11 +976,19 @@ export default function ModuleDetailPage() {
                   </button>
                 </div>
               )}
-              {/* Sub-header: insert / interface / actions */}
+              {/* Sub-header: informational only; actions live in the
+                  right-panel Level view. */}
               {(() => {
                 const ins = insertsByReceptacle.get(selectedLevel.id);
                 return (
                   <div className="flex items-center gap-3 text-xs">
+                    {selectedLevel.isDisabled && (
+                      <span className="text-red-400">
+                        disabled
+                        {selectedLevel.disableReason &&
+                          `: ${selectedLevel.disableReason}`}
+                      </span>
+                    )}
                     {ins ? (
                       <>
                         <span className="text-slate-500">holds</span>
@@ -942,14 +1007,6 @@ export default function ModuleDetailPage() {
                         <span className="text-slate-500">
                           {childLocations.length} positions
                         </span>
-                        <div className="ml-auto flex items-center gap-2">
-                          <button
-                            onClick={() => removeInsertFromLevel(ins.id)}
-                            className="px-2.5 py-1 rounded border border-slate-600 text-slate-300 hover:bg-slate-700/50 transition-colors"
-                          >
-                            Remove insert
-                          </button>
-                        </div>
                       </>
                     ) : selectedLevel.locationType === "receptacle" ? (
                       <>
@@ -962,12 +1019,6 @@ export default function ModuleDetailPage() {
                             </span>
                           </>
                         )}
-                        <Link
-                          href={`/modules/${id}/levels/${selectedLevel.id}/place-insert`}
-                          className="ml-auto px-2.5 py-1 rounded bg-accent text-white hover:brightness-110 transition-colors"
-                        >
-                          Place Insert
-                        </Link>
                       </>
                     ) : (
                       <span className="text-slate-500">
@@ -1397,10 +1448,15 @@ export default function ModuleDetailPage() {
           draft={levelDraft}
           setDraft={setLevelDraft}
           interfaceOptions={interfaceOptions}
+          insert={insertsByReceptacle.get(selectedLevel.id) ?? null}
+          placeInsertHref={`/modules/${id}/levels/${selectedLevel.id}/place-insert`}
           onEdit={() => setEditingLevel(true)}
           onSave={saveLevel}
           onCancel={cancelLevelEdit}
           onClose={() => selectLevel(null)}
+          onRemoveInsert={removeInsertFromLevel}
+          onDisableLevel={disableLevel}
+          onEnableLevel={enableLevel}
         />
       ) : (
         <ModulePanel
@@ -1730,10 +1786,15 @@ function LevelPanel({
   draft,
   setDraft,
   interfaceOptions,
+  insert,
+  placeInsertHref,
   onEdit,
   onSave,
   onCancel,
   onClose,
+  onRemoveInsert,
+  onDisableLevel,
+  onEnableLevel,
 }: {
   level: Location;
   editing: boolean;
@@ -1748,10 +1809,15 @@ function LevelPanel({
     interfaceTypeAccepted: string;
   }) => void;
   interfaceOptions: Array<{ identifier: string; description: string | null }>;
+  insert: Insert | null;
+  placeInsertHref: string;
   onEdit: () => void;
   onSave: () => void;
   onCancel: () => void;
   onClose: () => void;
+  onRemoveInsert: (insertId: string) => void;
+  onDisableLevel: () => void;
+  onEnableLevel: () => void;
 }) {
   return (
     <>
@@ -1875,6 +1941,87 @@ function LevelPanel({
                   </div>
                 </div>
               )}
+
+            {/* Insert — only meaningful for receptacle levels */}
+            {level.locationType === "receptacle" && (
+              <div className="pt-3 border-t border-slate-700 space-y-2">
+                <div className="text-xs font-medium text-slate-400 uppercase tracking-wider">
+                  Insert
+                </div>
+                {insert ? (
+                  <>
+                    <div className="text-sm text-slate-200 truncate">
+                      {insert.name ?? insert.templateName ?? "insert"}
+                    </div>
+                    {insert.templateName && insert.name && (
+                      <div className="text-[11px] text-slate-500">
+                        {insert.templateName}
+                      </div>
+                    )}
+                    <div className="flex items-center gap-2 pt-1">
+                      <button
+                        onClick={() => onRemoveInsert(insert.id)}
+                        className="px-3 py-1.5 border border-slate-600 text-slate-300 rounded text-xs hover:bg-slate-700/50"
+                      >
+                        Remove
+                      </button>
+                      <Link
+                        href={`/inserts?selected=${insert.id}`}
+                        className="text-xs text-slate-400 hover:text-accent"
+                      >
+                        Open in Inserts →
+                      </Link>
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <div className="text-sm text-slate-500">
+                      No insert placed.
+                    </div>
+                    <Link
+                      href={placeInsertHref}
+                      className="inline-block px-3 py-1.5 bg-accent text-white rounded text-xs hover:brightness-110"
+                    >
+                      Place insert…
+                    </Link>
+                  </>
+                )}
+              </div>
+            )}
+
+            {/* Level-scope Disable */}
+            <div className="pt-3 border-t border-slate-700 space-y-2">
+              <div className="text-xs font-medium text-slate-400 uppercase tracking-wider">
+                Override
+              </div>
+              {level.isDisabled ? (
+                <>
+                  <div className="text-xs text-red-400">
+                    Disabled
+                    {level.disableReason && `: ${level.disableReason}`}
+                  </div>
+                  <button
+                    onClick={onEnableLevel}
+                    className="px-3 py-1.5 border border-slate-600 text-slate-300 rounded text-xs hover:bg-slate-700/50"
+                  >
+                    Enable
+                  </button>
+                </>
+              ) : (
+                <button
+                  onClick={onDisableLevel}
+                  disabled={!!insert}
+                  title={
+                    insert
+                      ? "Remove the insert before disabling this level"
+                      : undefined
+                  }
+                  className="px-3 py-1.5 border border-slate-600 text-slate-300 rounded text-xs hover:bg-slate-700/50 disabled:opacity-40 disabled:cursor-not-allowed"
+                >
+                  Disable…
+                </button>
+              )}
+            </div>
           </>
         )}
       </div>

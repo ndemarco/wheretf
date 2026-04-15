@@ -188,6 +188,12 @@ Running list of issues and decisions for the `/modules` and `/modules/[id]` area
 
 ---
 
+### HX-1 — Assignment history (cross-cutting)
+- **Problem:** there's no surfaced history of who/what lived where before the current state. "Previously at this receptacle," "this item used to be in A3," etc. Comes up per-receptacle (previous inserts), per-insert (previous receptacles), per-cell (previous items), per-item (previous locations).
+- **Direction (deferred):** leverage the existing `transactions` log (already records beforeState/afterState for every mutation). Build a per-entity history view that filters the log by entity id and renders as a timeline. A clean history UX inherently enables undo — each transaction entry is a reversible delta.
+- **Scope:** applies to assignments, inserts, cells, receptacles, items. Would replace the current ad-hoc per-feature undo plans (e.g. module delete cascade) with a single transaction-log-driven pattern.
+- **Status:** future feature. Note it here so it doesn't get re-invented per-entity.
+
 ### IN-8 — Smart subdivision label suggestions
 - **Problem:** divide dialog accepts any comma-separated strings. User pointed out the template already knows enough to suggest the right terms. A drawer's front/back axis, a shelf's left/right, or a template-declared subdivision accessory (e.g. Akro-Mils 40716 divider → front + rear) all imply better defaults.
 - **Direction:**
