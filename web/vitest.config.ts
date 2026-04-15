@@ -11,16 +11,43 @@ process.env.DATABASE_URL =
   "postgresql://wheretf:wheretf@localhost:5432/wheretf_test";
 
 export default defineConfig({
-  test: {
-    globals: true,
-    environment: "node",
-    setupFiles: ["./tests/setup.ts"],
-    testTimeout: 10000,
-    fileParallelism: false,
-  },
   resolve: {
     alias: {
       "@": path.resolve(__dirname, "."),
     },
+  },
+  test: {
+    globals: true,
+    testTimeout: 10000,
+    fileParallelism: false,
+    projects: [
+      {
+        extends: true,
+        test: {
+          name: "backend",
+          environment: "node",
+          include: ["tests/**/*.test.ts"],
+          exclude: [
+            "tests/components/**",
+            "tests/pages/**",
+            "tests/frontend/**",
+          ],
+          setupFiles: ["./tests/setup.ts"],
+        },
+      },
+      {
+        extends: true,
+        test: {
+          name: "frontend",
+          environment: "jsdom",
+          include: [
+            "tests/components/**/*.test.{ts,tsx}",
+            "tests/pages/**/*.test.{ts,tsx}",
+            "tests/frontend/**/*.test.{ts,tsx}",
+          ],
+          setupFiles: ["./tests/setup.frontend.ts"],
+        },
+      },
+    ],
   },
 });
