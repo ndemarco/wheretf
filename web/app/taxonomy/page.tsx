@@ -582,6 +582,15 @@ function ParametersTab() {
     }
   }
 
+  async function updateParam(id: string, updates: Partial<ParameterDefinition>) {
+    await fetch(`/api/parameter-definitions/${id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(updates),
+    });
+    await fetchParams();
+  }
+
   return (
     <div className="flex-1 overflow-y-auto p-6">
       <div className="flex items-center justify-between mb-4">
@@ -678,38 +687,190 @@ function ParametersTab() {
           </thead>
           <tbody>
             {paramDefs.map((pd) => (
-              <tr
+              <ParamDefRow
                 key={pd.id}
-                className="border-b border-slate-700/50 hover:bg-slate-800/30"
-              >
-                <td className="px-3 py-2 text-sm text-slate-200">{pd.name}</td>
-                <td className="px-3 py-2">
-                  <span className="text-[10px] px-1.5 py-0.5 rounded bg-slate-700 text-slate-400">
-                    {pd.dataType}
-                  </span>
-                </td>
-                <td className="px-3 py-2 text-sm text-slate-400">
-                  {pd.unit || "—"}
-                </td>
-                <td className="px-3 py-2 text-xs text-slate-500 font-mono">
-                  {pd.constraints
-                    ? JSON.stringify(pd.constraints)
-                    : "—"}
-                </td>
-                <td className="px-3 py-2 text-right">
-                  <button
-                    onClick={() => deleteParam(pd.id)}
-                    className="text-xs text-red-400 hover:text-red-300"
-                  >
-                    Delete
-                  </button>
-                </td>
-              </tr>
+                pd={pd}
+                onSave={(updates) => updateParam(pd.id, updates)}
+                onDelete={() => deleteParam(pd.id)}
+              />
             ))}
           </tbody>
         </table>
       )}
     </div>
+  );
+}
+
+function ParamDefRow({
+  pd,
+  onSave,
+  onDelete,
+}: {
+  pd: ParameterDefinition;
+  onSave: (updates: Partial<ParameterDefinition>) => Promise<void>;
+  onDelete: () => void;
+}) {
+  const [editing, setEditing] = useState(false);
+  const [dataType, setDataType] = useState(pd.dataType);
+  const [unit, setUnit] = useState(pd.unit ?? "");
+  const constraints = (pd.constraints ?? {}) as {
+    enumValues?: string[];
+    min?: number;
+    max?: number;
+  };
+  const [enumValues, setEnumValues] = useState(
+    (constraints.enumValues ?? []).join(", ")
+  );
+  const [minStr, setMinStr] = useState(
+    constraints.min !== undefined ? String(constraints.min) : ""
+  );
+  const [maxStr, setMaxStr] = useState(
+    constraints.max !== undefined ? String(constraints.max) : ""
+  );
+  const [saving, setSaving] = useState(false);
+
+  async function save() {
+    setSaving(true);
+    try {
+      const updates: Partial<ParameterDefinition> = {
+        dataType,
+        unit: unit.trim() || null,
+      };
+      const nextConstraints: Record<string, unknown> = {};
+      if (dataType === "enum") {
+        const vals = enumValues
+          .split(",")
+          .map((v) => v.trim())
+          .filter(Boolean);
+        if (vals.length > 0) nextConstraints.enumValues = vals;
+      }
+      if (dataType === "numeric") {
+        if (minStr.trim() !== "" && !Number.isNaN(Number(minStr)))
+          nextConstraints.min = Number(minStr);
+        if (maxStr.trim() !== "" && !Number.isNaN(Number(maxStr)))
+          nextConstraints.max = Number(maxStr);
+      }
+      updates.constraints =
+        Object.keys(nextConstraints).length > 0 ? nextConstraints : null;
+      await onSave(updates);
+      setEditing(false);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  if (!editing) {
+    const displayConstraints = pd.constraints
+      ? (() => {
+          const c = pd.constraints as {
+            enumValues?: string[];
+            min?: number;
+            max?: number;
+          };
+          if (c.enumValues?.length) return c.enumValues.join(" · ");
+          const bits: string[] = [];
+          if (c.min !== undefined) bits.push(`min ${c.min}`);
+          if (c.max !== undefined) bits.push(`max ${c.max}`);
+          return bits.join(", ") || "—";
+        })()
+      : "—";
+    return (
+      <tr className="border-b border-slate-700/50 hover:bg-slate-800/30 group">
+        <td className="px-3 py-2 text-sm text-slate-200 font-mono">{pd.name}</td>
+        <td className="px-3 py-2">
+          <span className="text-[10px] px-1.5 py-0.5 rounded bg-slate-700 text-slate-400">
+            {pd.dataType}
+          </span>
+        </td>
+        <td className="px-3 py-2 text-sm text-slate-400">{pd.unit || "—"}</td>
+        <td className="px-3 py-2 text-xs text-slate-400">
+          {displayConstraints}
+        </td>
+        <td className="px-3 py-2 text-right whitespace-nowrap">
+          <button
+            onClick={() => setEditing(true)}
+            className="text-xs text-accent hover:brightness-110 mr-3"
+          >
+            Edit
+          </button>
+          <button
+            onClick={onDelete}
+            className="text-xs text-red-400 hover:text-red-300 opacity-0 group-hover:opacity-100 transition-opacity"
+          >
+            Delete
+          </button>
+        </td>
+      </tr>
+    );
+  }
+
+  return (
+    <tr className="border-b border-slate-700 bg-slate-900/30">
+      <td className="px-3 py-2 text-sm text-slate-200 font-mono">{pd.name}</td>
+      <td className="px-3 py-2">
+        <select
+          value={dataType}
+          onChange={(e) => setDataType(e.target.value)}
+          className="px-2 py-1 bg-slate-800 border border-slate-600 rounded text-xs text-slate-200 focus:border-accent focus:outline-none"
+        >
+          <option value="text">text</option>
+          <option value="numeric">numeric</option>
+          <option value="boolean">boolean</option>
+          <option value="enum">enum</option>
+        </select>
+      </td>
+      <td className="px-3 py-2">
+        <input
+          value={unit}
+          onChange={(e) => setUnit(e.target.value)}
+          placeholder="—"
+          className="w-20 px-2 py-1 bg-slate-800 border border-slate-600 rounded text-xs text-slate-200 focus:border-accent focus:outline-none"
+        />
+      </td>
+      <td className="px-3 py-2">
+        {dataType === "enum" ? (
+          <input
+            value={enumValues}
+            onChange={(e) => setEnumValues(e.target.value)}
+            placeholder="val1, val2, val3"
+            className="w-full px-2 py-1 bg-slate-800 border border-slate-600 rounded text-xs text-slate-200 focus:border-accent focus:outline-none"
+          />
+        ) : dataType === "numeric" ? (
+          <div className="flex items-center gap-1">
+            <input
+              value={minStr}
+              onChange={(e) => setMinStr(e.target.value)}
+              placeholder="min"
+              className="w-16 px-2 py-1 bg-slate-800 border border-slate-600 rounded text-xs text-slate-200 focus:border-accent focus:outline-none"
+            />
+            <span className="text-slate-600">–</span>
+            <input
+              value={maxStr}
+              onChange={(e) => setMaxStr(e.target.value)}
+              placeholder="max"
+              className="w-16 px-2 py-1 bg-slate-800 border border-slate-600 rounded text-xs text-slate-200 focus:border-accent focus:outline-none"
+            />
+          </div>
+        ) : (
+          <span className="text-xs text-slate-600">—</span>
+        )}
+      </td>
+      <td className="px-3 py-2 text-right whitespace-nowrap">
+        <button
+          onClick={save}
+          disabled={saving}
+          className="text-xs text-accent hover:brightness-110 mr-3 disabled:opacity-50"
+        >
+          {saving ? "Saving…" : "Save"}
+        </button>
+        <button
+          onClick={() => setEditing(false)}
+          className="text-xs text-slate-500 hover:text-slate-300"
+        >
+          Cancel
+        </button>
+      </td>
+    </tr>
   );
 }
 
