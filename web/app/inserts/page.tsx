@@ -291,6 +291,10 @@ function InsertDetail({
   const [multiSelect, setMultiSelect] = useState<Set<string>>(new Set());
   const [selectMode, setSelectMode] = useState(false);
 
+  // Right pane mode: View/Assign (item + receptacle focused) vs
+  // Edit (definition focused — overrides, merge, divide).
+  const [panelMode, setPanelMode] = useState<"view" | "edit">("view");
+
   // Assignments on this insert's cells
   const [assignments, setAssignments] = useState<
     Array<{
@@ -374,6 +378,7 @@ function InsertDetail({
     setSelectMode(false);
     setShowItemPicker(false);
     setEditingRestrict(false);
+    setPanelMode("view");
     loadAll();
   }, [insert.id, insert.name, loadAll]);
 
@@ -874,39 +879,67 @@ function InsertDetail({
 
         {cells.length > 0 && (
           <div className="w-80 shrink-0 border-l border-slate-700 bg-slate-800/20 overflow-y-auto flex flex-col">
-            {/* Always-visible toolbar header */}
-            <div className="p-4 border-b border-slate-700 space-y-2">
-              <button
-                onClick={() => {
-                  if (selectMode) {
-                    setSelectMode(false);
-                    setMultiSelect(new Set());
-                  } else {
-                    setSelectMode(true);
-                    setSelectedCellId(null);
-                  }
-                }}
-                className={`w-full px-3 py-1.5 rounded text-xs transition-colors ${
-                  selectMode
-                    ? "bg-accent text-white"
-                    : "border border-slate-600 text-slate-300 hover:bg-slate-700/50"
-                }`}
-              >
-                {selectMode
-                  ? "Selecting for merge — click cells in grid"
-                  : "Select cells to merge"}
-              </button>
-              {selectMode && (
-                <p className="text-[11px] text-slate-500 leading-tight">
-                  Tip: hold Ctrl/Cmd and click to add or remove cells
-                  without entering this mode.
-                </p>
-              )}
+            {/* Tabs */}
+            <div className="flex border-b border-slate-700 shrink-0">
+              {(["view", "edit"] as const).map((m) => (
+                <button
+                  key={m}
+                  onClick={() => {
+                    setPanelMode(m);
+                    if (m === "view") {
+                      // View mode is single-focus; clear merge state
+                      setSelectMode(false);
+                      setMultiSelect(new Set());
+                      setEditingRestrict(false);
+                      setDividingOpen(false);
+                    }
+                  }}
+                  className={`flex-1 px-3 py-2 text-xs font-medium transition-colors ${
+                    panelMode === m
+                      ? "text-accent border-b-2 border-accent -mb-px"
+                      : "text-slate-400 hover:text-slate-200"
+                  }`}
+                >
+                  {m === "view" ? "View / Assign" : "Edit"}
+                </button>
+              ))}
             </div>
 
+            {/* Edit-mode select-for-merge toggle */}
+            {panelMode === "edit" && (
+              <div className="p-4 border-b border-slate-700 space-y-2">
+                <button
+                  onClick={() => {
+                    if (selectMode) {
+                      setSelectMode(false);
+                      setMultiSelect(new Set());
+                    } else {
+                      setSelectMode(true);
+                      setSelectedCellId(null);
+                    }
+                  }}
+                  className={`w-full px-3 py-1.5 rounded text-xs transition-colors ${
+                    selectMode
+                      ? "bg-accent text-white"
+                      : "border border-slate-600 text-slate-300 hover:bg-slate-700/50"
+                  }`}
+                >
+                  {selectMode
+                    ? "Selecting for merge — click cells in grid"
+                    : "Select cells to merge"}
+                </button>
+                {selectMode && (
+                  <p className="text-[11px] text-slate-500 leading-tight">
+                    Tip: hold Ctrl/Cmd and click to add or remove cells
+                    without entering this mode.
+                  </p>
+                )}
+              </div>
+            )}
+
             {/* Body */}
-            {multiSelect.size > 0 ? (
-              /* Merge action panel */
+            {panelMode === "edit" && multiSelect.size > 0 ? (
+              /* Merge action panel — Edit mode only */
               <div className="p-4 space-y-3">
                 <div className="text-sm text-slate-200">
                   {multiSelect.size}{" "}
@@ -950,13 +983,15 @@ function InsertDetail({
                   );
                 })()}
               </div>
-            ) : selectMode ? (
+            ) : panelMode === "edit" && selectMode ? (
               <div className="p-6 text-center text-xs text-slate-500">
                 Click cells in the grid to select them for merging.
               </div>
             ) : !selectedCell ? (
               <div className="p-6 text-center text-xs text-slate-500">
-                Click a cell in the grid to view its details.
+                {panelMode === "view"
+                  ? "Click a cell to see its assignments."
+                  : "Click a cell to edit its overrides."}
               </div>
             ) : (
               <>
@@ -1100,7 +1135,65 @@ function InsertDetail({
                 </div>
               )}
 
-              {/* Overrides */}
+              {/* Overrides — view: read-only summary; edit: full controls */}
+              {panelMode === "view" ? (
+                (selectedCell.isDisabled ||
+                  selectedCell.maxWidthMm ||
+                  selectedCell.maxHeightMm ||
+                  selectedCell.maxDepthMm ||
+                  cells.some(
+                    (c) => c.mergedIntoId === selectedCell.id
+                  )) && (
+                  <div className="mt-4 pt-4 border-t border-slate-700 space-y-1">
+                    <h4 className="text-xs font-medium text-slate-400 uppercase tracking-wider mb-1">
+                      Status
+                    </h4>
+                    {selectedCell.isDisabled && (
+                      <div className="text-xs text-red-400">
+                        Disabled
+                        {selectedCell.disableReason &&
+                          `: ${selectedCell.disableReason}`}
+                      </div>
+                    )}
+                    {(selectedCell.maxWidthMm ||
+                      selectedCell.maxHeightMm ||
+                      selectedCell.maxDepthMm) && (
+                      <div className="text-xs text-amber-300">
+                        Restricted:{" "}
+                        {[
+                          selectedCell.maxWidthMm &&
+                            `W≤${selectedCell.maxWidthMm}mm`,
+                          selectedCell.maxHeightMm &&
+                            `H≤${selectedCell.maxHeightMm}mm`,
+                          selectedCell.maxDepthMm &&
+                            `D≤${selectedCell.maxDepthMm}mm`,
+                        ]
+                          .filter(Boolean)
+                          .join(", ")}
+                        {selectedCell.restrictReason &&
+                          ` — ${selectedCell.restrictReason}`}
+                      </div>
+                    )}
+                    {cells.some(
+                      (c) => c.mergedIntoId === selectedCell.id
+                    ) && (
+                      <div className="text-xs text-slate-300">
+                        Merged with{" "}
+                        {cells
+                          .filter((c) => c.mergedIntoId === selectedCell.id)
+                          .map((c) => c.label)
+                          .join(", ")}
+                      </div>
+                    )}
+                    <button
+                      onClick={() => setPanelMode("edit")}
+                      className="mt-2 text-[11px] text-slate-500 hover:text-accent"
+                    >
+                      Edit overrides →
+                    </button>
+                  </div>
+                )
+              ) : (
               <div className="mt-4 pt-4 border-t border-slate-700 space-y-3">
                 <h4 className="text-xs font-medium text-slate-400 uppercase tracking-wider">
                   Overrides
@@ -1315,6 +1408,7 @@ function InsertDetail({
                   </button>
                 )}
               </div>
+              )}
             </div>
               </>
             )}
