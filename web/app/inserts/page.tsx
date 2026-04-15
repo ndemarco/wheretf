@@ -1387,7 +1387,7 @@ function InsertGrid({
   selectedCellId: string | null;
   multiSelect: Set<string>;
   onCellClick: (id: string, additive?: boolean) => void;
-}) {
+}): React.ReactElement {
   const assignByLoc = new Map<
     string,
     typeof assignments
@@ -1436,47 +1436,60 @@ function InsertGrid({
 
   const maxRow = Math.max(...gridCells.map((c) => c.gridRow!));
   const maxCol = Math.max(...gridCells.map((c) => c.gridColumn!));
-  const cellSize = 64;
-  const gap = 4;
-  const labelPad = 26;
-  const svgW = labelPad + (maxCol + 1) * (cellSize + gap) + 4;
-  const svgH = labelPad + (maxRow + 1) * (cellSize + gap) + 4;
+  const rows = maxRow + 1;
+  const cols = maxCol + 1;
+
+  // Row label = first char of any cell in that row (A, B, C…)
+  // Col label = cell label stripped of leading row char (1, 2, 3…)
+  function rowLabelFor(r: number) {
+    const any = gridCells.find((c) => c.gridRow === r);
+    return any?.label.charAt(0) ?? String.fromCharCode(65 + r);
+  }
+  function colLabelFor(c: number) {
+    const any = gridCells.find((c2) => c2.gridColumn === c);
+    if (any) {
+      // strip the row-label prefix (usually one char)
+      const stripped = any.label.slice(1);
+      if (stripped) return stripped;
+    }
+    return String(c + 1);
+  }
 
   return (
-    <svg width={svgW} height={svgH} className="max-w-full">
-      {Array.from({ length: maxRow + 1 }, (_, r) => {
-        const label = gridCells.find((c) => c.gridRow === r)?.label.charAt(0);
-        return (
-          <text
-            key={`r-${r}`}
-            x={labelPad - 8}
-            y={labelPad + r * (cellSize + gap) + cellSize / 2}
-            textAnchor="end"
-            dominantBaseline="central"
-            fill="#64748b"
-            fontSize={11}
-          >
-            {label}
-          </text>
-        );
-      })}
-      {Array.from({ length: maxCol + 1 }, (_, c) => (
-        <text
+    <div
+      className="grid gap-1 w-full"
+      style={{
+        gridTemplateColumns: `auto repeat(${cols}, minmax(56px, 1fr))`,
+        gridAutoRows: "minmax(56px, 1fr)",
+      }}
+    >
+      {/* corner spacer */}
+      <div style={{ gridRow: 1, gridColumn: 1 }} aria-hidden />
+      {/* column labels */}
+      {Array.from({ length: cols }, (_, c) => (
+        <div
           key={`c-${c}`}
-          x={labelPad + c * (cellSize + gap) + cellSize / 2}
-          y={labelPad - 8}
-          textAnchor="middle"
-          fill="#64748b"
-          fontSize={11}
+          style={{ gridRow: 1, gridColumn: c + 2 }}
+          className="text-center text-[11px] text-slate-500 pb-1 self-end"
         >
-          {c + 1}
-        </text>
+          {colLabelFor(c)}
+        </div>
       ))}
+      {/* row labels */}
+      {Array.from({ length: rows }, (_, r) => (
+        <div
+          key={`r-${r}`}
+          style={{ gridRow: r + 2, gridColumn: 1 }}
+          className="text-right text-[11px] text-slate-500 pr-2 self-center"
+        >
+          {rowLabelFor(r)}
+        </div>
+      ))}
+
+      {/* cells — aliases skipped; merged origins span via grid-column/row */}
       {gridCells.map((cell) => {
-        // Skip aliases — the origin renders an expanded rect covering them.
         if (cell.mergedIntoId) return null;
 
-        // Find all cells merged into this one (including itself)
         const aliasChildren = gridCells.filter(
           (c) => c.mergedIntoId === cell.id
         );
@@ -1485,10 +1498,8 @@ function InsertGrid({
         const maxR = Math.max(...mergedGroup.map((c) => c.gridRow!));
         const minC = Math.min(...mergedGroup.map((c) => c.gridColumn!));
         const maxC = Math.max(...mergedGroup.map((c) => c.gridColumn!));
-        const x = labelPad + minC * (cellSize + gap);
-        const y = labelPad + minR * (cellSize + gap);
-        const w = (maxC - minC + 1) * cellSize + (maxC - minC) * gap;
-        const h = (maxR - minR + 1) * cellSize + (maxR - minR) * gap;
+        const rowSpan = maxR - minR + 1;
+        const colSpan = maxC - minC + 1;
         const isMerged = aliasChildren.length > 0;
 
         const cellAssignments = assignByLoc.get(cell.id) ?? [];
@@ -1500,223 +1511,148 @@ function InsertGrid({
         const isRestricted =
           cell.maxWidthMm || cell.maxHeightMm || cell.maxDepthMm;
 
-        let fillColor = "transparent";
-        let strokeColor = "#475569";
-        let strokeWidth = 1;
-        let strokeDash: string | undefined;
-
-        if (cell.isDisabled) {
-          fillColor = "rgba(248,113,113,0.12)";
-          strokeColor = "#7f1d1d";
-        } else if (isSelected) {
-          fillColor = "rgba(255,102,0,0.12)";
-          strokeColor = "#ff6600";
-          strokeWidth = 2;
-        } else if (isMulti) {
-          fillColor = "rgba(255,102,0,0.06)";
-          strokeColor = "#ff6600";
-          strokeWidth = 2;
-          strokeDash = "4 2";
-        } else if (occupied) {
-          fillColor = isProvisional
-            ? "rgba(251,191,36,0.1)"
-            : "rgba(96,165,250,0.12)";
-          strokeColor = isProvisional ? "#92400e" : "#1e40af";
-        } else if (isMerged) {
-          fillColor = "rgba(59,130,246,0.06)";
-          strokeColor = "#334155";
-        }
+        const divChildren = childrenByParent.get(cell.id) ?? [];
+        const isDivided = divChildren.length > 0;
 
         const itemName = occupied
           ? itemsById.get(cellAssignments[0].itemId)?.name
           : null;
-
         const displayLabel = isMerged
           ? cell.label + "+" + aliasChildren.map((a) => a.label).join("+")
           : cell.label;
 
-        // Divided — render child sub-rects instead of a single rect
-        const divChildren = childrenByParent.get(cell.id) ?? [];
-        const isDivided = divChildren.length > 0;
+        const cellClasses = [
+          "relative rounded border overflow-hidden transition-colors",
+          cell.isDisabled
+            ? "border-red-900/60 bg-red-900/10"
+            : isSelected
+              ? "border-accent border-2 bg-accent/10"
+              : isMulti
+                ? "border-accent border-2 border-dashed bg-accent/5"
+                : occupied
+                  ? isProvisional
+                    ? "border-amber-800 bg-amber-900/15"
+                    : "border-blue-800 bg-blue-900/15"
+                  : isMerged
+                    ? "border-slate-700 bg-blue-950/20"
+                    : "border-slate-700 bg-slate-800/30 hover:border-slate-600",
+          isDivided ? "" : "cursor-pointer",
+        ]
+          .filter(Boolean)
+          .join(" ");
+
+        const cellStyle: React.CSSProperties = {
+          gridRow: `${minR + 2} / span ${rowSpan}`,
+          gridColumn: `${minC + 2} / span ${colSpan}`,
+          aspectRatio: `${colSpan} / ${rowSpan}`,
+          minHeight: 0,
+        };
 
         return (
-          <g key={cell.id}>
-            {/* Parent bounding rect (always drawn; non-interactive when divided) */}
-            <rect
-              x={x}
-              y={y}
-              width={w}
-              height={h}
-              fill={fillColor}
-              stroke={strokeColor}
-              strokeWidth={strokeWidth}
-              strokeDasharray={strokeDash}
-              rx={3}
-              onClick={
-                isDivided
-                  ? undefined
-                  : (e) => onCellClick(cell.id, e.ctrlKey || e.metaKey)
-              }
-              className={isDivided ? undefined : "cursor-pointer"}
-            />
-            {/* Parent label: centered when undivided. When divided, the
-                child labels fill the interior and the parent label is
-                omitted to keep the grid rhythm clean. */}
-            {!isDivided && (
-              <text
-                x={x + w / 2}
-                y={occupied ? y + 14 : y + h / 2}
-                textAnchor="middle"
-                dominantBaseline={occupied ? "auto" : "central"}
-                fill={cell.isDisabled ? "#f87171" : "#64748b"}
-                fontSize={10}
-                fontWeight={isSelected ? 600 : 400}
-                className="pointer-events-none"
-              >
-                {displayLabel}
-              </text>
-            )}
-
-            {/* Item name on undivided cell */}
-            {!isDivided && itemName && (
-              <text
-                x={x + w / 2}
-                y={y + h / 2 + 4}
-                textAnchor="middle"
-                dominantBaseline="central"
-                fill={isProvisional ? "#fbbf24" : "#93c5fd"}
-                fontSize={9}
-                className="select-none pointer-events-none"
-              >
-                {itemName.length > 12
-                  ? itemName.substring(0, 11) + "…"
-                  : itemName}
-              </text>
-            )}
-
-            {/* Divided: full-size rect bisected by interior divider
-                lines. Child sections are click targets (hit rects)
-                without their own borders — the parent rect is the
-                only outline, preserving grid rhythm. */}
-            {isDivided && (() => {
-              const subCount = divChildren.length;
-              const subW = w / subCount;
-              return (
-                <>
-                  {/* Click-target hit rects + child labels + item names */}
-                  {divChildren.map((child, i) => {
-                    const cx = x + i * subW;
-                    const childAssigns = assignByLoc.get(child.id) ?? [];
-                    const childOccupied = childAssigns.length > 0;
-                    const childItem = childOccupied
-                      ? itemsById.get(childAssigns[0].itemId)?.name
-                      : null;
-                    const childSelected = child.id === selectedCellId;
-                    const childMulti = multiSelect.has(child.id);
-                    const childHighlight =
-                      child.isDisabled
-                        ? "rgba(248,113,113,0.12)"
-                        : childSelected
-                          ? "rgba(255,102,0,0.18)"
-                          : childMulti
-                            ? "rgba(255,102,0,0.08)"
-                            : childOccupied
-                              ? "rgba(96,165,250,0.12)"
-                              : "transparent";
-                    return (
-                      <g
-                        key={child.id}
-                        onClick={(e) =>
-                          onCellClick(child.id, e.ctrlKey || e.metaKey)
-                        }
-                        className="cursor-pointer"
-                      >
-                        {/* Highlight fill stays inside the parent rect */}
-                        <rect
-                          x={cx + 1}
-                          y={y + 1}
-                          width={subW - 2}
-                          height={h - 2}
-                          fill={childHighlight}
-                        />
-                        <text
-                          x={cx + subW / 2}
-                          y={childItem ? y + h / 2 - 5 : y + h / 2}
-                          textAnchor="middle"
-                          dominantBaseline="central"
-                          fill={
-                            child.isDisabled
-                              ? "#f87171"
-                              : childSelected
-                                ? "#ff6600"
-                                : "#94a3b8"
-                          }
-                          fontSize={9}
-                          fontWeight={childSelected ? 600 : 400}
-                          className="pointer-events-none"
-                        >
-                          {child.label}
-                        </text>
-                        {childItem && (
-                          <text
-                            x={cx + subW / 2}
-                            y={y + h / 2 + 7}
-                            textAnchor="middle"
-                            dominantBaseline="central"
-                            fill="#93c5fd"
-                            fontSize={7}
-                            className="select-none pointer-events-none"
-                          >
-                            {childItem.length > 7
-                              ? childItem.substring(0, 6) + "…"
-                              : childItem}
-                          </text>
-                        )}
-                        {childOccupied && (
-                          <circle
-                            cx={cx + subW - 4}
-                            cy={y + 4}
-                            r={2}
-                            fill="#60a5fa"
-                          />
-                        )}
-                      </g>
-                    );
-                  })}
-                  {/* Interior divider lines (N-1) */}
-                  {Array.from({ length: subCount - 1 }, (_, i) => {
-                    const lx = x + (i + 1) * subW;
-                    return (
-                      <line
-                        key={`div-${i}`}
-                        x1={lx}
-                        y1={y}
-                        x2={lx}
-                        y2={y + h}
-                        stroke={strokeColor}
-                        strokeWidth={1}
-                        className="pointer-events-none"
-                      />
-                    );
-                  })}
-                </>
-              );
-            })()}
-
+          <div
+            key={cell.id}
+            style={cellStyle}
+            className={cellClasses}
+            onClick={
+              isDivided
+                ? undefined
+                : (e) => onCellClick(cell.id, e.ctrlKey || e.metaKey)
+            }
+          >
+            {/* Indicator dots */}
             {occupied && !isDivided && (
-              <circle
-                cx={x + w - 6}
-                cy={y + 6}
-                r={3}
-                fill={isProvisional ? "#fbbf24" : "#60a5fa"}
+              <span
+                className={`absolute top-1 right-1 w-1.5 h-1.5 rounded-full ${
+                  isProvisional ? "bg-amber-400" : "bg-blue-400"
+                }`}
               />
             )}
             {isRestricted && !cell.isDisabled && !isDivided && (
-              <circle cx={x + 6} cy={y + 6} r={3} fill="#fbbf24" />
+              <span className="absolute top-1 left-1 w-1.5 h-1.5 rounded-full bg-amber-400" />
             )}
-          </g>
+
+            {isDivided ? (
+              <div className="absolute inset-0 flex">
+                {divChildren.map((child, i) => {
+                  const childAssigns = assignByLoc.get(child.id) ?? [];
+                  const childOccupied = childAssigns.length > 0;
+                  const childItem = childOccupied
+                    ? itemsById.get(childAssigns[0].itemId)?.name
+                    : null;
+                  const childSelected = child.id === selectedCellId;
+                  const childMulti = multiSelect.has(child.id);
+                  const isLast = i === divChildren.length - 1;
+                  const subClasses = [
+                    "flex-1 flex flex-col items-center justify-center gap-0.5 px-1 py-1 cursor-pointer transition-colors min-w-0",
+                    !isLast ? "border-r border-slate-700" : "",
+                    child.isDisabled
+                      ? "bg-red-900/15 text-red-300"
+                      : childSelected
+                        ? "bg-accent/20"
+                        : childMulti
+                          ? "bg-accent/10"
+                          : childOccupied
+                            ? "bg-blue-900/20"
+                            : "hover:bg-slate-700/30",
+                  ]
+                    .filter(Boolean)
+                    .join(" ");
+                  return (
+                    <div
+                      key={child.id}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onCellClick(child.id, e.ctrlKey || e.metaKey);
+                      }}
+                      className={subClasses}
+                    >
+                      <div
+                        className={`text-[10px] font-medium leading-tight text-center break-words ${
+                          childSelected
+                            ? "text-accent"
+                            : child.isDisabled
+                              ? "text-red-300"
+                              : "text-slate-300"
+                        }`}
+                      >
+                        {child.label}
+                      </div>
+                      {childItem && (
+                        <div className="text-[9px] text-blue-300 leading-tight text-center break-words overflow-hidden">
+                          {childItem}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            ) : (
+              <div className="absolute inset-0 flex flex-col items-center justify-center gap-1 px-1 py-1 min-w-0">
+                <div
+                  className={`text-[11px] font-medium leading-tight text-center break-words ${
+                    cell.isDisabled
+                      ? "text-red-300"
+                      : isSelected
+                        ? "text-slate-100"
+                        : "text-slate-400"
+                  }`}
+                >
+                  {displayLabel}
+                </div>
+                {itemName && (
+                  <div
+                    className={`text-[10px] leading-tight text-center break-words ${
+                      isProvisional ? "text-amber-300" : "text-blue-300"
+                    }`}
+                  >
+                    {itemName}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
         );
       })}
-    </svg>
+    </div>
   );
 }
