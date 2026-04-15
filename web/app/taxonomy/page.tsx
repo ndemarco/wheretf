@@ -40,6 +40,63 @@ interface Category {
   sortOrder: number;
 }
 
+// --- Reusable inline editable text ---
+
+function EditableText({
+  value,
+  onSave,
+  className = "",
+  placeholder = "—",
+}: {
+  value: string;
+  onSave: (next: string) => void | Promise<void>;
+  className?: string;
+  placeholder?: string;
+}) {
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState(value);
+
+  useEffect(() => {
+    if (!editing) setDraft(value);
+  }, [value, editing]);
+
+  if (editing) {
+    return (
+      <input
+        autoFocus
+        value={draft}
+        onChange={(e) => setDraft(e.target.value)}
+        onBlur={() => {
+          setEditing(false);
+          if (draft !== value) onSave(draft);
+        }}
+        onKeyDown={(e) => {
+          if (e.key === "Enter") {
+            setEditing(false);
+            if (draft !== value) onSave(draft);
+          } else if (e.key === "Escape") {
+            setDraft(value);
+            setEditing(false);
+          }
+        }}
+        placeholder={placeholder}
+        className={`${className} w-full px-2 py-0.5 bg-slate-900 border border-accent rounded focus:outline-none`}
+      />
+    );
+  }
+
+  return (
+    <div
+      onClick={() => setEditing(true)}
+      className={`${className} cursor-text border border-dashed border-transparent hover:border-slate-600 rounded px-2 py-0.5 -mx-2 -my-0.5 ${
+        value ? "" : "italic text-slate-600"
+      }`}
+    >
+      {value || placeholder}
+    </div>
+  );
+}
+
 // --- Inline new parameter-definition creator (reusable in-place form) ---
 
 function InlineNewParamDef({
@@ -1336,6 +1393,7 @@ function StandardDetail({
   onDelete: () => void;
   onMutated: () => void;
 }) {
+  const [meta, setMeta] = useState<StandardSummary | null>(null);
   const [aspects, setAspects] = useState<StandardAspectLink[]>([]);
   const [parameters, setParameters] = useState<StandardParameter[]>([]);
   const [designations, setDesignations] = useState<Designation[]>([]);
@@ -1345,7 +1403,16 @@ function StandardDetail({
     Map<string, AspectParameter[]>
   >(new Map());
   const [designationQuery, setDesignationQuery] = useState("");
-  const [showDesignationForm, setShowDesignationForm] = useState(false);
+
+  // Pending designation rows (not yet persisted).
+  type PendingRow = {
+    tmpId: string;
+    designation: string;
+    values: Record<string, string>;
+  };
+  const [pending, setPending] = useState<PendingRow[]>([]);
+  const [savingBatch, setSavingBatch] = useState(false);
+  const [batchError, setBatchError] = useState<string | null>(null);
 
   const refreshAll = useCallback(async () => {
     const [stdRes, paramsRes, desRes, aspectsRes] = await Promise.all([
@@ -1363,6 +1430,7 @@ function StandardDetail({
     const pData = await paramsRes.json();
     const dData = await desRes.json();
     const aData = await aspectsRes.json();
+    setMeta(std.standard ?? null);
     setAspects(std.aspects ?? []);
     setParameters(pData.parameters ?? []);
     setDesignations(dData.designations ?? []);
@@ -1453,20 +1521,136 @@ function StandardDetail({
     }
   }
 
+  async function updateMeta(updates: Partial<StandardSummary>) {
+    if (!meta) return;
+    const res = await fetch(`/api/standards/${standardId}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(updates),
+    });
+    if (res.ok) {
+      refreshAll();
+      onMutated();
+    }
+  }
+
+  function addPendingRow() {
+    setPending((prev) => [
+      ...prev,
+      {
+        tmpId: `tmp-${Date.now()}-${Math.random()}`,
+        designation: "",
+        values: {},
+      },
+    ]);
+  }
+
+  function updatePending(tmpId: string, patch: Partial<PendingRow>) {
+    setPending((prev) =>
+      prev.map((r) => (r.tmpId === tmpId ? { ...r, ...patch } : r))
+    );
+  }
+
+  function updatePendingValue(tmpId: string, paramDefId: string, v: string) {
+    setPending((prev) =>
+      prev.map((r) =>
+        r.tmpId === tmpId
+          ? { ...r, values: { ...r.values, [paramDefId]: v } }
+          : r
+      )
+    );
+  }
+
+  function removePending(tmpId: string) {
+    setPending((prev) => prev.filter((r) => r.tmpId !== tmpId));
+  }
+
+  async function saveBatch() {
+    const rows = pending.filter((r) => r.designation.trim());
+    if (rows.length === 0) return;
+    setSavingBatch(true);
+    setBatchError(null);
+    try {
+      const results = await Promise.all(
+        rows.map(async (r) => {
+          const payload: Record<string, unknown> = {};
+          for (const p of parameters) {
+            const raw = r.values[p.parameterDefinitionId];
+            if (raw === undefined || raw === "") continue;
+            if (p.dataType === "numeric") {
+              const num = Number(raw);
+              if (!Number.isNaN(num)) payload[p.parameterDefinitionId] = num;
+            } else if (p.dataType === "boolean") {
+              payload[p.parameterDefinitionId] = raw === "true";
+            } else {
+              payload[p.parameterDefinitionId] = raw;
+            }
+          }
+          const res = await fetch(
+            `/api/standards/${standardId}/designations`,
+            {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                designation: r.designation.trim(),
+                values: payload,
+              }),
+            }
+          );
+          return { r, ok: res.ok };
+        })
+      );
+      const failed = results.filter((x) => !x.ok).map((x) => x.r.tmpId);
+      // Keep only failed rows as pending
+      setPending((prev) => prev.filter((r) => failed.includes(r.tmpId)));
+      if (failed.length > 0) {
+        setBatchError(`${failed.length} row(s) failed to save`);
+      }
+      refreshAll();
+    } finally {
+      setSavingBatch(false);
+    }
+  }
+
   return (
     <div className="p-6 space-y-6 max-w-4xl">
       {/* Header */}
-      <div className="flex items-center justify-between">
-        <h2 className="text-base font-semibold text-slate-100">
-          Standard details
-        </h2>
-        <button
-          onClick={onDelete}
-          className="text-xs text-red-400 hover:text-red-300"
-        >
-          Delete standard
-        </button>
-      </div>
+      {meta && (
+        <div className="space-y-2">
+          <div className="flex items-start justify-between gap-4">
+            <div className="flex-1 space-y-1">
+              <EditableText
+                value={meta.name}
+                onSave={(name) => updateMeta({ name })}
+                className="text-base font-semibold text-slate-100"
+                placeholder="Standard name"
+              />
+              <EditableText
+                value={meta.domainTag ?? ""}
+                onSave={(domainTag) =>
+                  updateMeta({ domainTag: domainTag || null })
+                }
+                className="text-xs text-slate-400"
+                placeholder="Domain tag (e.g. Metric Thread)"
+              />
+              <EditableText
+                value={meta.description ?? ""}
+                onSave={(description) =>
+                  updateMeta({ description: description || null })
+                }
+                className="text-xs text-slate-500"
+                placeholder="Description…"
+              />
+            </div>
+            <button
+              onClick={onDelete}
+              className="text-xs text-red-400 hover:text-red-300 shrink-0"
+            >
+              Delete standard
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Aspects */}
       <section className="space-y-2">
@@ -1571,28 +1755,53 @@ function StandardDetail({
           <h3 className="text-xs uppercase tracking-wider text-slate-500">
             Designations ({designationTotal})
           </h3>
-          <button
-            onClick={() => setShowDesignationForm(!showDesignationForm)}
-            className="text-[11px] text-accent hover:brightness-110"
-          >
-            {showDesignationForm ? "Cancel" : "+ New designation"}
-          </button>
+          <div className="flex items-center gap-3">
+            {pending.length > 0 && (
+              <>
+                <button
+                  onClick={saveBatch}
+                  disabled={
+                    savingBatch ||
+                    !pending.some((r) => r.designation.trim())
+                  }
+                  className="text-[11px] px-2 py-0.5 bg-accent text-white rounded hover:brightness-110 disabled:opacity-50"
+                >
+                  {savingBatch
+                    ? "Saving…"
+                    : `Save ${pending.filter((r) => r.designation.trim()).length} row${
+                        pending.filter((r) => r.designation.trim()).length === 1 ? "" : "s"
+                      }`}
+                </button>
+                <button
+                  onClick={() => setPending([])}
+                  className="text-[11px] text-slate-500 hover:text-slate-300"
+                >
+                  Discard
+                </button>
+              </>
+            )}
+            <button
+              onClick={addPendingRow}
+              disabled={parameters.length === 0}
+              className="text-[11px] text-accent hover:brightness-110 disabled:opacity-40"
+              title={
+                parameters.length === 0
+                  ? "Add parameters to this standard first"
+                  : "Append an empty row"
+              }
+            >
+              + Add row
+            </button>
+          </div>
         </div>
 
-        {showDesignationForm && parameters.length > 0 && (
-          <DesignationForm
-            standardId={standardId}
-            parameters={parameters}
-            onCreated={() => {
-              setShowDesignationForm(false);
-              refreshAll();
-            }}
-          />
-        )}
-        {showDesignationForm && parameters.length === 0 && (
+        {parameters.length === 0 && (
           <p className="text-xs text-amber-400">
-            Add parameters to this standard before creating designations.
+            Link an aspect + add parameters before creating designations.
           </p>
+        )}
+        {batchError && (
+          <p className="text-xs text-red-400">{batchError}</p>
         )}
 
         <input
@@ -1602,7 +1811,7 @@ function StandardDetail({
           className="w-full max-w-xs px-2 py-1 bg-slate-800 border border-slate-600 rounded text-xs text-slate-200 focus:border-accent focus:outline-none"
         />
 
-        {designations.length === 0 ? (
+        {designations.length === 0 && pending.length === 0 ? (
           <p className="text-xs text-slate-500 italic">No designations.</p>
         ) : (
           <div className="overflow-x-auto border border-slate-700 rounded">
@@ -1638,9 +1847,11 @@ function StandardDetail({
                           : raw;
                       return (
                         <td key={p.id} className="px-2 py-1 text-slate-300">
-                          {scalar === undefined || scalar === null
-                            ? <span className="text-slate-600">—</span>
-                            : String(scalar)}
+                          {scalar === undefined || scalar === null ? (
+                            <span className="text-slate-600">—</span>
+                          ) : (
+                            String(scalar)
+                          )}
                         </td>
                       );
                     })}
@@ -1648,6 +1859,50 @@ function StandardDetail({
                       <button
                         onClick={() => deleteDesignation(d.id)}
                         className="text-red-400 hover:text-red-300 opacity-0 group-hover:opacity-100 text-[10px]"
+                      >
+                        ×
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+                {pending.map((r) => (
+                  <tr
+                    key={r.tmpId}
+                    className="border-t border-accent/30 bg-accent/5"
+                  >
+                    <td className="px-1 py-1">
+                      <input
+                        value={r.designation}
+                        onChange={(e) =>
+                          updatePending(r.tmpId, {
+                            designation: e.target.value,
+                          })
+                        }
+                        autoFocus
+                        placeholder="e.g. M3x0.5"
+                        className="w-full px-2 py-1 bg-slate-900 border border-slate-700 rounded text-xs font-mono text-slate-100 focus:border-accent focus:outline-none"
+                      />
+                    </td>
+                    {parameters.map((p) => (
+                      <td key={p.id} className="px-1 py-1">
+                        <input
+                          value={r.values[p.parameterDefinitionId] ?? ""}
+                          onChange={(e) =>
+                            updatePendingValue(
+                              r.tmpId,
+                              p.parameterDefinitionId,
+                              e.target.value
+                            )
+                          }
+                          placeholder={p.dataType === "numeric" ? "0" : "…"}
+                          className="w-full px-2 py-1 bg-slate-900 border border-slate-700 rounded text-xs text-slate-100 focus:border-accent focus:outline-none"
+                        />
+                      </td>
+                    ))}
+                    <td className="px-2 py-1 text-right">
+                      <button
+                        onClick={() => removePending(r.tmpId)}
+                        className="text-slate-500 hover:text-red-400 text-[10px]"
                       >
                         ×
                       </button>
@@ -1663,91 +1918,3 @@ function StandardDetail({
   );
 }
 
-function DesignationForm({
-  standardId,
-  parameters,
-  onCreated,
-}: {
-  standardId: string;
-  parameters: StandardParameter[];
-  onCreated: () => void;
-}) {
-  const [designation, setDesignation] = useState("");
-  const [values, setValues] = useState<Record<string, string>>({});
-  const [saving, setSaving] = useState(false);
-
-  async function submit() {
-    if (!designation.trim()) return;
-    setSaving(true);
-    try {
-      const payloadValues: Record<string, unknown> = {};
-      for (const p of parameters) {
-        const raw = values[p.parameterDefinitionId];
-        if (raw === undefined || raw === "") continue;
-        if (p.dataType === "numeric") {
-          const num = Number(raw);
-          if (!Number.isNaN(num)) payloadValues[p.parameterDefinitionId] = num;
-        } else if (p.dataType === "boolean") {
-          payloadValues[p.parameterDefinitionId] = raw === "true";
-        } else {
-          payloadValues[p.parameterDefinitionId] = raw;
-        }
-      }
-      await fetch(`/api/standards/${standardId}/designations`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          designation: designation.trim(),
-          values: payloadValues,
-        }),
-      });
-      setDesignation("");
-      setValues({});
-      onCreated();
-    } finally {
-      setSaving(false);
-    }
-  }
-
-  return (
-    <div className="p-3 bg-slate-800/50 border border-slate-700 rounded space-y-2">
-      <input
-        autoFocus
-        value={designation}
-        onChange={(e) => setDesignation(e.target.value)}
-        placeholder="Designation (e.g. M3x0.5)"
-        className="w-full max-w-xs px-2 py-1 bg-slate-900 border border-slate-600 rounded text-xs text-slate-100 focus:border-accent focus:outline-none"
-      />
-      <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
-        {parameters.map((p) => (
-          <label key={p.id} className="flex flex-col gap-0.5">
-            <span className="text-[10px] uppercase tracking-wider text-slate-500">
-              {p.parameterName}
-              {p.unit && (
-                <span className="text-slate-600 ml-1">({p.unit})</span>
-              )}
-            </span>
-            <input
-              value={values[p.parameterDefinitionId] ?? ""}
-              onChange={(e) =>
-                setValues((prev) => ({
-                  ...prev,
-                  [p.parameterDefinitionId]: e.target.value,
-                }))
-              }
-              placeholder={p.dataType === "numeric" ? "0" : "…"}
-              className="px-2 py-1 bg-slate-900 border border-slate-600 rounded text-xs text-slate-100 focus:border-accent focus:outline-none"
-            />
-          </label>
-        ))}
-      </div>
-      <button
-        onClick={submit}
-        disabled={saving || !designation.trim()}
-        className="px-3 py-1 bg-accent text-white rounded text-xs hover:brightness-110 disabled:opacity-50"
-      >
-        {saving ? "Saving…" : "Create"}
-      </button>
-    </div>
-  );
-}
