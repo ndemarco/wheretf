@@ -156,6 +156,157 @@ function ParamRow({
   );
 }
 
+function AppliedStandardRow({
+  itemId,
+  standard,
+  onChanged,
+}: {
+  itemId: string;
+  standard: {
+    standardId: string;
+    standardName: string;
+    designationId: string | null;
+    designation: string | null;
+    isCustom: boolean;
+  };
+  onChanged: () => void;
+}) {
+  const [picking, setPicking] = useState(false);
+  const [query, setQuery] = useState("");
+  const [hits, setHits] = useState<
+    { id: string; designation: string }[]
+  >([]);
+  const [searching, setSearching] = useState(false);
+
+  useEffect(() => {
+    if (!picking) return;
+    const handle = setTimeout(async () => {
+      setSearching(true);
+      try {
+        const qs = new URLSearchParams({ limit: "20" });
+        if (query.trim()) qs.set("q", query.trim());
+        const res = await fetch(
+          `/api/standards/${standard.standardId}/designations?${qs}`
+        );
+        const data = await res.json();
+        setHits(data.designations ?? []);
+      } finally {
+        setSearching(false);
+      }
+    }, 150);
+    return () => clearTimeout(handle);
+  }, [picking, query, standard.standardId]);
+
+  async function selectDesignation(id: string | null) {
+    await fetch(`/api/items/${itemId}/standards`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ standardId: standard.standardId, designationId: id }),
+    });
+    setPicking(false);
+    setQuery("");
+    onChanged();
+  }
+
+  async function removeStandard() {
+    await fetch(`/api/items/${itemId}/standards`, {
+      method: "DELETE",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ standardId: standard.standardId }),
+    });
+    onChanged();
+  }
+
+  return (
+    <div className="bg-slate-900/50 rounded border border-slate-700 px-3 py-1.5 text-xs group">
+      <div className="flex items-center justify-between gap-2">
+        <span className="font-medium text-slate-200 truncate">
+          {standard.standardName}
+        </span>
+        <button
+          onClick={removeStandard}
+          className="text-red-400 hover:text-red-300 text-[10px] opacity-0 group-hover:opacity-100 transition-opacity"
+          title="Remove standard"
+        >
+          ×
+        </button>
+      </div>
+      <div className="mt-1 flex items-center gap-2">
+        {picking ? (
+          <div className="flex-1">
+            <input
+              autoFocus
+              type="text"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              onBlur={() => setTimeout(() => setPicking(false), 150)}
+              placeholder="Type to search…"
+              className="w-full px-2 py-1 bg-slate-900 border border-accent rounded text-xs text-slate-100 outline-none"
+            />
+            <div className="mt-1 max-h-36 overflow-y-auto border border-slate-700 rounded bg-slate-950/80">
+              {searching && hits.length === 0 ? (
+                <div className="px-2 py-1 text-slate-500 text-[10px]">
+                  Searching…
+                </div>
+              ) : hits.length === 0 ? (
+                <div className="px-2 py-1 text-slate-500 text-[10px]">
+                  No matches
+                </div>
+              ) : (
+                hits.map((h) => (
+                  <button
+                    key={h.id}
+                    onMouseDown={(e) => e.preventDefault()}
+                    onClick={() => selectDesignation(h.id)}
+                    className={`w-full text-left px-2 py-1 text-[11px] hover:bg-slate-700/50 ${
+                      h.id === standard.designationId
+                        ? "text-accent"
+                        : "text-slate-300"
+                    }`}
+                  >
+                    {h.designation}
+                  </button>
+                ))
+              )}
+              {standard.designationId && (
+                <button
+                  onMouseDown={(e) => e.preventDefault()}
+                  onClick={() => selectDesignation(null)}
+                  className="w-full text-left px-2 py-1 text-[10px] text-slate-500 italic hover:bg-slate-700/50 border-t border-slate-700"
+                >
+                  Clear designation
+                </button>
+              )}
+            </div>
+          </div>
+        ) : standard.designation ? (
+          <button
+            onClick={() => setPicking(true)}
+            className="text-accent hover:brightness-110 font-mono"
+          >
+            {standard.designation}
+          </button>
+        ) : (
+          <button
+            onClick={() => setPicking(true)}
+            className="text-slate-500 italic hover:text-slate-300"
+          >
+            Pick designation…
+          </button>
+        )}
+        {standard.isCustom && (
+          <span
+            className="text-amber-400 text-[10px]"
+            title="Values overridden"
+          >
+            custom
+          </span>
+        )}
+      </div>
+    </div>
+  );
+}
+
 export default function ItemDetail({
   item,
   onAddFilter,
@@ -181,6 +332,24 @@ export default function ItemDetail({
   const [showCategoryPicker, setShowCategoryPicker] = useState(false);
   const [allCategories, setAllCategories] = useState<{ id: string; name: string; icon: string | null; color: string | null }[]>([]);
 
+  // Standards
+  type AppliedStandard = {
+    id: string;
+    standardId: string;
+    standardName: string;
+    designationId: string | null;
+    designation: string | null;
+    isCustom: boolean;
+  };
+  const [appliedStandards, setAppliedStandards] = useState<AppliedStandard[]>(
+    []
+  );
+  const [showStandardPicker, setShowStandardPicker] = useState(false);
+  const [allStandards, setAllStandards] = useState<
+    { id: string; name: string; domainTag: string | null }[]
+  >([]);
+  const [standardsLoading, setStandardsLoading] = useState(false);
+
   const fetchAllAspects = useCallback(async () => {
     try {
       const res = await fetch("/api/aspects");
@@ -200,6 +369,34 @@ export default function ItemDetail({
       console.error(err);
     }
   }, []);
+
+  const fetchAllStandards = useCallback(async () => {
+    try {
+      const res = await fetch("/api/standards");
+      const data = await res.json();
+      setAllStandards(data.standards || []);
+    } catch (err) {
+      console.error(err);
+    }
+  }, []);
+
+  const fetchAppliedStandards = useCallback(async (itemId: string) => {
+    setStandardsLoading(true);
+    try {
+      const res = await fetch(`/api/items/${itemId}/standards`);
+      const data = await res.json();
+      setAppliedStandards(data.standards || data.itemStandards || []);
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setStandardsLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (item) fetchAppliedStandards(item.id);
+    else setAppliedStandards([]);
+  }, [item, fetchAppliedStandards]);
 
   if (!item) {
     return (
@@ -565,6 +762,77 @@ export default function ItemDetail({
             </div>
           </div>
         )}
+
+        {/* Standards */}
+        <div>
+          <div className="flex items-center justify-between mb-1.5">
+            <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wider">
+              Standards
+            </h3>
+            <button
+              onClick={() => {
+                setShowStandardPicker(!showStandardPicker);
+                if (!showStandardPicker) fetchAllStandards();
+              }}
+              className="text-[10px] text-accent hover:brightness-110"
+            >
+              {showStandardPicker ? "Done" : "+ Add"}
+            </button>
+          </div>
+
+          {showStandardPicker && (
+            <div className="mb-2 space-y-1 max-h-40 overflow-y-auto">
+              {allStandards
+                .filter(
+                  (s) =>
+                    !appliedStandards.some((a) => a.standardId === s.id)
+                )
+                .map((s) => (
+                  <button
+                    key={s.id}
+                    onClick={async () => {
+                      await fetch(`/api/items/${item.id}/standards`, {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({ standardId: s.id }),
+                      });
+                      setShowStandardPicker(false);
+                      fetchAppliedStandards(item.id);
+                      onRefresh();
+                    }}
+                    className="w-full text-left flex items-center justify-between px-2 py-1 rounded hover:bg-slate-700/50 transition-colors"
+                  >
+                    <span className="text-xs text-slate-300">{s.name}</span>
+                    {s.domainTag && (
+                      <span className="text-[10px] text-slate-500">
+                        {s.domainTag}
+                      </span>
+                    )}
+                  </button>
+                ))}
+            </div>
+          )}
+
+          {standardsLoading && appliedStandards.length === 0 ? (
+            <p className="text-xs text-slate-600 italic">Loading…</p>
+          ) : appliedStandards.length === 0 && !showStandardPicker ? (
+            <p className="text-xs text-slate-600 italic">None applied.</p>
+          ) : (
+            <div className="space-y-1">
+              {appliedStandards.map((std) => (
+                <AppliedStandardRow
+                  key={std.id}
+                  itemId={item.id}
+                  standard={std}
+                  onChanged={() => {
+                    fetchAppliedStandards(item.id);
+                    onRefresh();
+                  }}
+                />
+              ))}
+            </div>
+          )}
+        </div>
 
         {/* Locations */}
         {item.assignments.length > 0 && (

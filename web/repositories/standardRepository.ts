@@ -1,4 +1,4 @@
-import { eq, and, count, sql } from "drizzle-orm";
+import { eq, and, count, ilike, inArray, sql } from "drizzle-orm";
 import { db } from "@/db/connection";
 import {
   standards,
@@ -6,6 +6,7 @@ import {
   standardParameters,
   standardDesignations,
   itemStandards,
+  itemParameterValues,
   parameterDefinitions,
   aspects,
   aspectParameters,
@@ -366,17 +367,24 @@ export const standardRepository = {
 
   async listDesignations({
     standardId,
+    q,
     limit,
     offset,
   }: {
     standardId: string;
+    q?: string;
     limit?: number;
     offset?: number;
   }) {
+    const filters = [eq(standardDesignations.standardId, standardId)];
+    if (q && q.trim().length > 0) {
+      filters.push(ilike(standardDesignations.designation, `%${q.trim()}%`));
+    }
+
     let query = db
       .select()
       .from(standardDesignations)
-      .where(eq(standardDesignations.standardId, standardId))
+      .where(and(...filters))
       .orderBy(standardDesignations.designation)
       .$dynamic();
 
@@ -424,6 +432,79 @@ export const standardRepository = {
 
   // --- Item-standard associations ---
 
+  /**
+   * Auto-fill item's parameter values from a designation.
+   *
+   * Designation values JSONB is keyed by parameter_definition_id. Each entry
+   * may be a scalar or a compound `{value, source_value?, source_unit?}`.
+   * For each entry we upsert itemParameterValues — matched on (itemId,
+   * parameterDefinitionId), ignoring itemAspectId so an existing
+   * aspect-scoped row gets overwritten rather than duplicated.
+   */
+  async applyDesignationValues({
+    itemId,
+    designationId,
+  }: {
+    itemId: string;
+    designationId: string;
+  }) {
+    const [designation] = await db
+      .select()
+      .from(standardDesignations)
+      .where(eq(standardDesignations.id, designationId));
+    if (!designation) return;
+
+    const values = (designation.values ?? {}) as Record<string, unknown>;
+    const allKeys = Object.keys(values);
+    const uuidLike = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    const keys = allKeys.filter((k) => uuidLike.test(k));
+    if (keys.length === 0) return;
+
+    // Skip keys that aren't real parameterDefinition IDs. Older tests /
+    // fixtures may store human-readable keys ("pitch") that would fail the
+    // FK; and even well-formed UUIDs may point at defs that don't exist.
+    const validKeys = new Set(
+      (
+        await db
+          .select({ id: parameterDefinitions.id })
+          .from(parameterDefinitions)
+          .where(inArray(parameterDefinitions.id, keys))
+      ).map((r) => r.id)
+    );
+
+    for (const [paramDefId, raw] of Object.entries(values)) {
+      if (!validKeys.has(paramDefId)) continue;
+      const scalar =
+        raw && typeof raw === "object" && "value" in raw
+          ? (raw as { value: unknown }).value
+          : raw;
+
+      const existing = await db
+        .select()
+        .from(itemParameterValues)
+        .where(
+          and(
+            eq(itemParameterValues.itemId, itemId),
+            eq(itemParameterValues.parameterDefinitionId, paramDefId)
+          )
+        );
+
+      if (existing.length > 0) {
+        await db
+          .update(itemParameterValues)
+          .set({ value: scalar, updatedAt: new Date() })
+          .where(eq(itemParameterValues.id, existing[0].id));
+      } else {
+        await db.insert(itemParameterValues).values({
+          itemId,
+          parameterDefinitionId: paramDefId,
+          itemAspectId: null,
+          value: scalar,
+        });
+      }
+    }
+  },
+
   async applyToItem({
     itemId,
     standardId,
@@ -442,6 +523,13 @@ export const standardRepository = {
         isCustom: false,
       })
       .returning();
+
+    if (designationId) {
+      await standardRepository.applyDesignationValues({
+        itemId,
+        designationId,
+      });
+    }
 
     await transactionRepository.log({
       actionType: "item_standard.create",
@@ -510,6 +598,13 @@ export const standardRepository = {
       throw new Error(
         `Standard ${standardId} not applied to item ${itemId}`
       );
+    }
+
+    if (designationId) {
+      await standardRepository.applyDesignationValues({
+        itemId,
+        designationId,
+      });
     }
 
     return updated;

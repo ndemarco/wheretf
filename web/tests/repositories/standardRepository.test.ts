@@ -842,6 +842,119 @@ describe("standardRepository", () => {
       expect(itemStds).toHaveLength(0);
     });
 
+    it("auto-fills item parameter values from the designation on apply", async () => {
+      const aspect = await createAspect();
+      const standard = await createStandardForAspect(aspect.id);
+      const pitch = await createParam("pitch", "numeric", "mm");
+      const majorDia = await createParam("major_diameter", "numeric", "mm");
+      const designation = await standardRepository.createDesignation({
+        standardId: standard.id,
+        designation: "M3x0.5",
+        values: {
+          [pitch.id]: { value: 0.5, source_value: "0.5", source_unit: "mm" },
+          [majorDia.id]: 3,
+        },
+      });
+      const item = await itemRepository.create({ name: "M3x0.5 screw" });
+
+      await standardRepository.applyToItem({
+        itemId: item.id,
+        standardId: standard.id,
+        designationId: designation.id,
+      });
+
+      const paramValues = await itemRepository.getParameterValues({
+        itemId: item.id,
+      });
+      const byParam = new Map(
+        paramValues.map((p) => [p.parameterDefinitionId, p.value])
+      );
+      expect(byParam.get(pitch.id)).toBe(0.5);
+      expect(byParam.get(majorDia.id)).toBe(3);
+    });
+
+    it("auto-fills parameter values when designation is changed later", async () => {
+      const aspect = await createAspect();
+      const standard = await createStandardForAspect(aspect.id);
+      const pitch = await createParam("pitch", "numeric", "mm");
+      const d1 = await standardRepository.createDesignation({
+        standardId: standard.id,
+        designation: "M3x0.5",
+        values: { [pitch.id]: { value: 0.5 } },
+      });
+      const d2 = await standardRepository.createDesignation({
+        standardId: standard.id,
+        designation: "M4x0.7",
+        values: { [pitch.id]: { value: 0.7 } },
+      });
+      const item = await itemRepository.create({ name: "Screw" });
+
+      await standardRepository.applyToItem({
+        itemId: item.id,
+        standardId: standard.id,
+        designationId: d1.id,
+      });
+      await standardRepository.setDesignation({
+        itemId: item.id,
+        standardId: standard.id,
+        designationId: d2.id,
+      });
+
+      const values = await itemRepository.getParameterValues({
+        itemId: item.id,
+      });
+      const pitchRow = values.find((v) => v.parameterDefinitionId === pitch.id);
+      expect(pitchRow?.value).toBe(0.7);
+    });
+
+    it("ignores designation values keyed by non-UUID strings", async () => {
+      const aspect = await createAspect();
+      const standard = await createStandardForAspect(aspect.id);
+      const designation = await standardRepository.createDesignation({
+        standardId: standard.id,
+        designation: "legacy",
+        values: { pitch: 0.5, "not-a-uuid": "x" },
+      });
+      const item = await itemRepository.create({ name: "Legacy" });
+
+      await standardRepository.applyToItem({
+        itemId: item.id,
+        standardId: standard.id,
+        designationId: designation.id,
+      });
+
+      const values = await itemRepository.getParameterValues({
+        itemId: item.id,
+      });
+      expect(values).toHaveLength(0);
+    });
+
+    it("filters designations by q substring (case-insensitive)", async () => {
+      const standard = await createStandard();
+      await standardRepository.createDesignation({
+        standardId: standard.id,
+        designation: "M3x0.5",
+        values: {},
+      });
+      await standardRepository.createDesignation({
+        standardId: standard.id,
+        designation: "M4x0.7",
+        values: {},
+      });
+      await standardRepository.createDesignation({
+        standardId: standard.id,
+        designation: "#8-32",
+        values: {},
+      });
+
+      const hits = await standardRepository.listDesignations({
+        standardId: standard.id,
+        q: "m3",
+      });
+      expect(hits).toHaveLength(1);
+      expect(hits[0].designation).toBe("M3x0.5");
+    });
+
     it("logs a transaction on removal", async () => {
       const aspect = await createAspect();
       const standard = await createStandardForAspect(aspect.id);

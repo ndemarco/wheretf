@@ -14,9 +14,10 @@ export async function GET(
     const offset = searchParams.get("offset")
       ? parseInt(searchParams.get("offset")!, 10)
       : 0;
+    const q = searchParams.get("q") ?? undefined;
 
     const [designations, total] = await Promise.all([
-      standardRepository.listDesignations({ standardId: id, limit, offset }),
+      standardRepository.listDesignations({ standardId: id, q, limit, offset }),
       standardRepository.countDesignations({ standardId: id }),
     ]);
 
