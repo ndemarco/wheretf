@@ -109,7 +109,13 @@ export default function ModuleDetailPage() {
   const [levelDraft, setLevelDraft] = useState<{
     label: string;
     description: string;
-  }>({ label: "", description: "" });
+    interfaceTypeAccepted: string;
+  }>({ label: "", description: "", interfaceTypeAccepted: "" });
+
+  // Available interface types (for the receptacle dropdown in level edit)
+  const [interfaceOptions, setInterfaceOptions] = useState<
+    Array<{ identifier: string; description: string | null }>
+  >([]);
 
   // Inserts in this module (key: receptacle location id → insert)
   const [insertsByReceptacle, setInsertsByReceptacle] = useState<
@@ -226,6 +232,19 @@ export default function ModuleDetailPage() {
   useEffect(() => {
     fetchData();
   }, [fetchData]);
+
+  // Load interface types once for the level edit dropdown
+  useEffect(() => {
+    (async () => {
+      try {
+        const res = await fetch("/api/interface-types");
+        const data = await res.json();
+        setInterfaceOptions(data.interfaceTypes ?? []);
+      } catch (err) {
+        console.error(err);
+      }
+    })();
+  }, []);
 
   // Top-level locations (levels)
   const levels = locations.filter((l) => l.parentId === null);
@@ -376,15 +395,19 @@ export default function ModuleDetailPage() {
         ? (selectedLevel.metadata as { notes?: string }).notes ?? ""
         : "";
     const newDesc = levelDraft.description.trim();
+    const newIface = levelDraft.interfaceTypeAccepted.trim() || null;
     const labelChanged = label !== selectedLevel.label;
     const descChanged = newDesc !== existingNotes;
-    if (!labelChanged && !descChanged) {
+    const ifaceChanged =
+      newIface !== (selectedLevel.interfaceTypeAccepted ?? null);
+    if (!labelChanged && !descChanged && !ifaceChanged) {
       setEditingLevel(false);
       return;
     }
     try {
       const body: Record<string, unknown> = {};
       if (labelChanged) body.label = label;
+      if (ifaceChanged) body.interfaceTypeAccepted = newIface;
       if (descChanged) {
         const nextMetadata = {
           ...(selectedLevel.metadata ?? {}),
@@ -413,7 +436,11 @@ export default function ModuleDetailPage() {
       "notes" in selectedLevel.metadata
         ? (selectedLevel.metadata as { notes?: string }).notes ?? ""
         : "";
-    setLevelDraft({ label: selectedLevel.label, description: notes });
+    setLevelDraft({
+      label: selectedLevel.label,
+      description: notes,
+      interfaceTypeAccepted: selectedLevel.interfaceTypeAccepted ?? "",
+    });
     setEditingLevel(false);
   }
 
@@ -429,7 +456,11 @@ export default function ModuleDetailPage() {
         "notes" in level.metadata
           ? (level.metadata as { notes?: string }).notes ?? ""
           : "";
-      setLevelDraft({ label: level.label, description: notes });
+      setLevelDraft({
+        label: level.label,
+        description: notes,
+        interfaceTypeAccepted: level.interfaceTypeAccepted ?? "",
+      });
     }
   }
 
@@ -1247,6 +1278,7 @@ export default function ModuleDetailPage() {
           editing={editingLevel}
           draft={levelDraft}
           setDraft={setLevelDraft}
+          interfaceOptions={interfaceOptions}
           onEdit={() => setEditingLevel(true)}
           onSave={saveLevel}
           onCancel={cancelLevelEdit}
@@ -1579,6 +1611,7 @@ function LevelPanel({
   editing,
   draft,
   setDraft,
+  interfaceOptions,
   onEdit,
   onSave,
   onCancel,
@@ -1586,8 +1619,17 @@ function LevelPanel({
 }: {
   level: Location;
   editing: boolean;
-  draft: { label: string; description: string };
-  setDraft: (v: { label: string; description: string }) => void;
+  draft: {
+    label: string;
+    description: string;
+    interfaceTypeAccepted: string;
+  };
+  setDraft: (v: {
+    label: string;
+    description: string;
+    interfaceTypeAccepted: string;
+  }) => void;
+  interfaceOptions: Array<{ identifier: string; description: string | null }>;
   onEdit: () => void;
   onSave: () => void;
   onCancel: () => void;
@@ -1647,6 +1689,33 @@ function LevelPanel({
                 className="w-full px-2 py-1.5 bg-slate-800 border border-slate-600 rounded text-sm text-slate-200 focus:border-accent focus:outline-none resize-none"
               />
             </div>
+            {level.locationType === "receptacle" && (
+              <div>
+                <label className="text-xs text-slate-500 block mb-1">
+                  Interface accepted
+                </label>
+                <select
+                  value={draft.interfaceTypeAccepted}
+                  onChange={(e) =>
+                    setDraft({
+                      ...draft,
+                      interfaceTypeAccepted: e.target.value,
+                    })
+                  }
+                  className="w-full px-2 py-1.5 bg-slate-800 border border-slate-600 rounded text-sm text-slate-200 focus:border-accent focus:outline-none"
+                >
+                  <option value="">— none —</option>
+                  {interfaceOptions.map((i) => (
+                    <option key={i.identifier} value={i.identifier}>
+                      {i.identifier}
+                    </option>
+                  ))}
+                </select>
+                <p className="text-[11px] text-slate-500 mt-1">
+                  Inserts that fit this interface will appear when placing.
+                </p>
+              </div>
+            )}
             <div className="flex gap-2">
               <button
                 onClick={onSave}

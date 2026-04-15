@@ -136,7 +136,7 @@ export const locationRepository = {
     id: string;
     label?: string;
     locationType?: string;
-    interfaceTypeAccepted?: string;
+    interfaceTypeAccepted?: string | null;
     templateVersionId?: string;
     gridRow?: number;
     gridColumn?: number;

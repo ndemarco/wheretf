@@ -411,6 +411,21 @@ async function seed() {
     console.log("Templates already seeded, skipping.");
   } else {
 
+  // Interface types — what physical contracts exist for this seed set.
+  // Templates declare which one they fit; receptacles declare which they
+  // accept. Compatibility is a string match.
+  const { interfaceTypes: ifaceTbl } = await import("./schema");
+  const ifaceSeeds = [
+    { identifier: "plano-3600", description: "Plano 3600 tackle-box footprint" },
+    { identifier: "plano-3700", description: "Plano 3700 tackle-box footprint" },
+    { identifier: "gridfinity-42mm", description: "Gridfinity 42mm baseplate cell" },
+    { identifier: "alex-drawer", description: "IKEA ALEX drawer interior" },
+    { identifier: "small-parts-bin", description: "Generic small-parts drawer cell" },
+  ];
+  for (const s of ifaceSeeds) {
+    await db.insert(ifaceTbl).values(s).onConflictDoNothing();
+  }
+
   // Plano 3600 Stowaway — classic tackle box tray
   const tplPlano3600 = await templateRepository.create({
     name: "Plano 3600 Stowaway",
@@ -422,6 +437,7 @@ async function seed() {
     originPosition: "top-left",
     rowDividersFixed: true,
     columnDividersFixed: false,
+    interfaceTypeProvided: "plano-3600",
     metadata: { unitSystem: "imperial", manufacturer: "Plano", productNumber: "2-3600" },
   });
 
@@ -448,6 +464,7 @@ async function seed() {
     originPosition: "top-left",
     rowDividersFixed: true,
     columnDividersFixed: false,
+    interfaceTypeProvided: "plano-3700",
     metadata: { unitSystem: "imperial", manufacturer: "Plano", productNumber: "2-3700" },
   });
 
@@ -468,6 +485,7 @@ async function seed() {
     rowDividersFixed: false,
     columnDividersFixed: false,
     unitSize: "42mm",
+    interfaceTypeProvided: "gridfinity-42mm",
     metadata: { unitSystem: "metric" },
   });
 
@@ -482,6 +500,7 @@ async function seed() {
     originPosition: "top-left",
     rowDividersFixed: true,
     columnDividersFixed: true,
+    interfaceTypeProvided: "small-parts-bin",
     metadata: { unitSystem: "metric" },
   });
 
@@ -496,6 +515,7 @@ async function seed() {
     originPosition: "top-left",
     rowDividersFixed: false,
     columnDividersFixed: false,
+    interfaceTypeProvided: "alex-drawer",
     metadata: { unitSystem: "metric", manufacturer: "IKEA", productNumber: "ALEX" },
   });
 
@@ -520,6 +540,7 @@ async function seed() {
         label: String(i),
         pathSegments: ["MUSE", String(i)],
         locationType: "receptacle",
+        interfaceTypeAccepted: "plano-3600",
       });
     }
 
@@ -536,6 +557,7 @@ async function seed() {
         label: String(i),
         pathSegments: ["ALEX", String(i)],
         locationType: "receptacle",
+        interfaceTypeAccepted: "alex-drawer",
       });
     }
 
@@ -552,6 +574,7 @@ async function seed() {
         label: String(i),
         pathSegments: ["BENCH", String(i)],
         locationType: i <= 2 ? "receptacle" : "fixed",
+        interfaceTypeAccepted: i <= 2 ? "plano-3700" : undefined,
       });
     }
 

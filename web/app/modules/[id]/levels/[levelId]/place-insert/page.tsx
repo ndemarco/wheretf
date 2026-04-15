@@ -1,17 +1,34 @@
 "use client";
 
+import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { getGridLabel } from "@/lib/gridLabels";
 
-type Origin = "top-left" | "top-right" | "bottom-left" | "bottom-right";
+interface InsertRow {
+  id: string;
+  name: string | null;
+  templateId: string | null;
+  templateName: string | null;
+  interfaceType: string | null;
+  locationPath: string | null;
+  moduleName: string | null;
+  rows: number | null;
+  columns: number | null;
+}
 
-interface Template {
+interface ReceptacleLocation {
+  id: string;
+  label: string;
+  path: string;
+  locationType: string;
+  interfaceTypeAccepted: string | null;
+  moduleId: string;
+}
+
+interface TemplateOption {
   id: string;
   name: string;
   description: string | null;
-  currentVersion: number;
-  activeVersion: number;
   currentVersionData: {
     id: string;
     isParametric: boolean;
@@ -21,151 +38,8 @@ interface Template {
     maxRows: number | null;
     minColumns: number | null;
     maxColumns: number | null;
-    rowLabelScheme: string;
-    columnLabelScheme: string;
-    originPosition: string;
-    rowDividersFixed: boolean;
-    columnDividersFixed: boolean;
+    interfaceTypeProvided: string | null;
   } | null;
-}
-
-interface Version {
-  id: string;
-  version: number;
-  isParametric: boolean;
-  rows: number | null;
-  columns: number | null;
-  minRows: number | null;
-  maxRows: number | null;
-  minColumns: number | null;
-  maxColumns: number | null;
-  rowLabelScheme: string;
-  columnLabelScheme: string;
-  originPosition: string;
-  rowDividersFixed: boolean;
-  columnDividersFixed: boolean;
-}
-
-function MiniGrid({
-  rows,
-  columns,
-  rowLabelScheme,
-  columnLabelScheme,
-  origin,
-  rowDividersFixed,
-  columnDividersFixed,
-}: {
-  rows: number;
-  columns: number;
-  rowLabelScheme: string;
-  columnLabelScheme: string;
-  origin: Origin;
-  rowDividersFixed: boolean;
-  columnDividersFixed: boolean;
-}) {
-  const cellSize = 52;
-  const gap = 2;
-  const labelPad = 24;
-
-  const gridW = columns * cellSize + (columns - 1) * gap;
-  const gridH = rows * cellSize + (rows - 1) * gap;
-  const svgW = labelPad + gridW + 4;
-  const svgH = labelPad + gridH + 4;
-
-  const cells = [];
-  for (let r = 0; r < rows; r++) {
-    for (let c = 0; c < columns; c++) {
-      const x = labelPad + c * (cellSize + gap);
-      const y = labelPad + r * (cellSize + gap);
-      const rl = getGridLabel(rowLabelScheme, r, rows, origin, "row");
-      const cl = getGridLabel(columnLabelScheme, c, columns, origin, "col");
-      cells.push(
-        <g key={`${r}-${c}`}>
-          <rect
-            x={x}
-            y={y}
-            width={cellSize}
-            height={cellSize}
-            fill="transparent"
-            stroke="#475569"
-            strokeWidth={1}
-            rx={2}
-          />
-          <text
-            x={x + cellSize / 2}
-            y={y + cellSize / 2}
-            textAnchor="middle"
-            dominantBaseline="central"
-            fill="#94a3b8"
-            fontSize={9}
-          >
-            {rl}{cl}
-          </text>
-        </g>
-      );
-    }
-  }
-
-  const rowLabels = [];
-  for (let r = 0; r < rows; r++) {
-    rowLabels.push(
-      <text
-        key={`rl-${r}`}
-        x={labelPad - 6}
-        y={labelPad + r * (cellSize + gap) + cellSize / 2}
-        textAnchor="end"
-        dominantBaseline="central"
-        fill="#64748b"
-        fontSize={11}
-      >
-        {getGridLabel(rowLabelScheme, r, rows, origin, "row")}
-      </text>
-    );
-  }
-
-  const colLabels = [];
-  for (let c = 0; c < columns; c++) {
-    colLabels.push(
-      <text
-        key={`cl-${c}`}
-        x={labelPad + c * (cellSize + gap) + cellSize / 2}
-        y={labelPad - 6}
-        textAnchor="middle"
-        dominantBaseline="alphabetic"
-        fill="#64748b"
-        fontSize={11}
-      >
-        {getGridLabel(columnLabelScheme, c, columns, origin, "col")}
-      </text>
-    );
-  }
-
-  const dividers = [];
-  if (rowDividersFixed) {
-    for (let r = 1; r < rows; r++) {
-      const y = labelPad + r * (cellSize + gap) - gap / 2;
-      dividers.push(
-        <line key={`rd-${r}`} x1={labelPad} x2={labelPad + gridW} y1={y} y2={y} stroke="#94a3b8" strokeWidth={2} opacity={0.6} />
-      );
-    }
-  }
-  if (columnDividersFixed) {
-    for (let c = 1; c < columns; c++) {
-      const x = labelPad + c * (cellSize + gap) - gap / 2;
-      dividers.push(
-        <line key={`cd-${c}`} x1={x} x2={x} y1={labelPad} y2={labelPad + gridH} stroke="#94a3b8" strokeWidth={2} opacity={0.6} />
-      );
-    }
-  }
-
-  return (
-    <svg width={svgW} height={svgH} className="max-w-full">
-      {cells}
-      {rowLabels}
-      {colLabels}
-      {dividers}
-    </svg>
-  );
 }
 
 export default function PlaceInsertPage() {
@@ -174,372 +48,369 @@ export default function PlaceInsertPage() {
   const moduleId = params.id as string;
   const levelId = params.levelId as string;
 
-  const [step, setStep] = useState(1);
-  const [templates, setTemplates] = useState<Template[]>([]);
-  const [selectedTemplateId, setSelectedTemplateId] = useState<string | null>(null);
-  const [versions, setVersions] = useState<Version[]>([]);
-  const [selectedVersionId, setSelectedVersionId] = useState<string | null>(null);
+  const [receptacle, setReceptacle] = useState<ReceptacleLocation | null>(null);
+  const [inserts, setInserts] = useState<InsertRow[]>([]);
+  const [templates, setTemplates] = useState<TemplateOption[]>([]);
+  const [showAll, setShowAll] = useState(false);
   const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
+  const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [search, setSearch] = useState("");
 
-  // Parametric config
-  const [configRows, setConfigRows] = useState(4);
-  const [configCols, setConfigCols] = useState(4);
+  // Sub-flow: create new insert
+  const [createOpen, setCreateOpen] = useState(false);
+  const [newTemplateId, setNewTemplateId] = useState("");
+  const [newName, setNewName] = useState("");
+  const [newRows, setNewRows] = useState<number | "">("");
+  const [newCols, setNewCols] = useState<number | "">("");
 
-  // Name
-  const [insertName, setInsertName] = useState("");
-
-  useEffect(() => {
-    fetch("/api/templates")
-      .then((r) => r.json())
-      .then((d) => setTemplates(d.templates || []))
-      .catch(console.error)
-      .finally(() => setLoading(false));
-  }, []);
-
-  // When template is selected, fetch versions and pick active
-  useEffect(() => {
-    if (!selectedTemplateId) return;
-    fetch(`/api/templates/${selectedTemplateId}/versions`)
-      .then((r) => r.json())
-      .then((d) => {
-        const versionList = (d.versions || []).sort(
-          (a: Version, b: Version) => b.version - a.version
-        );
-        setVersions(versionList);
-        // Pick active version
-        const tpl = templates.find((t) => t.id === selectedTemplateId);
-        const activeVer = versionList.find(
-          (v: Version) => v.version === tpl?.activeVersion
-        );
-        if (activeVer) {
-          setSelectedVersionId(activeVer.id);
-          setConfigRows(activeVer.rows ?? 4);
-          setConfigCols(activeVer.columns ?? 4);
-        }
-      })
-      .catch(console.error);
-  }, [selectedTemplateId, templates]);
-
-  const selectedTemplate = templates.find((t) => t.id === selectedTemplateId);
-  const selectedVersion = versions.find((v) => v.id === selectedVersionId);
-
-  const filteredTemplates = useMemo(() => {
-    if (!search) return templates;
-    const q = search.toLowerCase();
-    return templates.filter(
-      (t) =>
-        t.name.toLowerCase().includes(q) ||
-        t.description?.toLowerCase().includes(q)
-    );
-  }, [templates, search]);
-
-  // Auto-generate insert name
-  useEffect(() => {
-    if (selectedTemplate && !insertName) {
-      setInsertName(selectedTemplate.name + " #1");
-    }
-  }, [selectedTemplate, insertName]);
-
-  function selectTemplate(tplId: string) {
-    setSelectedTemplateId(tplId);
-    setInsertName(""); // reset so auto-name triggers
-  }
-
-  function goToStep2() {
-    if (!selectedVersion) return;
-    if (selectedVersion.isParametric) {
-      setStep(2);
-    } else {
-      setStep(3);
-    }
-  }
-
-  async function handlePlace() {
-    if (!selectedTemplate || !selectedVersion) return;
-
-    setSaving(true);
-    setError(null);
-
+  const fetchAll = useCallback(async () => {
     try {
-      const res = await fetch("/api/inserts/place-with-children", {
+      const recRes = await fetch(`/api/locations/${levelId}`);
+      if (!recRes.ok) throw new Error("Receptacle not found");
+      const recData = await recRes.json();
+      setReceptacle(recData.location);
+
+      const iface = recData.location.interfaceTypeAccepted as string | null;
+      const placement = showAll ? "all" : "unplaced";
+      const insQs = new URLSearchParams({ placement });
+      if (iface) insQs.set("interfaceType", iface);
+      const insRes = await fetch(`/api/inserts?${insQs}`);
+      const insData = await insRes.json();
+      // Exclude inserts already at this receptacle.
+      setInserts(
+        (insData.inserts ?? []).filter(
+          (i: InsertRow & { locationId?: string | null }) =>
+            i.locationId !== levelId
+        )
+      );
+
+      const tplRes = await fetch("/api/templates");
+      const tplData = await tplRes.json();
+      const all = (tplData.templates ?? []) as TemplateOption[];
+      // Filter templates by interface compatibility (or all if receptacle has none)
+      const compat = iface
+        ? all.filter(
+            (t) => t.currentVersionData?.interfaceTypeProvided === iface
+          )
+        : all;
+      setTemplates(compat);
+    } catch (err) {
+      console.error(err);
+      setError(err instanceof Error ? err.message : "Failed to load");
+    } finally {
+      setLoading(false);
+    }
+  }, [levelId, showAll]);
+
+  useEffect(() => {
+    fetchAll();
+  }, [fetchAll]);
+
+  const selectedTemplate = templates.find((t) => t.id === newTemplateId);
+  const ver = selectedTemplate?.currentVersionData;
+
+  // Default dimensions when picking a parametric template
+  useEffect(() => {
+    if (!ver) {
+      setNewRows("");
+      setNewCols("");
+      return;
+    }
+    if (ver.isParametric) {
+      setNewRows(ver.minRows ?? 1);
+      setNewCols(ver.minColumns ?? 1);
+    } else {
+      setNewRows(ver.rows ?? 1);
+      setNewCols(ver.columns ?? 1);
+    }
+  }, [newTemplateId, ver]);
+
+  async function placeInsert(insertId: string) {
+    setBusy(true);
+    setError(null);
+    try {
+      const res = await fetch(`/api/inserts/${insertId}/place`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          templateId: selectedTemplate.id,
-          templateVersionId: selectedVersion.id,
-          locationId: levelId,
-          name: insertName.trim() || undefined,
-          rows: selectedVersion.isParametric ? configRows : undefined,
-          columns: selectedVersion.isParametric ? configCols : undefined,
-        }),
+        body: JSON.stringify({ locationId: levelId }),
       });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Failed to place insert");
-
+      if (!res.ok) {
+        const data = await res.json();
+        setError(data.error || "Place failed");
+        return;
+      }
       router.push(`/modules/${moduleId}`);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Unknown error");
-      setSaving(false);
+      console.error(err);
+    } finally {
+      setBusy(false);
     }
   }
 
-  if (loading) {
-    return (
-      <div className="flex-1 flex items-center justify-center text-slate-500">
-        Loading...
-      </div>
-    );
+  async function createAndPlace() {
+    if (!selectedTemplate || !ver) return;
+    setBusy(true);
+    setError(null);
+    try {
+      const body: Record<string, unknown> = {
+        templateId: selectedTemplate.id,
+        templateVersionId: ver.id,
+        name: newName.trim() || undefined,
+      };
+      if (ver.isParametric) {
+        body.rows = Number(newRows) || 1;
+        body.columns = Number(newCols) || 1;
+      }
+      const cRes = await fetch("/api/inserts", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      if (!cRes.ok) {
+        const d = await cRes.json();
+        setError(d.error || "Create failed");
+        return;
+      }
+      const cData = await cRes.json();
+      await placeInsert(cData.insert.id);
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setBusy(false);
+    }
   }
 
-  const previewRows = selectedVersion?.isParametric
-    ? configRows
-    : (selectedVersion?.rows ?? 1);
-  const previewCols = selectedVersion?.isParametric
-    ? configCols
-    : (selectedVersion?.columns ?? 1);
+  const interfaceLabel = receptacle?.interfaceTypeAccepted;
+
+  const compatLabel = useMemo(() => {
+    if (loading) return "Loading…";
+    if (!receptacle) return "";
+    if (!interfaceLabel) {
+      return "Receptacle has no interface set — showing all inserts.";
+    }
+    return `Compatible with ${interfaceLabel}.`;
+  }, [loading, receptacle, interfaceLabel]);
 
   return (
-    <div className="flex-1 flex min-w-0 h-full overflow-hidden">
-      {/* Left: Template selection / configuration */}
-      <div className="flex-1 flex flex-col min-w-0 max-w-xl">
-        <div className="flex-1 overflow-y-auto p-6">
-        <button
-          onClick={() => router.push(`/modules/${moduleId}`)}
-          className="text-sm text-slate-400 hover:text-slate-200 transition-colors mb-4 self-start"
+    <div className="flex-1 flex flex-col min-w-0 h-full overflow-hidden">
+      <div className="px-6 py-3 border-b border-slate-700 flex items-center gap-3 shrink-0">
+        <Link
+          href={`/modules/${moduleId}`}
+          className="text-sm text-slate-400 hover:text-slate-200"
         >
-          &larr; Back to module
-        </button>
-
-        {error && (
-          <div className="px-3 py-2 bg-red-900/30 border border-red-700/50 rounded text-red-300 text-sm mb-4">
-            {error}
-          </div>
-        )}
-
-        {/* Step 1: Choose Template */}
-        {step === 1 && (
-          <div className="flex flex-col gap-4">
-            <h1 className="text-xl font-semibold text-slate-100">
-              Place Insert — Choose Template
-            </h1>
-
-            <input
-              type="text"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              placeholder="Search templates..."
-              className="px-3 py-2 bg-slate-800 border border-slate-700 rounded text-slate-100 placeholder:text-slate-600 focus:border-accent focus:outline-none"
-            />
-
-            {filteredTemplates.length === 0 ? (
-              <p className="text-slate-500 text-sm">
-                No templates available. Create a template first.
-              </p>
-            ) : (
-              <div className="flex flex-col gap-1">
-                {filteredTemplates.map((t) => {
-                  const ver = t.currentVersionData;
-                  const isSelected = t.id === selectedTemplateId;
-                  return (
-                    <button
-                      key={t.id}
-                      onClick={() => selectTemplate(t.id)}
-                      className={`flex items-center gap-3 px-4 py-3 rounded text-left transition-colors ${
-                        isSelected
-                          ? "bg-slate-700 border border-accent/50"
-                          : "bg-slate-800/30 border border-slate-700/50 hover:bg-slate-800/60"
-                      }`}
-                    >
-                      <div className="flex-1 min-w-0">
-                        <div className="text-sm text-slate-100 font-medium">
-                          {t.name}
-                        </div>
-                        {t.description && (
-                          <div className="text-xs text-slate-500 truncate">
-                            {t.description}
-                          </div>
-                        )}
-                      </div>
-                      <span
-                        className={`text-xs px-1.5 py-0.5 rounded ${
-                          ver?.isParametric
-                            ? "bg-purple-900/50 text-purple-300"
-                            : "bg-slate-700 text-slate-300"
-                        }`}
-                      >
-                        {ver?.isParametric ? "Parametric" : "Fixed"}
-                      </span>
-                      {ver?.rows != null && ver?.columns != null && (
-                        <span className="text-xs text-slate-500 tabular-nums">
-                          {ver.rows}×{ver.columns}
-                        </span>
-                      )}
-                    </button>
-                  );
-                })}
-              </div>
-            )}
-
-          </div>
-        )}
-
-        {/* Step 2: Configure (parametric only) */}
-        {step === 2 && selectedVersion && (
-          <div className="flex flex-col gap-4">
-            <h1 className="text-xl font-semibold text-slate-100">
-              Configure Dimensions
-            </h1>
-            <p className="text-sm text-slate-400">
-              {selectedTemplate?.name} is parametric — set the grid size.
-            </p>
-
-            <div className="flex gap-4">
-              <label className="flex flex-col gap-1 flex-1">
-                <span className="text-xs text-slate-400 uppercase tracking-wider">
-                  Rows
-                  {selectedVersion.minRows != null && selectedVersion.maxRows != null && (
-                    <span className="text-slate-600 normal-case ml-1">
-                      ({selectedVersion.minRows}–{selectedVersion.maxRows})
-                    </span>
-                  )}
-                </span>
-                <input
-                  type="number"
-                  min={selectedVersion.minRows ?? 1}
-                  max={selectedVersion.maxRows ?? 26}
-                  value={configRows}
-                  onChange={(e) => setConfigRows(Number(e.target.value) || 1)}
-                  className="px-3 py-2 bg-slate-800 border border-slate-700 rounded text-slate-100 focus:border-accent focus:outline-none tabular-nums"
-                />
-              </label>
-              <label className="flex flex-col gap-1 flex-1">
-                <span className="text-xs text-slate-400 uppercase tracking-wider">
-                  Columns
-                  {selectedVersion.minColumns != null && selectedVersion.maxColumns != null && (
-                    <span className="text-slate-600 normal-case ml-1">
-                      ({selectedVersion.minColumns}–{selectedVersion.maxColumns})
-                    </span>
-                  )}
-                </span>
-                <input
-                  type="number"
-                  min={selectedVersion.minColumns ?? 1}
-                  max={selectedVersion.maxColumns ?? 26}
-                  value={configCols}
-                  onChange={(e) => setConfigCols(Number(e.target.value) || 1)}
-                  className="px-3 py-2 bg-slate-800 border border-slate-700 rounded text-slate-100 focus:border-accent focus:outline-none tabular-nums"
-                />
-              </label>
-            </div>
-
-          </div>
-        )}
-
-        {/* Step 3: Name & Confirm */}
-        {step === 3 && selectedVersion && (
-          <div className="flex flex-col gap-4">
-            <h1 className="text-xl font-semibold text-slate-100">
-              Name & Place
-            </h1>
-
-            <label className="flex flex-col gap-1">
-              <span className="text-xs text-slate-400 uppercase tracking-wider">
-                Insert Name
-              </span>
-              <input
-                type="text"
-                value={insertName}
-                onChange={(e) => setInsertName(e.target.value)}
-                placeholder="e.g., Plano 3600 #4"
-                className="px-3 py-2 bg-slate-800 border border-slate-700 rounded text-slate-100 placeholder:text-slate-600 focus:border-accent focus:outline-none"
-              />
-            </label>
-
-            <div className="bg-slate-800/50 border border-slate-700 rounded-lg p-3 text-sm">
-              <p className="text-slate-400">
-                Template: <span className="text-slate-200">{selectedTemplate?.name}</span>
-              </p>
-              <p className="text-slate-400">
-                Version: <span className="text-slate-200">v{selectedVersion.version}</span>
-              </p>
-              <p className="text-slate-400">
-                Grid: <span className="text-slate-200 tabular-nums">{previewRows} × {previewCols}</span>
-              </p>
-            </div>
-
-          </div>
-        )}
-        </div>
-
-        {/* Sticky footer: primary action for the current step (PI-1) */}
-        <div className="border-t border-slate-700 bg-slate-900/80 backdrop-blur px-6 py-3 flex items-center gap-3 shrink-0">
-          {step === 1 && (
-            <button
-              onClick={goToStep2}
-              disabled={!selectedVersion}
-              className="px-5 py-2 bg-accent text-white rounded-md hover:brightness-110 transition-all disabled:opacity-50 disabled:cursor-not-allowed ml-auto"
-            >
-              Next
-            </button>
-          )}
-          {step === 2 && selectedVersion && (
-            <>
-              <button
-                onClick={() => setStep(1)}
-                className="px-5 py-2 bg-slate-700 text-slate-300 rounded-md hover:bg-slate-600 transition-all"
-              >
-                Back
-              </button>
-              <button
-                onClick={() => setStep(3)}
-                className="px-5 py-2 bg-accent text-white rounded-md hover:brightness-110 transition-all ml-auto"
-              >
-                Next
-              </button>
-            </>
-          )}
-          {step === 3 && selectedVersion && (
-            <>
-              <button
-                onClick={() =>
-                  setStep(selectedVersion.isParametric ? 2 : 1)
-                }
-                className="px-5 py-2 bg-slate-700 text-slate-300 rounded-md hover:bg-slate-600 transition-all"
-              >
-                Back
-              </button>
-              <button
-                onClick={handlePlace}
-                disabled={saving}
-                className="px-5 py-2 bg-accent text-white rounded-md hover:brightness-110 transition-all disabled:opacity-50 disabled:cursor-not-allowed ml-auto"
-              >
-                {saving ? "Placing..." : "Place Insert"}
-              </button>
-            </>
-          )}
-        </div>
+          ← Back to module
+        </Link>
       </div>
 
-      {/* Right: Grid preview */}
-      <div className="w-96 shrink-0 border-l border-slate-700 flex items-center justify-center bg-slate-800/20">
-        {selectedVersion ? (
-          <MiniGrid
-            rows={previewRows}
-            columns={previewCols}
-            rowLabelScheme={selectedVersion.rowLabelScheme}
-            columnLabelScheme={selectedVersion.columnLabelScheme}
-            origin={selectedVersion.originPosition as Origin}
-            rowDividersFixed={selectedVersion.rowDividersFixed}
-            columnDividersFixed={selectedVersion.columnDividersFixed}
-          />
+      <div className="px-6 py-3 border-b border-slate-700 shrink-0">
+        <h1 className="text-base font-semibold text-slate-100">
+          Place an insert in {receptacle?.path ?? "…"}
+        </h1>
+        <p className="text-xs text-slate-500 mt-0.5">{compatLabel}</p>
+      </div>
+
+      {error && (
+        <div className="mx-6 my-2 px-3 py-2 bg-red-900/30 border border-red-700/50 rounded text-red-300 text-sm shrink-0">
+          {error}
+        </div>
+      )}
+
+      <div className="flex-1 min-h-0 overflow-y-auto px-6 py-4">
+        {/* Existing inserts */}
+        <div className="flex items-center justify-between mb-3">
+          <div className="text-xs font-medium text-slate-400 uppercase tracking-wider">
+            Compatible inserts
+          </div>
+          <label className="flex items-center gap-2 text-xs text-slate-400 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={showAll}
+              onChange={(e) => setShowAll(e.target.checked)}
+              className="accent-accent"
+            />
+            Include placed inserts (will be moved here)
+          </label>
+        </div>
+
+        {loading ? (
+          <div className="text-sm text-slate-500">Loading…</div>
+        ) : inserts.length === 0 ? (
+          <div className="text-sm text-slate-500">
+            No {showAll ? "" : "unplaced "}inserts match this receptacle.
+          </div>
         ) : (
-          <p className="text-slate-500 text-sm px-6 text-center">
-            Select a template to preview its grid layout.
-          </p>
+          <ul className="flex flex-col gap-1 mb-6">
+            {inserts.map((ins) => {
+              const dims =
+                ins.rows != null && ins.columns != null
+                  ? `${ins.rows}×${ins.columns}`
+                  : "—";
+              return (
+                <li key={ins.id}>
+                  <button
+                    onClick={() => placeInsert(ins.id)}
+                    disabled={busy}
+                    className="w-full text-left px-3 py-2 rounded border border-slate-700 hover:border-accent/60 hover:bg-slate-800/40 transition-colors disabled:opacity-50"
+                  >
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm text-slate-100 font-medium truncate flex-1">
+                        {ins.name ?? ins.templateName ?? "Insert"}
+                      </span>
+                      {ins.interfaceType && (
+                        <span className="text-[10px] px-1.5 py-0.5 rounded bg-blue-900/40 text-blue-300 shrink-0">
+                          {ins.interfaceType}
+                        </span>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-2 mt-0.5 text-[11px] text-slate-500">
+                      <span>{ins.templateName ?? "(no template)"}</span>
+                      <span>·</span>
+                      <span className="tabular-nums">{dims}</span>
+                      {ins.locationPath ? (
+                        <>
+                          <span>·</span>
+                          <span className="text-amber-400">
+                            currently at {ins.locationPath}
+                          </span>
+                        </>
+                      ) : null}
+                    </div>
+                  </button>
+                </li>
+              );
+            })}
+          </ul>
         )}
+
+        {/* Sub-flow: create a new insert */}
+        <div className="border-t border-slate-700 pt-4 mt-2">
+          {!createOpen ? (
+            <button
+              onClick={() => setCreateOpen(true)}
+              className="text-sm text-slate-300 hover:text-accent transition-colors"
+            >
+              + Create a new insert from a template
+            </button>
+          ) : (
+            <div className="space-y-3">
+              <h2 className="text-xs font-medium text-slate-400 uppercase tracking-wider">
+                New insert
+              </h2>
+              {templates.length === 0 ? (
+                <p className="text-sm text-slate-500">
+                  No templates match this receptacle&apos;s interface.
+                </p>
+              ) : (
+                <>
+                  <label className="block">
+                    <span className="text-xs text-slate-400 block mb-1">
+                      Template
+                    </span>
+                    <select
+                      value={newTemplateId}
+                      onChange={(e) => setNewTemplateId(e.target.value)}
+                      className="w-full px-2 py-1.5 bg-slate-800 border border-slate-700 rounded text-sm text-slate-200 focus:border-accent focus:outline-none"
+                    >
+                      <option value="">Select a template…</option>
+                      {templates.map((t) => (
+                        <option key={t.id} value={t.id}>
+                          {t.name}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <label className="block">
+                    <span className="text-xs text-slate-400 block mb-1">
+                      Name (optional)
+                    </span>
+                    <input
+                      type="text"
+                      value={newName}
+                      onChange={(e) => setNewName(e.target.value)}
+                      placeholder={
+                        selectedTemplate
+                          ? `e.g., ${selectedTemplate.name} #1`
+                          : "Name this insert"
+                      }
+                      className="w-full px-2 py-1.5 bg-slate-800 border border-slate-700 rounded text-sm text-slate-200 focus:border-accent focus:outline-none"
+                    />
+                  </label>
+                  {ver?.isParametric && (
+                    <div className="flex gap-3">
+                      <label className="flex flex-col gap-1 flex-1">
+                        <span className="text-xs text-slate-400">
+                          Rows
+                          {ver.minRows != null && ver.maxRows != null && (
+                            <span className="text-slate-600 ml-1">
+                              ({ver.minRows}–{ver.maxRows})
+                            </span>
+                          )}
+                        </span>
+                        <input
+                          type="number"
+                          min={ver.minRows ?? 1}
+                          max={ver.maxRows ?? 26}
+                          value={newRows}
+                          onChange={(e) =>
+                            setNewRows(
+                              e.target.value === ""
+                                ? ""
+                                : Number(e.target.value)
+                            )
+                          }
+                          className="px-2 py-1.5 bg-slate-800 border border-slate-700 rounded text-sm text-slate-200 focus:border-accent focus:outline-none tabular-nums"
+                        />
+                      </label>
+                      <label className="flex flex-col gap-1 flex-1">
+                        <span className="text-xs text-slate-400">
+                          Columns
+                          {ver.minColumns != null && ver.maxColumns != null && (
+                            <span className="text-slate-600 ml-1">
+                              ({ver.minColumns}–{ver.maxColumns})
+                            </span>
+                          )}
+                        </span>
+                        <input
+                          type="number"
+                          min={ver.minColumns ?? 1}
+                          max={ver.maxColumns ?? 26}
+                          value={newCols}
+                          onChange={(e) =>
+                            setNewCols(
+                              e.target.value === ""
+                                ? ""
+                                : Number(e.target.value)
+                            )
+                          }
+                          className="px-2 py-1.5 bg-slate-800 border border-slate-700 rounded text-sm text-slate-200 focus:border-accent focus:outline-none tabular-nums"
+                        />
+                      </label>
+                    </div>
+                  )}
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={createAndPlace}
+                      disabled={busy || !newTemplateId}
+                      className="px-3 py-1.5 bg-accent text-white rounded text-sm hover:brightness-110 disabled:opacity-50"
+                    >
+                      {busy ? "Creating…" : "Create + place here"}
+                    </button>
+                    <button
+                      onClick={() => {
+                        setCreateOpen(false);
+                        setNewTemplateId("");
+                        setNewName("");
+                      }}
+                      className="px-3 py-1.5 border border-slate-600 text-slate-300 rounded text-sm hover:bg-slate-700/50"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                </>
+              )}
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );
