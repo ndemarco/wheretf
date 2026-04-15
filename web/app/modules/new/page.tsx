@@ -22,9 +22,16 @@ export default function NewModulePage() {
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
   const [dimensionLabel, setDimensionLabel] = useState("level");
-  const [dimensionCount, setDimensionCount] = useState(4);
   const [defaultIface, setDefaultIface] = useState("");
-  const [levels, setLevels] = useState<LevelConfig[]>([]);
+  const [levels, setLevels] = useState<LevelConfig[]>([
+    {
+      label: "1",
+      type: "receptacle",
+      interfaceTypeAccepted: "",
+      notes: "",
+      selected: false,
+    },
+  ]);
 
   const [interfaceOptions, setInterfaceOptions] = useState<
     Array<{ identifier: string; description: string | null }>
@@ -42,27 +49,6 @@ export default function NewModulePage() {
     })();
   }, []);
 
-  // Regenerate levels when count or defaults change, preserving
-  // existing edits for rows that remain in range.
-  useEffect(() => {
-    const n = Math.max(1, Math.min(dimensionCount, 50));
-    setLevels((prev) => {
-      const next: LevelConfig[] = Array.from({ length: n }, (_, i) => {
-        const existing = prev[i];
-        if (existing) return existing;
-        return {
-          label: String(i + 1),
-          type: "receptacle",
-          interfaceTypeAccepted: defaultIface,
-          notes: "",
-          selected: false,
-        };
-      });
-      return next;
-    });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [dimensionCount]);
-
   // When the default interface changes, propagate it to receptacle rows
   // that still hold the old default (don't overwrite user-set values).
   useEffect(() => {
@@ -74,6 +60,22 @@ export default function NewModulePage() {
       )
     );
   }, [defaultIface]);
+
+  function addLevel() {
+    setLevels((p) => [
+      ...p,
+      {
+        label: String(p.length + 1),
+        type: "receptacle",
+        interfaceTypeAccepted: defaultIface,
+        notes: "",
+        selected: false,
+      },
+    ]);
+  }
+  function removeLevel(i: number) {
+    setLevels((p) => p.filter((_, k) => k !== i));
+  }
 
   function updateLevel(i: number, updates: Partial<LevelConfig>) {
     setLevels((p) => p.map((l, k) => (k === i ? { ...l, ...updates } : l)));
@@ -154,15 +156,7 @@ export default function NewModulePage() {
   return (
     <div className="flex-1 flex flex-col min-w-0 overflow-y-auto">
       <div className="max-w-3xl w-full mx-auto p-6 flex flex-col gap-6">
-        <div className="flex items-center justify-between">
-          <h1 className="text-xl font-semibold text-slate-100">New module</h1>
-          <Link
-            href="/modules"
-            className="text-sm text-slate-400 hover:text-slate-200"
-          >
-            Cancel
-          </Link>
-        </div>
+        <h1 className="text-xl font-semibold text-slate-100">New module</h1>
 
         {error && (
           <div className="px-3 py-2 bg-red-900/30 border border-red-700/50 rounded text-red-300 text-sm">
@@ -200,50 +194,33 @@ export default function NewModulePage() {
         </div>
 
         {/* Primary dimension */}
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-          <label className="flex flex-col gap-1 sm:col-span-2">
-            <span className="text-xs text-slate-400 uppercase tracking-wider">
-              Primary dimension label
-            </span>
-            <input
-              type="text"
-              value={dimensionLabel}
-              onChange={(e) => setDimensionLabel(e.target.value)}
-              placeholder="level / drawer / shelf / row / bay"
-              className="px-3 py-2 bg-slate-800 border border-slate-700 rounded text-slate-100 placeholder:text-slate-600 focus:border-accent focus:outline-none"
-            />
-            <div className="flex gap-2 mt-1 flex-wrap">
-              {DIMENSION_SUGGESTIONS.map((s) => (
-                <button
-                  key={s}
-                  onClick={() => setDimensionLabel(s)}
-                  className={`text-xs px-2 py-0.5 rounded transition-colors ${
-                    dimensionLabel === s
-                      ? "bg-accent/20 text-accent"
-                      : "bg-slate-700 text-slate-400 hover:text-slate-200"
-                  }`}
-                >
-                  {s}
-                </button>
-              ))}
-            </div>
-          </label>
-          <label className="flex flex-col gap-1">
-            <span className="text-xs text-slate-400 uppercase tracking-wider">
-              Count
-            </span>
-            <input
-              type="number"
-              min={1}
-              max={50}
-              value={dimensionCount}
-              onChange={(e) =>
-                setDimensionCount(Math.max(1, Number(e.target.value) || 1))
-              }
-              className="px-3 py-2 bg-slate-800 border border-slate-700 rounded text-slate-100 focus:border-accent focus:outline-none tabular-nums"
-            />
-          </label>
-        </div>
+        <label className="flex flex-col gap-1">
+          <span className="text-xs text-slate-400 uppercase tracking-wider">
+            Primary dimension label
+          </span>
+          <input
+            type="text"
+            value={dimensionLabel}
+            onChange={(e) => setDimensionLabel(e.target.value)}
+            placeholder="level / drawer / shelf / row / bay"
+            className="px-3 py-2 bg-slate-800 border border-slate-700 rounded text-slate-100 placeholder:text-slate-600 focus:border-accent focus:outline-none"
+          />
+          <div className="flex gap-2 mt-1 flex-wrap">
+            {DIMENSION_SUGGESTIONS.map((s) => (
+              <button
+                key={s}
+                onClick={() => setDimensionLabel(s)}
+                className={`text-xs px-2 py-0.5 rounded transition-colors ${
+                  dimensionLabel === s
+                    ? "bg-accent/20 text-accent"
+                    : "bg-slate-700 text-slate-400 hover:text-slate-200"
+                }`}
+              >
+                {s}
+              </button>
+            ))}
+          </div>
+        </label>
 
         {/* Default interface (applied to new receptacle rows) */}
         <label className="flex flex-col gap-1 max-w-xs">
@@ -336,6 +313,7 @@ export default function NewModulePage() {
                   <th className="px-3 py-2 text-xs font-medium text-slate-400 uppercase tracking-wider">
                     Notes
                   </th>
+                  <th className="px-2 py-2 w-8" aria-label="remove" />
                 </tr>
               </thead>
               <tbody>
@@ -409,11 +387,32 @@ export default function NewModulePage() {
                         className="px-2 py-1 bg-slate-800 border border-slate-700 rounded text-slate-100 text-sm placeholder:text-slate-600 focus:border-accent focus:outline-none w-full"
                       />
                     </td>
+                    <td className="px-2 py-1.5">
+                      <button
+                        onClick={() => removeLevel(i)}
+                        disabled={levels.length <= 1}
+                        title={
+                          levels.length <= 1
+                            ? "A module needs at least one level"
+                            : "Remove this level"
+                        }
+                        className="w-6 h-6 rounded text-slate-400 hover:text-red-400 hover:bg-red-900/20 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                        aria-label="Remove level"
+                      >
+                        −
+                      </button>
+                    </td>
                   </tr>
                 ))}
               </tbody>
             </table>
           </div>
+          <button
+            onClick={addLevel}
+            className="self-start px-3 py-1.5 border border-dashed border-slate-600 text-slate-400 rounded text-xs hover:border-slate-500 hover:text-slate-200 transition-colors"
+          >
+            + Add {dimensionLabel || "level"}
+          </button>
         </div>
 
         <div className="flex items-center justify-end gap-3 pt-2">
