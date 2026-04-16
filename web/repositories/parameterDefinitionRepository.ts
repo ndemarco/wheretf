@@ -5,6 +5,9 @@ import {
   aspectParameters,
   itemParameterValues,
   standardParameters,
+  aspects,
+  items,
+  standards,
 } from "@/db/schema";
 import { transactionRepository } from "./transactionRepository";
 import {
@@ -138,6 +141,44 @@ export const parameterDefinitionRepository = {
    * Detect data-quality and duplication issues in the parameter catalog.
    * Runs in Node, no expensive joins — just transforms listWithUsage() output.
    */
+  /**
+   * Where-used drilldown for a single parameter definition.
+   * Returns the aspects that include it, the items that have a stored
+   * value, and the standards that reference it.
+   */
+  async getUsage({ parameterDefinitionId }: { parameterDefinitionId: string }) {
+    const aspectRows = await db
+      .select({ id: aspects.id, name: aspects.name })
+      .from(aspectParameters)
+      .innerJoin(aspects, eq(aspectParameters.aspectId, aspects.id))
+      .where(eq(aspectParameters.parameterDefinitionId, parameterDefinitionId))
+      .orderBy(aspects.name);
+
+    const itemRows = await db
+      .selectDistinctOn([items.id], { id: items.id, name: items.name })
+      .from(itemParameterValues)
+      .innerJoin(items, eq(itemParameterValues.itemId, items.id))
+      .where(
+        eq(itemParameterValues.parameterDefinitionId, parameterDefinitionId)
+      )
+      .orderBy(items.id, items.name);
+
+    const standardRows = await db
+      .select({ id: standards.id, name: standards.name })
+      .from(standardParameters)
+      .innerJoin(standards, eq(standardParameters.standardId, standards.id))
+      .where(
+        eq(standardParameters.parameterDefinitionId, parameterDefinitionId)
+      )
+      .orderBy(standards.name);
+
+    return {
+      aspects: aspectRows,
+      items: itemRows,
+      standards: standardRows,
+    };
+  },
+
   async audit(): Promise<AuditCheck[]> {
     const defs = await parameterDefinitionRepository.listWithUsage();
     const out: AuditCheck[] = [];

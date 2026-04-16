@@ -409,6 +409,10 @@ function AspectsTab() {
   const [params, setParams] = useState<AspectParameter[]>([]);
   const [allParamDefs, setAllParamDefs] = useState<ParameterDefinition[]>([]);
   const [loading, setLoading] = useState(true);
+  const [itemsUsing, setItemsUsing] = useState<
+    { itemId: string; itemName: string }[]
+  >([]);
+  const [showItems, setShowItems] = useState(false);
 
   // Create form
   const [showCreate, setShowCreate] = useState(false);
@@ -457,6 +461,22 @@ function AspectsTab() {
   useEffect(() => {
     if (selectedId) fetchParams(selectedId);
   }, [selectedId, fetchParams]);
+
+  useEffect(() => {
+    // Reset + lazily fetch items-using list on aspect change.
+    setItemsUsing([]);
+    setShowItems(false);
+    if (!selectedId) return;
+    (async () => {
+      try {
+        const res = await fetch(`/api/aspects/${selectedId}/items`);
+        const data = await res.json();
+        setItemsUsing(data.items ?? []);
+      } catch (err) {
+        console.error(err);
+      }
+    })();
+  }, [selectedId]);
 
   const selectedAspect = aspects.find((a) => a.id === selectedId) || null;
 
@@ -778,6 +798,39 @@ function AspectsTab() {
                 onAdd={async (pd) => addParamToAspect(pd.id)}
                 onCreateAndAdd={async (newDef) => addParamToAspect(newDef.id)}
               />
+            </div>
+
+            {/* Used by */}
+            <div>
+              <button
+                onClick={() => setShowItems((v) => !v)}
+                className="w-full flex items-center justify-between text-xs font-medium text-slate-400 uppercase tracking-wider mb-2 hover:text-slate-200 transition-colors"
+              >
+                <span>
+                  Used by {itemsUsing.length}{" "}
+                  item{itemsUsing.length === 1 ? "" : "s"}
+                </span>
+                <span className="text-[10px]">{showItems ? "▼" : "▶"}</span>
+              </button>
+              {showItems && (
+                <div className="space-y-1 max-h-64 overflow-y-auto">
+                  {itemsUsing.length === 0 ? (
+                    <p className="text-xs text-slate-500 italic">
+                      Not applied to any items yet.
+                    </p>
+                  ) : (
+                    itemsUsing.map((i) => (
+                      <a
+                        key={i.itemId}
+                        href={`/items?selected=${i.itemId}`}
+                        className="block px-3 py-1.5 bg-slate-800/40 border border-slate-700 rounded text-xs text-slate-300 hover:bg-slate-800 hover:text-accent transition-colors"
+                      >
+                        {i.itemName}
+                      </a>
+                    ))
+                  )}
+                </div>
+              )}
             </div>
           </div>
         )}
@@ -1402,6 +1455,12 @@ function ParametersTab() {
   );
 }
 
+interface ParamUsage {
+  aspects: { id: string; name: string }[];
+  items: { id: string; name: string }[];
+  standards: { id: string; name: string }[];
+}
+
 function ParamDefRow({
   pd,
   onSave,
@@ -1411,6 +1470,21 @@ function ParamDefRow({
   onSave: (updates: Partial<ParameterDefinition>) => Promise<void>;
   onDelete: () => void;
 }) {
+  const [expanded, setExpanded] = useState(false);
+  const [usage, setUsage] = useState<ParamUsage | null>(null);
+  const [usageLoading, setUsageLoading] = useState(false);
+
+  async function loadUsage() {
+    if (usage) return;
+    setUsageLoading(true);
+    try {
+      const res = await fetch(`/api/parameter-definitions/${pd.id}/usage`);
+      const data = await res.json();
+      setUsage(data);
+    } finally {
+      setUsageLoading(false);
+    }
+  }
   const [editing, setEditing] = useState(false);
   const [dataType, setDataType] = useState(pd.dataType);
   const [unit, setUnit] = useState(pd.unit ?? "");
@@ -1495,6 +1569,7 @@ function ParamDefRow({
         })()
       : "—";
     return (
+      <>
       <tr className="border-b border-slate-700/50 hover:bg-slate-800/30 group">
         <td className="px-3 py-2 text-sm text-slate-200 font-mono">{pd.name}</td>
         <td className="px-3 py-2">
@@ -1528,15 +1603,20 @@ function ParamDefRow({
             <span className="text-slate-600 text-xs">—</span>
           )}
         </td>
-        <td className="px-3 py-2 text-xs text-slate-400 tabular-nums whitespace-nowrap">
+        <td className="px-3 py-2 text-xs tabular-nums whitespace-nowrap">
           {pd.aspectCount !== undefined ||
           pd.itemCount !== undefined ||
           pd.standardCount !== undefined ? (
-            <span
-              title={`${pd.aspectCount ?? 0} aspects · ${pd.itemCount ?? 0} items · ${pd.standardCount ?? 0} standards`}
+            <button
+              onClick={() => {
+                if (!expanded) loadUsage();
+                setExpanded((v) => !v);
+              }}
+              title="Show where this parameter is used"
+              className={`text-xs cursor-pointer ${expanded ? "text-accent" : "text-slate-400 hover:text-accent"}`}
             >
-              {pd.aspectCount ?? 0}·{pd.itemCount ?? 0}
-            </span>
+              {pd.aspectCount ?? 0}·{pd.itemCount ?? 0} {expanded ? "▼" : "▶"}
+            </button>
           ) : (
             <span className="text-slate-600">—</span>
           )}
@@ -1556,6 +1636,74 @@ function ParamDefRow({
           </button>
         </td>
       </tr>
+      {expanded && (
+        <tr className="bg-slate-900/60 border-b border-slate-700">
+          <td colSpan={8} className="px-6 py-3">
+            {usageLoading && !usage ? (
+              <div className="text-xs text-slate-500">Loading usage…</div>
+            ) : usage ? (
+              <div className="grid grid-cols-3 gap-4 text-xs">
+                <div>
+                  <div className="text-[10px] uppercase tracking-wider text-slate-500 mb-1">
+                    Aspects ({usage.aspects.length})
+                  </div>
+                  {usage.aspects.length === 0 ? (
+                    <span className="text-slate-600 italic">none</span>
+                  ) : (
+                    <ul className="space-y-0.5">
+                      {usage.aspects.map((a) => (
+                        <li key={a.id} className="text-slate-300">
+                          {a.name}
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+                <div>
+                  <div className="text-[10px] uppercase tracking-wider text-slate-500 mb-1">
+                    Items ({usage.items.length})
+                  </div>
+                  {usage.items.length === 0 ? (
+                    <span className="text-slate-600 italic">none</span>
+                  ) : (
+                    <ul className="space-y-0.5 max-h-40 overflow-y-auto">
+                      {usage.items.map((i) => (
+                        <li key={i.id}>
+                          <a
+                            href={`/items?selected=${i.id}`}
+                            className="text-slate-300 hover:text-accent"
+                          >
+                            {i.name}
+                          </a>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+                <div>
+                  <div className="text-[10px] uppercase tracking-wider text-slate-500 mb-1">
+                    Standards ({usage.standards.length})
+                  </div>
+                  {usage.standards.length === 0 ? (
+                    <span className="text-slate-600 italic">none</span>
+                  ) : (
+                    <ul className="space-y-0.5">
+                      {usage.standards.map((s) => (
+                        <li key={s.id} className="text-slate-300">
+                          {s.name}
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+              </div>
+            ) : (
+              <div className="text-xs text-slate-500">No usage data.</div>
+            )}
+          </td>
+        </tr>
+      )}
+      </>
     );
   }
 

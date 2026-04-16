@@ -6,6 +6,7 @@ import {
   aspectStandards,
   parameterDefinitions,
   itemAspects,
+  items,
 } from "@/db/schema";
 import { transactionRepository } from "./transactionRepository";
 import { type AuditCheck, jaccardTokens } from "@/lib/audit";
@@ -87,6 +88,31 @@ export const aspectRepository = {
       itemCount: Number(r.itemCount ?? 0),
       standardCount: Number(r.standardCount ?? 0),
     }));
+  },
+
+  /**
+   * Items that have this aspect applied. Limited so the list detail
+   * panel stays snappy — the count lives on getUsage().
+   */
+  async listItemsUsing({
+    aspectId,
+    limit = 50,
+  }: {
+    aspectId: string;
+    limit?: number;
+  }) {
+    const rows = await db
+      .select({
+        itemId: items.id,
+        itemName: items.name,
+        appliedAt: itemAspects.createdAt,
+      })
+      .from(itemAspects)
+      .innerJoin(items, eq(itemAspects.itemId, items.id))
+      .where(eq(itemAspects.aspectId, aspectId))
+      .orderBy(sql`${itemAspects.createdAt} DESC`)
+      .limit(limit);
+    return rows;
   },
 
   async getUsage({ aspectId }: { aspectId: string }) {
