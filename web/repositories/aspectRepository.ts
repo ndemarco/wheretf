@@ -1,8 +1,9 @@
-import { eq, and, count } from "drizzle-orm";
+import { eq, and, count, sql } from "drizzle-orm";
 import { db } from "@/db/connection";
 import {
   aspects,
   aspectParameters,
+  aspectStandards,
   parameterDefinitions,
   itemAspects,
 } from "@/db/schema";
@@ -50,6 +51,61 @@ export const aspectRepository = {
 
   async list() {
     return db.select().from(aspects).orderBy(aspects.name);
+  },
+
+  /**
+   * Like list() but each row includes usage counts computed via correlated
+   * subqueries so the list page can show context per aspect.
+   */
+  async listWithUsage() {
+    const rows = await db
+      .select({
+        id: aspects.id,
+        name: aspects.name,
+        description: aspects.description,
+        createdAt: aspects.createdAt,
+        updatedAt: aspects.updatedAt,
+        parameterCount: sql<number>`(
+          SELECT COUNT(*)::int FROM ${aspectParameters}
+          WHERE ${aspectParameters.aspectId} = ${aspects.id}
+        )`.as("parameterCount"),
+        itemCount: sql<number>`(
+          SELECT COUNT(*)::int FROM ${itemAspects}
+          WHERE ${itemAspects.aspectId} = ${aspects.id}
+        )`.as("itemCount"),
+        standardCount: sql<number>`(
+          SELECT COUNT(*)::int FROM ${aspectStandards}
+          WHERE ${aspectStandards.aspectId} = ${aspects.id}
+        )`.as("standardCount"),
+      })
+      .from(aspects)
+      .orderBy(aspects.name);
+    return rows.map((r) => ({
+      ...r,
+      parameterCount: Number(r.parameterCount ?? 0),
+      itemCount: Number(r.itemCount ?? 0),
+      standardCount: Number(r.standardCount ?? 0),
+    }));
+  },
+
+  async getUsage({ aspectId }: { aspectId: string }) {
+    const [pc] = await db
+      .select({ n: count() })
+      .from(aspectParameters)
+      .where(eq(aspectParameters.aspectId, aspectId));
+    const [ic] = await db
+      .select({ n: count() })
+      .from(itemAspects)
+      .where(eq(itemAspects.aspectId, aspectId));
+    const [sc] = await db
+      .select({ n: count() })
+      .from(aspectStandards)
+      .where(eq(aspectStandards.aspectId, aspectId));
+    return {
+      parameterCount: pc?.n ?? 0,
+      itemCount: ic?.n ?? 0,
+      standardCount: sc?.n ?? 0,
+    };
   },
 
   async update({

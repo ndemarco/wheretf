@@ -3,7 +3,8 @@ import { parameterDefinitionRepository } from "@/repositories/parameterDefinitio
 
 export async function GET() {
   try {
-    const parameterDefinitions = await parameterDefinitionRepository.list();
+    const parameterDefinitions =
+      await parameterDefinitionRepository.listWithUsage();
     return NextResponse.json({ parameterDefinitions });
   } catch (err) {
     return NextResponse.json(

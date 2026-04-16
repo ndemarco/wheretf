@@ -11,6 +11,10 @@ interface Aspect {
   id: string;
   name: string;
   description: string | null;
+  // Optional usage counts — present when loaded via listWithUsage().
+  parameterCount?: number;
+  itemCount?: number;
+  standardCount?: number;
 }
 
 interface AspectParameter {
@@ -35,6 +39,10 @@ interface ParameterDefinition {
   searchTerms: string[] | null;
   defaultValue: unknown;
   constraints: unknown;
+  // Optional usage counts — present when loaded via listWithUsage().
+  aspectCount?: number;
+  itemCount?: number;
+  standardCount?: number;
 }
 
 interface Category {
@@ -619,9 +627,20 @@ function AspectsTab() {
                     : "hover:bg-slate-800/30"
                 }`}
               >
-                <span className="text-sm text-slate-200 font-medium">
-                  {aspect.name}
-                </span>
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-sm text-slate-200 font-medium truncate">
+                    {aspect.name}
+                  </span>
+                  {(aspect.itemCount !== undefined ||
+                    aspect.parameterCount !== undefined) && (
+                    <span
+                      className="text-[10px] text-slate-500 tabular-nums shrink-0"
+                      title={`${aspect.itemCount ?? 0} items · ${aspect.parameterCount ?? 0} parameters · ${aspect.standardCount ?? 0} standards`}
+                    >
+                      {aspect.itemCount ?? 0}·{aspect.parameterCount ?? 0}
+                    </span>
+                  )}
+                </div>
                 {aspect.description && (
                   <span className="block text-xs text-slate-500 mt-0.5 line-clamp-1">
                     {aspect.description}
@@ -646,6 +665,27 @@ function AspectsTab() {
                 <h2 className="text-base font-semibold text-slate-100">
                   {selectedAspect.name}
                 </h2>
+                {(selectedAspect.itemCount !== undefined ||
+                  selectedAspect.parameterCount !== undefined ||
+                  selectedAspect.standardCount !== undefined) && (
+                  <p className="text-xs text-slate-500 mt-0.5 tabular-nums">
+                    applied to{" "}
+                    <span className="text-slate-300">
+                      {selectedAspect.itemCount ?? 0}
+                    </span>{" "}
+                    item{(selectedAspect.itemCount ?? 0) === 1 ? "" : "s"} ·{" "}
+                    <span className="text-slate-300">
+                      {selectedAspect.parameterCount ?? 0}
+                    </span>{" "}
+                    parameter
+                    {(selectedAspect.parameterCount ?? 0) === 1 ? "" : "s"} ·{" "}
+                    <span className="text-slate-300">
+                      {selectedAspect.standardCount ?? 0}
+                    </span>{" "}
+                    standard
+                    {(selectedAspect.standardCount ?? 0) === 1 ? "" : "s"}
+                  </p>
+                )}
                 {selectedAspect.description && (
                   <p className="text-sm text-slate-400 mt-1">
                     {selectedAspect.description}
@@ -1297,6 +1337,9 @@ function ParametersTab() {
               <th className="px-3 py-2 text-xs font-medium text-slate-400 uppercase tracking-wider">
                 Search terms
               </th>
+              <th className="px-3 py-2 text-xs font-medium text-slate-400 uppercase tracking-wider">
+                Usage
+              </th>
               <th className="px-3 py-2"></th>
             </tr>
           </thead>
@@ -1438,6 +1481,19 @@ function ParamDefRow({
             <span className="text-slate-600 text-xs">—</span>
           )}
         </td>
+        <td className="px-3 py-2 text-xs text-slate-400 tabular-nums whitespace-nowrap">
+          {pd.aspectCount !== undefined ||
+          pd.itemCount !== undefined ||
+          pd.standardCount !== undefined ? (
+            <span
+              title={`${pd.aspectCount ?? 0} aspects · ${pd.itemCount ?? 0} items · ${pd.standardCount ?? 0} standards`}
+            >
+              {pd.aspectCount ?? 0}·{pd.itemCount ?? 0}
+            </span>
+          ) : (
+            <span className="text-slate-600">—</span>
+          )}
+        </td>
         <td className="px-3 py-2 text-right whitespace-nowrap">
           <button
             onClick={() => setEditing(true)}
@@ -1522,6 +1578,11 @@ function ParamDefRow({
           placeholder="alias, synonym, abbrev"
           className="w-full max-w-xs px-2 py-1 bg-slate-800 border border-slate-600 rounded text-xs text-slate-200 focus:border-accent focus:outline-none"
         />
+      </td>
+      <td className="px-3 py-2 text-xs text-slate-500 tabular-nums whitespace-nowrap">
+        {pd.aspectCount !== undefined || pd.itemCount !== undefined
+          ? `${pd.aspectCount ?? 0}·${pd.itemCount ?? 0}`
+          : "—"}
       </td>
       <td className="px-3 py-2 text-right whitespace-nowrap">
         <button

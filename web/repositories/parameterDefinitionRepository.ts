@@ -1,6 +1,11 @@
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { db } from "@/db/connection";
-import { parameterDefinitions } from "@/db/schema";
+import {
+  parameterDefinitions,
+  aspectParameters,
+  itemParameterValues,
+  standardParameters,
+} from "@/db/schema";
 import { transactionRepository } from "./transactionRepository";
 
 type DataType = "numeric" | "text" | "boolean" | "enum";
@@ -77,6 +82,51 @@ export const parameterDefinitionRepository = {
 
   async list() {
     return db.select().from(parameterDefinitions).orderBy(parameterDefinitions.name);
+  },
+
+  /**
+   * Like list() but each row includes usage counts so the Parameters
+   * table can show an at-a-glance context column.
+   *
+   * - aspectCount: how many aspects include this parameter.
+   * - itemCount: how many distinct items have a stored value for it.
+   * - standardCount: how many standards reference it.
+   */
+  async listWithUsage() {
+    const rows = await db
+      .select({
+        id: parameterDefinitions.id,
+        name: parameterDefinitions.name,
+        dataType: parameterDefinitions.dataType,
+        unit: parameterDefinitions.unit,
+        description: parameterDefinitions.description,
+        searchTerms: parameterDefinitions.searchTerms,
+        defaultValue: parameterDefinitions.defaultValue,
+        constraints: parameterDefinitions.constraints,
+        createdAt: parameterDefinitions.createdAt,
+        updatedAt: parameterDefinitions.updatedAt,
+        aspectCount: sql<number>`(
+          SELECT COUNT(*)::int FROM ${aspectParameters}
+          WHERE ${aspectParameters.parameterDefinitionId} = ${parameterDefinitions.id}
+        )`.as("aspectCount"),
+        itemCount: sql<number>`(
+          SELECT COUNT(DISTINCT ${itemParameterValues.itemId})::int
+          FROM ${itemParameterValues}
+          WHERE ${itemParameterValues.parameterDefinitionId} = ${parameterDefinitions.id}
+        )`.as("itemCount"),
+        standardCount: sql<number>`(
+          SELECT COUNT(*)::int FROM ${standardParameters}
+          WHERE ${standardParameters.parameterDefinitionId} = ${parameterDefinitions.id}
+        )`.as("standardCount"),
+      })
+      .from(parameterDefinitions)
+      .orderBy(parameterDefinitions.name);
+    return rows.map((r) => ({
+      ...r,
+      aspectCount: Number(r.aspectCount ?? 0),
+      itemCount: Number(r.itemCount ?? 0),
+      standardCount: Number(r.standardCount ?? 0),
+    }));
   },
 
   async update({

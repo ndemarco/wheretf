@@ -3,7 +3,7 @@ import { aspectRepository } from "@/repositories/aspectRepository";
 
 export async function GET() {
   try {
-    const aspects = await aspectRepository.list();
+    const aspects = await aspectRepository.listWithUsage();
     return NextResponse.json({ aspects });
   } catch (err) {
     return NextResponse.json(

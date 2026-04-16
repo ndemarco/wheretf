@@ -11,9 +11,17 @@ export async function GET(
     if (!aspect) {
       return NextResponse.json({ error: "Aspect not found" }, { status: 404 });
     }
-    const itemCount = await aspectRepository.countItemsUsing({ aspectId: id });
-    const parameters = await aspectRepository.getParameters({ aspectId: id });
-    return NextResponse.json({ aspect, itemCount, parameters });
+    const [usage, parameters] = await Promise.all([
+      aspectRepository.getUsage({ aspectId: id }),
+      aspectRepository.getParameters({ aspectId: id }),
+    ]);
+    return NextResponse.json({
+      aspect,
+      parameters,
+      itemCount: usage.itemCount,
+      parameterCount: usage.parameterCount,
+      standardCount: usage.standardCount,
+    });
   } catch (err) {
     return NextResponse.json(
       { error: err instanceof Error ? err.message : "Unexpected error" },
