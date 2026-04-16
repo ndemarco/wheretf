@@ -113,15 +113,30 @@ function EditableText({
 
 // --- Parameter typeahead (attach existing or inline-create) ---
 
+interface CoOccurrenceSuggestion {
+  parameterDefinitionId: string;
+  name: string;
+  dataType: string;
+  unit: string | null;
+  frequency: number;
+  sourceAspects: string[];
+}
+
 function ParamTypeahead({
   available,
   onAdd,
   onCreateAndAdd,
+  aspectId,
   placeholder = "Search to add parameter…",
 }: {
   available: ParameterDefinition[];
   onAdd: (pd: ParameterDefinition) => Promise<void> | void;
   onCreateAndAdd: (def: ParameterDefinition) => Promise<void> | void;
+  // Optional aspect context — when set the typeahead asks the backend
+  // for co-occurring-parameter suggestions and surfaces them as a
+  // "commonly paired with" strip above the dropdown when the input is
+  // empty.
+  aspectId?: string;
   placeholder?: string;
 }) {
   const [query, setQuery] = useState("");
@@ -133,7 +148,33 @@ function ParamTypeahead({
   const [createUnit, setCreateUnit] = useState("");
   const [createEnumValues, setCreateEnumValues] = useState("");
   const [createError, setCreateError] = useState<string | null>(null);
+  const [suggestions, setSuggestions] = useState<CoOccurrenceSuggestion[]>([]);
   const inputRef = useRef<HTMLInputElement>(null);
+
+  // Re-fetch suggestions whenever the aspect changes or the attached
+  // parameter set changes (available.length is a coarse but cheap proxy
+  // for "something added/removed").
+  useEffect(() => {
+    if (!aspectId) {
+      setSuggestions([]);
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch(
+          `/api/aspects/${aspectId}/suggested-parameters?limit=5`
+        );
+        const data = await res.json();
+        if (!cancelled) setSuggestions(data.suggestions ?? []);
+      } catch {
+        /* ignore */
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [aspectId, available.length]);
 
   const q = query.trim().toLowerCase();
   const filtered = q
@@ -297,6 +338,47 @@ function ParamTypeahead({
         className="w-full px-3 py-2 bg-slate-800 border border-slate-600 rounded text-sm text-slate-200 placeholder:text-slate-500 focus:border-accent focus:outline-none"
       />
 
+      {/* Commonly-paired-with chips — aspect context + empty query */}
+      {aspectId && !query.trim() && suggestions.length > 0 && (
+        <div className="mt-2">
+          <div className="text-[10px] uppercase tracking-wider text-slate-500 mb-1">
+            Commonly paired with
+          </div>
+          <div className="flex flex-wrap gap-1.5">
+            {suggestions.map((s) => (
+              <button
+                key={s.parameterDefinitionId}
+                onClick={async () => {
+                  // Use the existing add-by-definition path. Build a
+                  // minimal ParameterDefinition shape; the onAdd call
+                  // only needs .id to link to the aspect.
+                  await onAdd({
+                    id: s.parameterDefinitionId,
+                    name: s.name,
+                    dataType: s.dataType,
+                    unit: s.unit,
+                    description: null,
+                    searchTerms: null,
+                    defaultValue: null,
+                    constraints: null,
+                  });
+                }}
+                title={`Seen in: ${s.sourceAspects.join(", ")}`}
+                className="inline-flex items-center gap-1.5 px-2 py-0.5 text-xs bg-slate-800 border border-dashed border-slate-600 text-slate-300 rounded-full hover:border-accent hover:text-accent transition-colors"
+              >
+                <span className="font-mono">{s.name}</span>
+                {s.unit && (
+                  <span className="text-[10px] text-slate-500">{s.unit}</span>
+                )}
+                <span className="text-[9px] text-slate-500 tabular-nums">
+                  ×{s.frequency}
+                </span>
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
       {open && (filtered.length > 0 || canCreate) && (
         <div className="absolute left-0 right-0 top-full mt-1 z-20 max-h-64 overflow-y-auto bg-slate-900 border border-slate-600 rounded shadow-lg">
           {filtered.map((pd, i) => (
@@ -318,6 +400,12 @@ function ParamTypeahead({
                 </span>
                 {pd.unit && (
                   <span className="text-[10px] text-slate-500">{pd.unit}</span>
+                )}
+                {pd.aspectCount !== undefined && pd.aspectCount > 0 && (
+                  <span className="text-[10px] text-slate-500">
+                    in {pd.aspectCount}{" "}
+                    aspect{pd.aspectCount === 1 ? "" : "s"}
+                  </span>
                 )}
               </span>
               <span className="text-[10px] text-accent shrink-0">+ add</span>
@@ -401,7 +489,6 @@ export default function TaxonomyPage() {
 // --- Aspects Tab ---
 
 function AspectsTab() {
-  const [view, setView] = useState<"detail" | "matrix">("detail");
   const [showBulkImport, setShowBulkImport] = useState(false);
   const [filter, setFilter] = useState("");
   const [aspects, setAspects] = useState<Aspect[]>([]);
@@ -560,21 +647,8 @@ function AspectsTab() {
     }
   }
 
-  if (view === "matrix") {
-    return (
-      <div className="flex-1 flex flex-col overflow-hidden">
-        <ViewToggle view={view} onChange={setView} />
-        <AspectParameterMatrix
-          aspects={aspects}
-          allParamDefs={allParamDefs.length ? allParamDefs : null}
-        />
-      </div>
-    );
-  }
-
   return (
     <div className="flex-1 flex flex-col overflow-hidden">
-      <ViewToggle view={view} onChange={setView} />
       <div className="flex-1 flex overflow-hidden">
       {/* Aspect list */}
       <div className="w-72 border-r border-slate-700 flex flex-col shrink-0">
@@ -797,6 +871,7 @@ function AspectsTab() {
                 available={availableParamDefs}
                 onAdd={async (pd) => addParamToAspect(pd.id)}
                 onCreateAndAdd={async (newDef) => addParamToAspect(newDef.id)}
+                aspectId={selectedId ?? undefined}
               />
             </div>
 
@@ -856,32 +931,6 @@ function AspectsTab() {
         />
       )}
       </div>
-    </div>
-  );
-}
-
-function ViewToggle({
-  view,
-  onChange,
-}: {
-  view: "detail" | "matrix";
-  onChange: (v: "detail" | "matrix") => void;
-}) {
-  return (
-    <div className="px-4 py-2 border-b border-slate-700 flex items-center justify-end gap-1 bg-slate-900/40">
-      {(["detail", "matrix"] as const).map((v) => (
-        <button
-          key={v}
-          onClick={() => onChange(v)}
-          className={`px-2.5 py-1 rounded text-[11px] transition-colors ${
-            view === v
-              ? "bg-slate-700 text-slate-100"
-              : "text-slate-400 hover:text-slate-200"
-          }`}
-        >
-          {v === "detail" ? "Detail" : "Matrix"}
-        </button>
-      ))}
     </div>
   );
 }
@@ -1241,7 +1290,9 @@ function DeleteAspectModal({
 // --- Parameters Tab ---
 
 function ParametersTab() {
+  const [view, setView] = useState<"detail" | "matrix">("detail");
   const [paramDefs, setParamDefs] = useState<ParameterDefinition[]>([]);
+  const [aspectsForMatrix, setAspectsForMatrix] = useState<Aspect[]>([]);
   const [loading, setLoading] = useState(true);
   const [showCreate, setShowCreate] = useState(false);
   const [newName, setNewName] = useState("");
@@ -1266,6 +1317,19 @@ function ParametersTab() {
   useEffect(() => {
     fetchParams();
   }, [fetchParams]);
+
+  useEffect(() => {
+    if (view !== "matrix") return;
+    (async () => {
+      try {
+        const res = await fetch("/api/aspects");
+        const data = await res.json();
+        setAspectsForMatrix(data.aspects || []);
+      } catch (err) {
+        console.error(err);
+      }
+    })();
+  }, [view]);
 
   async function createParam() {
     if (!newName.trim()) return;
@@ -1320,21 +1384,64 @@ function ParametersTab() {
         <h2 className="text-sm font-medium text-slate-300">
           Parameter Definitions
         </h2>
+        <div className="flex items-center gap-1">
+          {(["detail", "matrix"] as const).map((v) => (
+            <button
+              key={v}
+              onClick={() => setView(v)}
+              className={`px-2.5 py-1 rounded text-[11px] transition-colors ${
+                view === v
+                  ? "bg-slate-700 text-slate-100"
+                  : "text-slate-400 hover:text-slate-200"
+              }`}
+            >
+              {v === "detail" ? "Detail" : "Matrix"}
+            </button>
+          ))}
+        </div>
         <input
           value={filter}
           onChange={(e) => setFilter(e.target.value)}
-          placeholder="Filter by name, unit, description, or search term…"
+          placeholder={
+            view === "matrix"
+              ? "Filter rows (parameters) and columns (aspects)…"
+              : "Filter by name, unit, description, or search term…"
+          }
           className="flex-1 max-w-md px-2 py-1 bg-slate-800 border border-slate-600 rounded text-xs text-slate-200 placeholder:text-slate-500 focus:border-accent focus:outline-none"
         />
-        <button
-          onClick={() => setShowCreate(true)}
-          className="text-xs text-accent hover:brightness-110"
-        >
-          + New Parameter
-        </button>
+        {view === "detail" && (
+          <button
+            onClick={() => setShowCreate(true)}
+            className="text-xs text-accent hover:brightness-110"
+          >
+            + New Parameter
+          </button>
+        )}
       </div>
 
-      {showCreate && (
+      {view === "matrix" && (
+        <AspectParameterMatrix
+          aspects={aspectsForMatrix.filter((a) => {
+            const q = filter.trim().toLowerCase();
+            if (!q) return true;
+            return a.name.toLowerCase().includes(q);
+          })}
+          allParamDefs={
+            paramDefs.length > 0
+              ? paramDefs.filter((pd) => {
+                  const q = filter.trim().toLowerCase();
+                  if (!q) return true;
+                  return (
+                    pd.name.toLowerCase().includes(q) ||
+                    (pd.unit ?? "").toLowerCase().includes(q)
+                  );
+                })
+              : null
+          }
+        />
+      )}
+
+      {view === "detail" && showCreate && (
         <div className="mb-4 p-4 bg-slate-800/50 border border-slate-700 rounded space-y-3">
           <div className="grid grid-cols-3 gap-3">
             <input
@@ -1389,13 +1496,13 @@ function ParametersTab() {
         </div>
       )}
 
-      {loading ? (
+      {view === "detail" && loading ? (
         <div className="text-center text-slate-500 text-sm py-8">Loading...</div>
-      ) : paramDefs.length === 0 ? (
+      ) : view === "detail" && paramDefs.length === 0 ? (
         <div className="text-center text-slate-500 text-sm py-8">
           No parameter definitions yet.
         </div>
-      ) : (
+      ) : view === "detail" ? (
         <table className="w-full text-left">
           <thead>
             <tr className="border-b border-slate-700">
@@ -1450,7 +1557,7 @@ function ParametersTab() {
             ))}
           </tbody>
         </table>
-      )}
+      ) : null}
     </div>
   );
 }

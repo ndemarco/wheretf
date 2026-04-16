@@ -136,6 +136,105 @@ export const aspectRepository = {
   },
 
   /**
+   * Suggest parameters that commonly co-occur with the ones already
+   * attached to this aspect. Used by the typeahead "commonly paired
+   * with" strip.
+   *
+   * Algorithm: find aspects (other than this one) that share ≥1 of
+   * this aspect's parameters. From each such aspect collect its other
+   * parameters. Rank the candidates by frequency — parameters that
+   * appear across many such aspects are more likely to belong here.
+   * Exclude parameters already attached to this aspect.
+   */
+  async suggestCoOccurringParameters({
+    aspectId,
+    limit = 5,
+  }: {
+    aspectId: string;
+    limit?: number;
+  }) {
+    // Current attached params.
+    const attachedRows = await db
+      .select({ id: aspectParameters.parameterDefinitionId })
+      .from(aspectParameters)
+      .where(eq(aspectParameters.aspectId, aspectId));
+    const attached = new Set(attachedRows.map((r) => r.id));
+    if (attached.size === 0) return [];
+
+    // Aspects that share any of those params.
+    const sharingRows = await db
+      .selectDistinctOn([aspectParameters.aspectId], {
+        aspectId: aspectParameters.aspectId,
+      })
+      .from(aspectParameters)
+      .where(sql`${aspectParameters.parameterDefinitionId} IN (${sql.join(Array.from(attached).map((id) => sql`${id}`), sql`, `)})`);
+    const sharingAspectIds = sharingRows
+      .map((r) => r.aspectId)
+      .filter((id) => id !== aspectId);
+    if (sharingAspectIds.length === 0) return [];
+
+    // All parameters on those aspects.
+    const candidateRows = await db
+      .select({
+        aspectId: aspectParameters.aspectId,
+        aspectName: aspects.name,
+        parameterDefinitionId: aspectParameters.parameterDefinitionId,
+        parameterName: parameterDefinitions.name,
+        dataType: parameterDefinitions.dataType,
+        unit: parameterDefinitions.unit,
+      })
+      .from(aspectParameters)
+      .innerJoin(aspects, eq(aspects.id, aspectParameters.aspectId))
+      .innerJoin(
+        parameterDefinitions,
+        eq(parameterDefinitions.id, aspectParameters.parameterDefinitionId)
+      )
+      .where(sql`${aspectParameters.aspectId} IN (${sql.join(sharingAspectIds.map((id) => sql`${id}`), sql`, `)})`);
+
+    // Tally freq; track source aspects.
+    const tally = new Map<
+      string,
+      {
+        parameterDefinitionId: string;
+        name: string;
+        dataType: string;
+        unit: string | null;
+        frequency: number;
+        sourceAspects: Set<string>;
+      }
+    >();
+    for (const r of candidateRows) {
+      if (attached.has(r.parameterDefinitionId)) continue; // already attached
+      const existing = tally.get(r.parameterDefinitionId);
+      if (existing) {
+        existing.frequency += 1;
+        existing.sourceAspects.add(r.aspectName);
+      } else {
+        tally.set(r.parameterDefinitionId, {
+          parameterDefinitionId: r.parameterDefinitionId,
+          name: r.parameterName,
+          dataType: r.dataType,
+          unit: r.unit,
+          frequency: 1,
+          sourceAspects: new Set([r.aspectName]),
+        });
+      }
+    }
+
+    return Array.from(tally.values())
+      .map((t) => ({
+        parameterDefinitionId: t.parameterDefinitionId,
+        name: t.name,
+        dataType: t.dataType,
+        unit: t.unit,
+        frequency: t.frequency,
+        sourceAspects: Array.from(t.sourceAspects),
+      }))
+      .sort((a, b) => b.frequency - a.frequency || a.name.localeCompare(b.name))
+      .slice(0, limit);
+  },
+
+  /**
    * Taxonomy-level audit of aspects: empty, unused, duplicate or
    * overlapping parameter sets, similar names. Complements
    * parameterDefinitionRepository.audit().
