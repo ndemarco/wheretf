@@ -16,12 +16,16 @@ export const parameterDefinitionRepository = {
     name,
     dataType,
     unit,
+    description,
+    searchTerms,
     defaultValue,
     constraints,
   }: {
     name: string;
     dataType: DataType;
     unit?: string;
+    description?: string | null;
+    searchTerms?: string[] | null;
     defaultValue?: unknown;
     constraints?: Constraints;
   }) {
@@ -33,7 +37,15 @@ export const parameterDefinitionRepository = {
 
     const [paramDef] = await db
       .insert(parameterDefinitions)
-      .values({ name, dataType, unit, defaultValue, constraints })
+      .values({
+        name,
+        dataType,
+        unit,
+        description: description ?? null,
+        searchTerms: searchTerms ?? null,
+        defaultValue,
+        constraints,
+      })
       .returning();
 
     await transactionRepository.log({
@@ -75,6 +87,8 @@ export const parameterDefinitionRepository = {
     name?: string;
     dataType?: DataType;
     unit?: string;
+    description?: string | null;
+    searchTerms?: string[] | null;
     defaultValue?: unknown;
     constraints?: Constraints;
   }) {

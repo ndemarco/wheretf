@@ -27,6 +27,8 @@ export const parameterDefinitions = pgTable("parameter_definitions", {
   name: text("name").notNull().unique(),
   dataType: text("data_type").notNull(), // "numeric" | "text" | "boolean" | "enum"
   unit: text("unit"), // mm, inches, V, ohms — null if dimensionless
+  description: text("description"), // one-liner — answers "what is this parameter?"
+  searchTerms: text("search_terms").array(), // aliases / synonyms for future NL search
   defaultValue: jsonb("default_value"), // type-appropriate default
   constraints: jsonb("constraints"), // { enumValues?: string[], min?: number, max?: number }
   createdAt: timestamp("created_at").defaultNow().notNull(),

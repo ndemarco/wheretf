@@ -31,6 +31,8 @@ interface ParameterDefinition {
   name: string;
   dataType: string;
   unit: string | null;
+  description: string | null;
+  searchTerms: string[] | null;
   defaultValue: unknown;
   constraints: unknown;
 }
@@ -1287,7 +1289,13 @@ function ParametersTab() {
                 Unit
               </th>
               <th className="px-3 py-2 text-xs font-medium text-slate-400 uppercase tracking-wider">
+                Description
+              </th>
+              <th className="px-3 py-2 text-xs font-medium text-slate-400 uppercase tracking-wider">
                 Constraints
+              </th>
+              <th className="px-3 py-2 text-xs font-medium text-slate-400 uppercase tracking-wider">
+                Search terms
               </th>
               <th className="px-3 py-2"></th>
             </tr>
@@ -1320,6 +1328,10 @@ function ParamDefRow({
   const [editing, setEditing] = useState(false);
   const [dataType, setDataType] = useState(pd.dataType);
   const [unit, setUnit] = useState(pd.unit ?? "");
+  const [description, setDescription] = useState(pd.description ?? "");
+  const [searchTerms, setSearchTerms] = useState(
+    (pd.searchTerms ?? []).join(", ")
+  );
   const constraints = (pd.constraints ?? {}) as {
     enumValues?: string[];
     min?: number;
@@ -1342,6 +1354,17 @@ function ParamDefRow({
       const updates: Partial<ParameterDefinition> = {
         dataType,
         unit: unit.trim() || null,
+        description: description.trim() || null,
+        searchTerms:
+          searchTerms
+            .split(",")
+            .map((s) => s.trim())
+            .filter(Boolean).length > 0
+            ? searchTerms
+                .split(",")
+                .map((s) => s.trim())
+                .filter(Boolean)
+            : null,
       };
       const nextConstraints: Record<string, unknown> = {};
       if (dataType === "enum") {
@@ -1390,8 +1413,30 @@ function ParamDefRow({
           </span>
         </td>
         <td className="px-3 py-2 text-sm text-slate-400">{pd.unit || "—"}</td>
+        <td
+          className="px-3 py-2 text-xs text-slate-400 max-w-sm truncate"
+          title={pd.description ?? ""}
+        >
+          {pd.description || <span className="text-slate-600">—</span>}
+        </td>
         <td className="px-3 py-2 text-xs text-slate-400">
           {displayConstraints}
+        </td>
+        <td className="px-3 py-2">
+          {pd.searchTerms && pd.searchTerms.length > 0 ? (
+            <div className="flex flex-wrap gap-1 max-w-xs">
+              {pd.searchTerms.map((t) => (
+                <span
+                  key={t}
+                  className="text-[10px] px-1.5 py-0.5 rounded bg-slate-800 text-slate-400 border border-slate-700"
+                >
+                  {t}
+                </span>
+              ))}
+            </div>
+          ) : (
+            <span className="text-slate-600 text-xs">—</span>
+          )}
         </td>
         <td className="px-3 py-2 text-right whitespace-nowrap">
           <button
@@ -1435,6 +1480,14 @@ function ParamDefRow({
         />
       </td>
       <td className="px-3 py-2">
+        <input
+          value={description}
+          onChange={(e) => setDescription(e.target.value)}
+          placeholder="Short description…"
+          className="w-full max-w-sm px-2 py-1 bg-slate-800 border border-slate-600 rounded text-xs text-slate-200 focus:border-accent focus:outline-none"
+        />
+      </td>
+      <td className="px-3 py-2">
         {dataType === "enum" ? (
           <input
             value={enumValues}
@@ -1461,6 +1514,14 @@ function ParamDefRow({
         ) : (
           <span className="text-xs text-slate-600">—</span>
         )}
+      </td>
+      <td className="px-3 py-2">
+        <input
+          value={searchTerms}
+          onChange={(e) => setSearchTerms(e.target.value)}
+          placeholder="alias, synonym, abbrev"
+          className="w-full max-w-xs px-2 py-1 bg-slate-800 border border-slate-600 rounded text-xs text-slate-200 focus:border-accent focus:outline-none"
+        />
       </td>
       <td className="px-3 py-2 text-right whitespace-nowrap">
         <button
