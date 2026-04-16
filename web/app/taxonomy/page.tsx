@@ -1429,6 +1429,10 @@ export function ParametersTab() {
   const [newUnit, setNewUnit] = useState("");
   const [newEnumValues, setNewEnumValues] = useState("");
   const [filter, setFilter] = useState("");
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [usage, setUsage] = useState<ParamUsage | null>(null);
+  const [deleteExpanded, setDeleteExpanded] = useState(false);
+  const [deleteConfirmText, setDeleteConfirmText] = useState("");
 
   const fetchParams = useCallback(async () => {
     setLoading(true);
@@ -1460,6 +1464,29 @@ export function ParametersTab() {
     })();
   }, [view]);
 
+  // Lazy-load usage per selected parameter.
+  useEffect(() => {
+    setUsage(null);
+    setDeleteExpanded(false);
+    setDeleteConfirmText("");
+    if (!selectedId) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch(
+          `/api/parameter-definitions/${selectedId}/usage`
+        );
+        const data = await res.json();
+        if (!cancelled) setUsage(data);
+      } catch (err) {
+        console.error(err);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedId]);
+
   async function createParam() {
     if (!newName.trim()) return;
     const body: Record<string, unknown> = {
@@ -1488,17 +1515,25 @@ export function ParametersTab() {
     }
   }
 
-  async function deleteParam(id: string) {
-    if (!confirm("Delete this parameter definition? It will be removed from all aspects and items.")) return;
+  async function deleteSelectedParam() {
+    if (!selectedId) return;
     try {
-      await fetch(`/api/parameter-definitions/${id}`, { method: "DELETE" });
+      await fetch(`/api/parameter-definitions/${selectedId}`, {
+        method: "DELETE",
+      });
+      setSelectedId(null);
+      setDeleteExpanded(false);
+      setDeleteConfirmText("");
       await fetchParams();
     } catch (err) {
       console.error(err);
     }
   }
 
-  async function updateParam(id: string, updates: Partial<ParameterDefinition>) {
+  async function updateParam(
+    id: string,
+    updates: Partial<ParameterDefinition>
+  ) {
     await fetch(`/api/parameter-definitions/${id}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
@@ -1507,84 +1542,99 @@ export function ParametersTab() {
     await fetchParams();
   }
 
-  return (
-    <div className="flex-1 overflow-y-auto p-6">
-      <div className="flex items-center justify-between mb-4 gap-3">
-        <h2 className="text-sm font-medium text-slate-300">
-          Parameter Definitions
-        </h2>
-        <div className="flex items-center gap-1">
-          {(["detail", "matrix"] as const).map((v) => (
-            <button
-              key={v}
-              onClick={() => setView(v)}
-              className={`px-2.5 py-1 rounded text-[11px] transition-colors ${
-                view === v
-                  ? "bg-slate-700 text-slate-100"
-                  : "text-slate-400 hover:text-slate-200"
-              }`}
-            >
-              {v === "detail" ? "Detail" : "Matrix"}
-            </button>
-          ))}
-        </div>
-        <input
-          value={filter}
-          onChange={(e) => setFilter(e.target.value)}
-          placeholder={
-            view === "matrix"
-              ? "Filter rows (parameters) and columns (aspects)…"
-              : "Filter by name, unit, description, or search term…"
-          }
-          className="flex-1 max-w-md px-2 py-1 bg-slate-800 border border-slate-600 rounded text-xs text-slate-200 placeholder:text-slate-500 focus:border-accent focus:outline-none"
-        />
-        {view === "detail" && (
-          <button
-            onClick={() => setShowCreate(true)}
-            className="text-xs text-accent hover:brightness-110"
-          >
-            + New Parameter
-          </button>
-        )}
-      </div>
+  const filteredParamDefs = paramDefs.filter((pd) => {
+    const q = filter.trim().toLowerCase();
+    if (!q) return true;
+    if (pd.name.toLowerCase().includes(q)) return true;
+    if ((pd.description ?? "").toLowerCase().includes(q)) return true;
+    if ((pd.unit ?? "").toLowerCase().includes(q)) return true;
+    if ((pd.searchTerms ?? []).some((t) => t.toLowerCase().includes(q))) {
+      return true;
+    }
+    return false;
+  });
+  const selectedParam = paramDefs.find((pd) => pd.id === selectedId) ?? null;
 
-      {view === "matrix" && (
+  if (view === "matrix") {
+    return (
+      <div className="flex-1 overflow-y-auto p-6">
+        <div className="flex items-center justify-between mb-4 gap-3">
+          <h2 className="text-sm font-medium text-slate-300">
+            Parameter Definitions
+          </h2>
+          <div className="flex items-center gap-1">
+            {(["detail", "matrix"] as const).map((v) => (
+              <button
+                key={v}
+                onClick={() => setView(v)}
+                className={`px-2.5 py-1 rounded text-[11px] transition-colors ${
+                  view === v
+                    ? "bg-slate-700 text-slate-100"
+                    : "text-slate-400 hover:text-slate-200"
+                }`}
+              >
+                {v === "detail" ? "Detail" : "Matrix"}
+              </button>
+            ))}
+          </div>
+          <input
+            value={filter}
+            onChange={(e) => setFilter(e.target.value)}
+            placeholder="Filter rows (parameters) and columns (aspects)…"
+            className="flex-1 max-w-md px-2 py-1 bg-slate-800 border border-slate-600 rounded text-xs text-slate-200 placeholder:text-slate-500 focus:border-accent focus:outline-none"
+          />
+        </div>
         <AspectParameterMatrix
           aspects={aspectsForMatrix.filter((a) => {
             const q = filter.trim().toLowerCase();
             if (!q) return true;
             return a.name.toLowerCase().includes(q);
           })}
-          allParamDefs={
-            paramDefs.length > 0
-              ? paramDefs.filter((pd) => {
-                  const q = filter.trim().toLowerCase();
-                  if (!q) return true;
-                  return (
-                    pd.name.toLowerCase().includes(q) ||
-                    (pd.unit ?? "").toLowerCase().includes(q)
-                  );
-                })
-              : null
-          }
+          allParamDefs={filteredParamDefs.length > 0 ? filteredParamDefs : null}
         />
-      )}
+      </div>
+    );
+  }
 
-      {view === "detail" && showCreate && (
-        <div className="mb-4 p-4 bg-slate-800/50 border border-slate-700 rounded space-y-3">
-          <div className="grid grid-cols-3 gap-3">
+  return (
+    <div className="flex-1 flex min-h-0 overflow-hidden">
+      {/* Left: parameter list */}
+      <div className="w-72 border-r border-slate-700 flex flex-col shrink-0">
+        <div className="p-3 border-b border-slate-700 flex items-center justify-between">
+          <span className="text-xs text-slate-400 uppercase tracking-wider font-medium">
+            Parameters
+          </span>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setView("matrix")}
+              className="text-[10px] text-slate-500 hover:text-accent"
+              title="Switch to matrix view"
+            >
+              Matrix
+            </button>
+            <button
+              onClick={() => setShowCreate(true)}
+              className="text-xs text-accent hover:brightness-110"
+            >
+              + New
+            </button>
+          </div>
+        </div>
+
+        {showCreate && (
+          <div className="p-3 border-b border-slate-700 space-y-2">
             <input
               type="text"
               value={newName}
               onChange={(e) => setNewName(e.target.value)}
               placeholder="Parameter name"
               autoFocus
-              className="px-2 py-1.5 bg-slate-800 border border-slate-600 rounded text-sm text-slate-200 placeholder:text-slate-500 focus:border-accent focus:outline-none"
+              className="w-full px-2 py-1 bg-slate-800 border border-slate-600 rounded text-xs text-slate-200 placeholder:text-slate-500 focus:border-accent focus:outline-none"
             />
             <select
               value={newDataType}
               onChange={(e) => setNewDataType(e.target.value)}
-              className="px-2 py-1.5 bg-slate-800 border border-slate-600 rounded text-sm text-slate-200 focus:border-accent focus:outline-none"
+              className="w-full px-2 py-1 bg-slate-800 border border-slate-600 rounded text-xs text-slate-200 focus:border-accent focus:outline-none"
             >
               <option value="text">Text</option>
               <option value="numeric">Numeric</option>
@@ -1596,97 +1646,124 @@ export function ParametersTab() {
               value={newUnit}
               onChange={(e) => setNewUnit(e.target.value)}
               placeholder="Unit (optional)"
-              className="px-2 py-1.5 bg-slate-800 border border-slate-600 rounded text-sm text-slate-200 placeholder:text-slate-500 focus:border-accent focus:outline-none"
+              className="w-full px-2 py-1 bg-slate-800 border border-slate-600 rounded text-xs text-slate-200 placeholder:text-slate-500 focus:border-accent focus:outline-none"
             />
-          </div>
-          {newDataType === "enum" && (
-            <input
-              type="text"
-              value={newEnumValues}
-              onChange={(e) => setNewEnumValues(e.target.value)}
-              placeholder="Enum values (comma-separated)"
-              className="w-full px-2 py-1.5 bg-slate-800 border border-slate-600 rounded text-sm text-slate-200 placeholder:text-slate-500 focus:border-accent focus:outline-none"
-            />
-          )}
-          <div className="flex gap-2">
-            <button
-              onClick={createParam}
-              className="px-3 py-1 bg-accent text-white rounded text-xs hover:brightness-110"
-            >
-              Create
-            </button>
-            <button
-              onClick={() => setShowCreate(false)}
-              className="text-xs text-slate-500 hover:text-slate-400"
-            >
-              Cancel
-            </button>
-          </div>
-        </div>
-      )}
-
-      {view === "detail" && loading ? (
-        <div className="text-center text-slate-500 text-sm py-8">Loading...</div>
-      ) : view === "detail" && paramDefs.length === 0 ? (
-        <div className="text-center text-slate-500 text-sm py-8">
-          No parameter definitions yet.
-        </div>
-      ) : view === "detail" ? (
-        <table className="w-full text-left">
-          <thead>
-            <tr className="border-b border-slate-700">
-              <th className="px-3 py-2 text-xs font-medium text-slate-400 uppercase tracking-wider">
-                Name
-              </th>
-              <th className="px-3 py-2 text-xs font-medium text-slate-400 uppercase tracking-wider">
-                Type
-              </th>
-              <th className="px-3 py-2 text-xs font-medium text-slate-400 uppercase tracking-wider">
-                Unit
-              </th>
-              <th className="px-3 py-2 text-xs font-medium text-slate-400 uppercase tracking-wider">
-                Description
-              </th>
-              <th className="px-3 py-2 text-xs font-medium text-slate-400 uppercase tracking-wider">
-                Constraints
-              </th>
-              <th className="px-3 py-2 text-xs font-medium text-slate-400 uppercase tracking-wider">
-                Search terms
-              </th>
-              <th className="px-3 py-2 text-xs font-medium text-slate-400 uppercase tracking-wider">
-                Usage
-              </th>
-              <th className="px-3 py-2"></th>
-            </tr>
-          </thead>
-          <tbody>
-            {paramDefs
-              .filter((pd) => {
-                const q = filter.trim().toLowerCase();
-                if (!q) return true;
-                if (pd.name.toLowerCase().includes(q)) return true;
-                if ((pd.description ?? "").toLowerCase().includes(q)) return true;
-                if ((pd.unit ?? "").toLowerCase().includes(q)) return true;
-                if (
-                  (pd.searchTerms ?? []).some((t) =>
-                    t.toLowerCase().includes(q)
-                  )
-                ) {
-                  return true;
-                }
-                return false;
-              })
-              .map((pd) => (
-              <ParamDefRow
-                key={pd.id}
-                pd={pd}
-                onSave={(updates) => updateParam(pd.id, updates)}
-                onDelete={() => deleteParam(pd.id)}
+            {newDataType === "enum" && (
+              <input
+                type="text"
+                value={newEnumValues}
+                onChange={(e) => setNewEnumValues(e.target.value)}
+                placeholder="Enum values (comma-separated)"
+                className="w-full px-2 py-1 bg-slate-800 border border-slate-600 rounded text-xs text-slate-200 placeholder:text-slate-500 focus:border-accent focus:outline-none"
               />
-            ))}
-          </tbody>
-        </table>
-      ) : null}
+            )}
+            <div className="flex gap-2">
+              <button
+                onClick={createParam}
+                className="px-3 py-1 bg-accent text-white rounded text-xs hover:brightness-110"
+              >
+                Create
+              </button>
+              <button
+                onClick={() => setShowCreate(false)}
+                className="text-xs text-slate-500 hover:text-slate-400"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        )}
+
+        <div className="p-2 border-b border-slate-700">
+          <input
+            value={filter}
+            onChange={(e) => setFilter(e.target.value)}
+            placeholder="Filter parameters…"
+            className="w-full px-2 py-1 bg-slate-800 border border-slate-600 rounded text-xs text-slate-200 placeholder:text-slate-500 focus:border-accent focus:outline-none"
+          />
+        </div>
+        <div className="flex-1 overflow-y-auto">
+          {loading ? (
+            <div className="p-4 text-center text-slate-500 text-sm">
+              Loading…
+            </div>
+          ) : filteredParamDefs.length === 0 ? (
+            <div className="p-4 text-center text-slate-500 text-sm">
+              {paramDefs.length === 0 ? "No parameters yet." : "No matches."}
+            </div>
+          ) : (
+            filteredParamDefs.map((pd) => {
+              const isSel = pd.id === selectedId;
+              return (
+                <button
+                  key={pd.id}
+                  onClick={() => setSelectedId(pd.id)}
+                  className={`w-full text-left px-3 py-2 border-b border-slate-700/50 transition-colors ${
+                    isSel
+                      ? "bg-slate-700/50"
+                      : "hover:bg-slate-800/30"
+                  }`}
+                >
+                  <div className="flex items-center justify-between gap-2">
+                    <span
+                      className={`text-sm font-mono truncate ${
+                        isSel ? "text-accent" : "text-slate-200"
+                      }`}
+                    >
+                      {pd.name}
+                    </span>
+                    <span className="text-[10px] text-slate-500 tabular-nums shrink-0">
+                      {(pd.aspectCount ?? 0)}·{(pd.itemCount ?? 0)}
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-1.5 mt-0.5">
+                    <span className="text-[9px] px-1 py-px rounded bg-slate-800 text-slate-500">
+                      {pd.dataType}
+                    </span>
+                    {pd.unit && (
+                      <span className="text-[9px] text-slate-600">
+                        {pd.unit}
+                      </span>
+                    )}
+                  </div>
+                </button>
+              );
+            })
+          )}
+        </div>
+      </div>
+
+      {/* Middle: parameter editor */}
+      <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
+        {!selectedParam ? (
+          <div className="flex-1 flex items-center justify-center text-slate-500 text-sm">
+            Select a parameter to edit.
+          </div>
+        ) : (
+          <ParameterEditor
+            key={selectedParam.id}
+            pd={selectedParam}
+            onSave={(updates) => updateParam(selectedParam.id, updates)}
+          />
+        )}
+      </div>
+
+      {/* Right: usage panel */}
+      {selectedParam && (
+        <ParameterUsagePanel
+          pd={selectedParam}
+          usage={usage}
+          deleteExpanded={deleteExpanded}
+          onDeleteExpand={() => setDeleteExpanded(true)}
+          onDeleteCancel={() => {
+            setDeleteExpanded(false);
+            setDeleteConfirmText("");
+          }}
+          deleteConfirmText={deleteConfirmText}
+          onDeleteConfirmTextChange={setDeleteConfirmText}
+          onDelete={deleteSelectedParam}
+        />
+      )}
     </div>
   );
 }
@@ -1697,31 +1774,16 @@ interface ParamUsage {
   standards: { id: string; name: string }[];
 }
 
-function ParamDefRow({
+// --- Parameters three-pane: editor + usage panel ---
+
+function ParameterEditor({
   pd,
   onSave,
-  onDelete,
 }: {
   pd: ParameterDefinition;
   onSave: (updates: Partial<ParameterDefinition>) => Promise<void>;
-  onDelete: () => void;
 }) {
-  const [expanded, setExpanded] = useState(false);
-  const [usage, setUsage] = useState<ParamUsage | null>(null);
-  const [usageLoading, setUsageLoading] = useState(false);
-
-  async function loadUsage() {
-    if (usage) return;
-    setUsageLoading(true);
-    try {
-      const res = await fetch(`/api/parameter-definitions/${pd.id}/usage`);
-      const data = await res.json();
-      setUsage(data);
-    } finally {
-      setUsageLoading(false);
-    }
-  }
-  const [editing, setEditing] = useState(false);
+  const [name, setName] = useState(pd.name);
   const [dataType, setDataType] = useState(pd.dataType);
   const [unit, setUnit] = useState(pd.unit ?? "");
   const [description, setDescription] = useState(pd.description ?? "");
@@ -1743,11 +1805,15 @@ function ParamDefRow({
     constraints.max !== undefined ? String(constraints.max) : ""
   );
   const [saving, setSaving] = useState(false);
+  const [savedAt, setSavedAt] = useState<number | null>(null);
 
-  async function save() {
+  const originalName = pd.name;
+
+  async function commit() {
     setSaving(true);
     try {
       const updates: Partial<ParameterDefinition> = {
+        name: name.trim() || originalName,
         dataType,
         unit: unit.trim() || null,
         description: description.trim() || null,
@@ -1783,256 +1849,320 @@ function ParamDefRow({
       updates.constraints =
         Object.keys(nextConstraints).length > 0 ? nextConstraints : null;
       await onSave(updates);
-      setEditing(false);
+      setSavedAt(Date.now());
     } finally {
       setSaving(false);
     }
   }
 
-  if (!editing) {
-    const displayConstraints = pd.constraints
-      ? (() => {
-          const c = pd.constraints as {
-            enumValues?: string[];
-            min?: number;
-            max?: number;
-          };
-          if (c.enumValues?.length) return c.enumValues.join(" · ");
-          const bits: string[] = [];
-          if (c.min !== undefined) bits.push(`min ${c.min}`);
-          if (c.max !== undefined) bits.push(`max ${c.max}`);
-          return bits.join(", ") || "—";
-        })()
-      : "—";
-    return (
-      <>
-      <tr className="border-b border-slate-700/50 hover:bg-slate-800/30 group">
-        <td className="px-3 py-2 text-sm text-slate-200 font-mono">{pd.name}</td>
-        <td className="px-3 py-2">
-          <span className="text-[10px] px-1.5 py-0.5 rounded bg-slate-700 text-slate-400">
-            {pd.dataType}
-          </span>
-        </td>
-        <td className="px-3 py-2 text-sm text-slate-400">{pd.unit || "—"}</td>
-        <td
-          className="px-3 py-2 text-xs text-slate-400 max-w-sm truncate"
-          title={pd.description ?? ""}
-        >
-          {pd.description || <span className="text-slate-600">—</span>}
-        </td>
-        <td className="px-3 py-2 text-xs text-slate-400">
-          {displayConstraints}
-        </td>
-        <td className="px-3 py-2">
-          {pd.searchTerms && pd.searchTerms.length > 0 ? (
-            <div className="flex flex-wrap gap-1 max-w-xs">
-              {pd.searchTerms.map((t) => (
-                <span
-                  key={t}
-                  className="text-[10px] px-1.5 py-0.5 rounded bg-slate-800 text-slate-400 border border-slate-700"
-                >
-                  {t}
-                </span>
-              ))}
-            </div>
-          ) : (
-            <span className="text-slate-600 text-xs">—</span>
-          )}
-        </td>
-        <td className="px-3 py-2 text-xs tabular-nums whitespace-nowrap">
-          {pd.aspectCount !== undefined ||
-          pd.itemCount !== undefined ||
-          pd.standardCount !== undefined ? (
-            <button
-              onClick={() => {
-                if (!expanded) loadUsage();
-                setExpanded((v) => !v);
-              }}
-              title="Show where this parameter is used"
-              className={`text-xs cursor-pointer ${expanded ? "text-accent" : "text-slate-400 hover:text-accent"}`}
-            >
-              {pd.aspectCount ?? 0}·{pd.itemCount ?? 0} {expanded ? "▼" : "▶"}
-            </button>
-          ) : (
-            <span className="text-slate-600">—</span>
-          )}
-        </td>
-        <td className="px-3 py-2 text-right whitespace-nowrap">
-          <button
-            onClick={() => setEditing(true)}
-            className="text-xs text-accent hover:brightness-110 mr-3"
-          >
-            Edit
-          </button>
-          <button
-            onClick={onDelete}
-            className="text-xs text-red-400 hover:text-red-300 opacity-0 group-hover:opacity-100 transition-opacity"
-          >
-            Delete
-          </button>
-        </td>
-      </tr>
-      {expanded && (
-        <tr className="bg-slate-900/60 border-b border-slate-700">
-          <td colSpan={8} className="px-6 py-3">
-            {usageLoading && !usage ? (
-              <div className="text-xs text-slate-500">Loading usage…</div>
-            ) : usage ? (
-              <div className="grid grid-cols-3 gap-4 text-xs">
-                <div>
-                  <div className="text-[10px] uppercase tracking-wider text-slate-500 mb-1">
-                    Aspects ({usage.aspects.length})
-                  </div>
-                  {usage.aspects.length === 0 ? (
-                    <span className="text-slate-600 italic">none</span>
-                  ) : (
-                    <ul className="space-y-0.5">
-                      {usage.aspects.map((a) => (
-                        <li key={a.id} className="text-slate-300">
-                          {a.name}
-                        </li>
-                      ))}
-                    </ul>
-                  )}
-                </div>
-                <div>
-                  <div className="text-[10px] uppercase tracking-wider text-slate-500 mb-1">
-                    Items ({usage.items.length})
-                  </div>
-                  {usage.items.length === 0 ? (
-                    <span className="text-slate-600 italic">none</span>
-                  ) : (
-                    <ul className="space-y-0.5 max-h-40 overflow-y-auto">
-                      {usage.items.map((i) => (
-                        <li key={i.id}>
-                          <a
-                            href={`/items?selected=${i.id}`}
-                            className="text-slate-300 hover:text-accent"
-                          >
-                            {i.name}
-                          </a>
-                        </li>
-                      ))}
-                    </ul>
-                  )}
-                </div>
-                <div>
-                  <div className="text-[10px] uppercase tracking-wider text-slate-500 mb-1">
-                    Standards ({usage.standards.length})
-                  </div>
-                  {usage.standards.length === 0 ? (
-                    <span className="text-slate-600 italic">none</span>
-                  ) : (
-                    <ul className="space-y-0.5">
-                      {usage.standards.map((s) => (
-                        <li key={s.id} className="text-slate-300">
-                          {s.name}
-                        </li>
-                      ))}
-                    </ul>
-                  )}
-                </div>
-              </div>
-            ) : (
-              <div className="text-xs text-slate-500">No usage data.</div>
-            )}
-          </td>
-        </tr>
-      )}
-      </>
-    );
-  }
-
   return (
-    <tr className="border-b border-slate-700 bg-slate-900/30">
-      <td className="px-3 py-2 text-sm text-slate-200 font-mono">{pd.name}</td>
-      <td className="px-3 py-2">
-        <select
-          value={dataType}
-          onChange={(e) => setDataType(e.target.value)}
-          className="px-2 py-1 bg-slate-800 border border-slate-600 rounded text-xs text-slate-200 focus:border-accent focus:outline-none"
-        >
-          <option value="text">text</option>
-          <option value="numeric">numeric</option>
-          <option value="boolean">boolean</option>
-          <option value="enum">enum</option>
-        </select>
-      </td>
-      <td className="px-3 py-2">
-        <input
-          value={unit}
-          onChange={(e) => setUnit(e.target.value)}
-          placeholder="—"
-          className="w-20 px-2 py-1 bg-slate-800 border border-slate-600 rounded text-xs text-slate-200 focus:border-accent focus:outline-none"
-        />
-      </td>
-      <td className="px-3 py-2">
-        <input
-          value={description}
-          onChange={(e) => setDescription(e.target.value)}
-          placeholder="Short description…"
-          className="w-full max-w-sm px-2 py-1 bg-slate-800 border border-slate-600 rounded text-xs text-slate-200 focus:border-accent focus:outline-none"
-        />
-      </td>
-      <td className="px-3 py-2">
-        {dataType === "enum" ? (
+    <>
+      <div className="px-6 py-4 border-b border-slate-700 shrink-0 flex items-baseline justify-between gap-4">
+        <div className="flex-1 min-w-0">
           <input
-            value={enumValues}
-            onChange={(e) => setEnumValues(e.target.value)}
-            placeholder="val1, val2, val3"
-            className="w-full px-2 py-1 bg-slate-800 border border-slate-600 rounded text-xs text-slate-200 focus:border-accent focus:outline-none"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            className="text-lg font-semibold text-slate-100 font-mono bg-transparent border-b border-dashed border-transparent hover:border-slate-600 focus:border-accent outline-none w-full"
           />
-        ) : dataType === "numeric" ? (
-          <div className="flex items-center gap-1">
-            <input
-              value={minStr}
-              onChange={(e) => setMinStr(e.target.value)}
-              placeholder="min"
-              className="w-16 px-2 py-1 bg-slate-800 border border-slate-600 rounded text-xs text-slate-200 focus:border-accent focus:outline-none"
-            />
-            <span className="text-slate-600">–</span>
-            <input
-              value={maxStr}
-              onChange={(e) => setMaxStr(e.target.value)}
-              placeholder="max"
-              className="w-16 px-2 py-1 bg-slate-800 border border-slate-600 rounded text-xs text-slate-200 focus:border-accent focus:outline-none"
-            />
+          <div className="text-[11px] text-slate-500 mt-0.5 tabular-nums">
+            in <span className="text-slate-300">{pd.aspectCount ?? 0}</span>{" "}
+            aspect{(pd.aspectCount ?? 0) === 1 ? "" : "s"} ·{" "}
+            <span className="text-slate-300">{pd.itemCount ?? 0}</span>{" "}
+            item{(pd.itemCount ?? 0) === 1 ? "" : "s"} ·{" "}
+            <span className="text-slate-300">{pd.standardCount ?? 0}</span>{" "}
+            standard{(pd.standardCount ?? 0) === 1 ? "" : "s"}
           </div>
-        ) : (
-          <span className="text-xs text-slate-600">—</span>
+        </div>
+        <div className="flex items-center gap-2 shrink-0">
+          {savedAt && (
+            <span className="text-[10px] text-slate-500">saved</span>
+          )}
+          <button
+            onClick={commit}
+            disabled={saving}
+            className="px-3 py-1 bg-accent text-white rounded text-xs hover:brightness-110 disabled:opacity-50"
+          >
+            {saving ? "Saving…" : "Save"}
+          </button>
+        </div>
+      </div>
+
+      <div className="flex-1 overflow-y-auto p-6 space-y-5">
+        <div className="grid grid-cols-3 gap-3">
+          <label className="block">
+            <span className="text-[10px] uppercase tracking-wider text-slate-500">
+              Data type
+            </span>
+            <select
+              value={dataType}
+              onChange={(e) => setDataType(e.target.value)}
+              className="mt-1 w-full px-2 py-1.5 bg-slate-800 border border-slate-600 rounded text-sm text-slate-200 focus:border-accent focus:outline-none"
+            >
+              <option value="text">text</option>
+              <option value="numeric">numeric</option>
+              <option value="boolean">boolean</option>
+              <option value="enum">enum</option>
+            </select>
+          </label>
+          <label className="block col-span-2">
+            <span className="text-[10px] uppercase tracking-wider text-slate-500">
+              Unit
+            </span>
+            <input
+              value={unit}
+              onChange={(e) => setUnit(e.target.value)}
+              placeholder="ohm, mm, V, …"
+              className="mt-1 w-full px-2 py-1.5 bg-slate-800 border border-slate-600 rounded text-sm text-slate-200 placeholder:text-slate-600 focus:border-accent focus:outline-none"
+            />
+          </label>
+        </div>
+
+        <label className="block">
+          <span className="text-[10px] uppercase tracking-wider text-slate-500">
+            Description
+          </span>
+          <input
+            value={description}
+            onChange={(e) => setDescription(e.target.value)}
+            placeholder="One-line description…"
+            className="mt-1 w-full px-2 py-1.5 bg-slate-800 border border-slate-600 rounded text-sm text-slate-200 placeholder:text-slate-600 focus:border-accent focus:outline-none"
+          />
+        </label>
+
+        <label className="block">
+          <span className="text-[10px] uppercase tracking-wider text-slate-500">
+            Search terms
+          </span>
+          <input
+            value={searchTerms}
+            onChange={(e) => setSearchTerms(e.target.value)}
+            placeholder="alias, synonym, abbrev"
+            className="mt-1 w-full px-2 py-1.5 bg-slate-800 border border-slate-600 rounded text-sm text-slate-200 placeholder:text-slate-600 focus:border-accent focus:outline-none"
+          />
+        </label>
+
+        {dataType === "enum" && (
+          <label className="block">
+            <span className="text-[10px] uppercase tracking-wider text-slate-500">
+              Enum values
+            </span>
+            <input
+              value={enumValues}
+              onChange={(e) => setEnumValues(e.target.value)}
+              placeholder="val1, val2, val3"
+              className="mt-1 w-full px-2 py-1.5 bg-slate-800 border border-slate-600 rounded text-sm text-slate-200 placeholder:text-slate-600 focus:border-accent focus:outline-none"
+            />
+          </label>
         )}
-      </td>
-      <td className="px-3 py-2">
-        <input
-          value={searchTerms}
-          onChange={(e) => setSearchTerms(e.target.value)}
-          placeholder="alias, synonym, abbrev"
-          className="w-full max-w-xs px-2 py-1 bg-slate-800 border border-slate-600 rounded text-xs text-slate-200 focus:border-accent focus:outline-none"
-        />
-      </td>
-      <td className="px-3 py-2 text-xs text-slate-500 tabular-nums whitespace-nowrap">
-        {pd.aspectCount !== undefined || pd.itemCount !== undefined
-          ? `${pd.aspectCount ?? 0}·${pd.itemCount ?? 0}`
-          : "—"}
-      </td>
-      <td className="px-3 py-2 text-right whitespace-nowrap">
-        <button
-          onClick={save}
-          disabled={saving}
-          className="text-xs text-accent hover:brightness-110 mr-3 disabled:opacity-50"
-        >
-          {saving ? "Saving…" : "Save"}
-        </button>
-        <button
-          onClick={() => setEditing(false)}
-          className="text-xs text-slate-500 hover:text-slate-300"
-        >
-          Cancel
-        </button>
-      </td>
-    </tr>
+
+        {dataType === "numeric" && (
+          <div className="grid grid-cols-2 gap-3">
+            <label className="block">
+              <span className="text-[10px] uppercase tracking-wider text-slate-500">
+                Min
+              </span>
+              <input
+                value={minStr}
+                onChange={(e) => setMinStr(e.target.value)}
+                placeholder="(optional)"
+                className="mt-1 w-full px-2 py-1.5 bg-slate-800 border border-slate-600 rounded text-sm text-slate-200 placeholder:text-slate-600 focus:border-accent focus:outline-none tabular-nums"
+              />
+            </label>
+            <label className="block">
+              <span className="text-[10px] uppercase tracking-wider text-slate-500">
+                Max
+              </span>
+              <input
+                value={maxStr}
+                onChange={(e) => setMaxStr(e.target.value)}
+                placeholder="(optional)"
+                className="mt-1 w-full px-2 py-1.5 bg-slate-800 border border-slate-600 rounded text-sm text-slate-200 placeholder:text-slate-600 focus:border-accent focus:outline-none tabular-nums"
+              />
+            </label>
+          </div>
+        )}
+      </div>
+    </>
   );
 }
+
+function ParameterUsagePanel({
+  pd,
+  usage,
+  deleteExpanded,
+  onDeleteExpand,
+  onDeleteCancel,
+  deleteConfirmText,
+  onDeleteConfirmTextChange,
+  onDelete,
+}: {
+  pd: ParameterDefinition;
+  usage: ParamUsage | null;
+  deleteExpanded: boolean;
+  onDeleteExpand: () => void;
+  onDeleteCancel: () => void;
+  deleteConfirmText: string;
+  onDeleteConfirmTextChange: (s: string) => void;
+  onDelete: () => void;
+}) {
+  const confirmed = deleteConfirmText === pd.name;
+  return (
+    <aside className="w-80 shrink-0 border-l border-slate-700 bg-slate-800/20 overflow-y-auto flex flex-col">
+      <div className="flex border-b border-slate-700 shrink-0">
+        <button className="flex-1 px-3 py-2 text-xs font-medium text-accent border-b-2 border-accent -mb-px">
+          Usage
+        </button>
+      </div>
+
+      <div className="flex-1 overflow-y-auto">
+        <div className="p-4 space-y-5 text-xs">
+          {!usage ? (
+            <div className="text-slate-500 text-xs">Loading usage…</div>
+          ) : (
+            <>
+              <div>
+                <div className="text-[10px] uppercase tracking-wider text-slate-500 mb-1.5">
+                  Aspects ({usage.aspects.length})
+                </div>
+                {usage.aspects.length === 0 ? (
+                  <span className="text-slate-600 italic text-[11px]">
+                    none
+                  </span>
+                ) : (
+                  <ul className="space-y-0.5">
+                    {usage.aspects.map((a) => (
+                      <li
+                        key={a.id}
+                        className="text-slate-300 text-[11px] px-2 py-1 rounded bg-slate-900/40 border border-slate-700"
+                      >
+                        {a.name}
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+
+              <div>
+                <div className="text-[10px] uppercase tracking-wider text-slate-500 mb-1.5">
+                  Items ({usage.items.length})
+                </div>
+                {usage.items.length === 0 ? (
+                  <span className="text-slate-600 italic text-[11px]">
+                    none
+                  </span>
+                ) : (
+                  <ul className="space-y-0.5 max-h-64 overflow-y-auto">
+                    {usage.items.map((i) => (
+                      <li key={i.id}>
+                        <a
+                          href={`/items?selected=${i.id}`}
+                          className="block px-2 py-1 rounded bg-slate-900/40 border border-slate-700 text-[11px] text-slate-300 hover:text-accent hover:bg-slate-800 transition-colors truncate"
+                        >
+                          {i.name}
+                        </a>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+
+              <div>
+                <div className="text-[10px] uppercase tracking-wider text-slate-500 mb-1.5">
+                  Standards ({usage.standards.length})
+                </div>
+                {usage.standards.length === 0 ? (
+                  <span className="text-slate-600 italic text-[11px]">
+                    none
+                  </span>
+                ) : (
+                  <ul className="space-y-0.5">
+                    {usage.standards.map((s) => (
+                      <li
+                        key={s.id}
+                        className="text-slate-300 text-[11px] px-2 py-1 rounded bg-slate-900/40 border border-slate-700"
+                      >
+                        {s.name}
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+            </>
+          )}
+        </div>
+      </div>
+
+      <div className="shrink-0 border-t border-slate-700 p-4 bg-slate-900/40">
+        {!deleteExpanded ? (
+          <button
+            onClick={onDeleteExpand}
+            className="w-full text-xs text-red-400 hover:text-red-300 border border-red-900/50 hover:border-red-700 rounded py-1.5 transition-colors"
+          >
+            Delete parameter…
+          </button>
+        ) : (
+          <div className="space-y-2">
+            <p className="text-[11px] text-slate-400 leading-snug">
+              {usage && (usage.aspects.length + usage.items.length + usage.standards.length) > 0 ? (
+                <>
+                  Used by{" "}
+                  <span className="text-slate-100">
+                    {usage.aspects.length} aspects
+                  </span>
+                  ,{" "}
+                  <span className="text-slate-100">
+                    {usage.items.length} items
+                  </span>
+                  ,{" "}
+                  <span className="text-slate-100">
+                    {usage.standards.length} standards
+                  </span>
+                  . All references will be removed.
+                </>
+              ) : (
+                <>Not used anywhere.</>
+              )}{" "}
+              This cannot be undone.
+            </p>
+            <label className="block text-[11px] text-slate-400">
+              Type{" "}
+              <span className="font-mono text-slate-200 bg-slate-700 px-1.5 py-0.5 rounded">
+                {pd.name}
+              </span>{" "}
+              to confirm:
+            </label>
+            <input
+              value={deleteConfirmText}
+              onChange={(e) => onDeleteConfirmTextChange(e.target.value)}
+              placeholder={pd.name}
+              className="w-full px-2 py-1 bg-slate-900 border border-slate-700 rounded text-xs text-slate-200 placeholder:text-slate-600 focus:border-red-500 focus:outline-none"
+            />
+            <div className="flex items-center gap-2">
+              <button
+                onClick={onDelete}
+                disabled={!confirmed}
+                className={`flex-1 px-3 py-1.5 text-xs rounded transition-colors ${
+                  confirmed
+                    ? "bg-red-600 text-white hover:bg-red-500"
+                    : "bg-slate-700 text-slate-500 cursor-not-allowed"
+                }`}
+              >
+                Delete this parameter
+              </button>
+              <button
+                onClick={onDeleteCancel}
+                className="text-[11px] text-slate-500 hover:text-slate-300 px-2"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
+    </aside>
+  );
+}
+
 
 // --- Categories Tab ---
 
