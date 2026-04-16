@@ -1,9 +1,13 @@
 # Deployment
 
-This repo produces Docker artifacts only. The homelab deploy system (or
-any platform consumer — ECS, Fly, App Runner, bare Docker on a VM) runs
-the image. Nothing app-specific lives outside this document and the
-compose/Dockerfile it describes.
+WhereTF is FOSS (AGPL-3.0). CI publishes container images to the
+public GitHub Container Registry; anyone can pull, run, and
+self-host. The project's own homelab deployment pulls from the same
+registry.
+
+The open repo produces Docker artifacts only. Deploy orchestration
+(hostnames, secrets, Ansible, Caddy config) lives in a separate
+private infrastructure repo and is not part of this codebase.
 
 ---
 
@@ -62,19 +66,25 @@ docker build --target runner   -t wheretf/web:<sha>     .
 docker build --target migrator -t wheretf/migrate:<sha> .
 ```
 
-### Multi-arch (for a registry)
+### Multi-arch (done by CI)
+
+GitHub Actions (`.github/workflows/ci.yml`) builds both stages for
+`linux/amd64` and `linux/arm64` on every push to `main` and every
+release tag, then publishes to GHCR:
+
+- `ghcr.io/ndemarco/wheretf/web:sha-<shortsha>` (always)
+- `ghcr.io/ndemarco/wheretf/web:latest` (on `main`)
+- `ghcr.io/ndemarco/wheretf/web:v<x.y.z>` (on release tags)
+- `ghcr.io/ndemarco/wheretf/migrate:*` — same tag schema.
+
+Manual equivalent if you need it locally:
 
 ```bash
 docker buildx create --use --name wtf-builder
 docker buildx build \
   --platform linux/amd64,linux/arm64 \
   --target runner \
-  -t registry.example/wheretf/web:<sha> \
-  --push ./web
-docker buildx build \
-  --platform linux/amd64,linux/arm64 \
-  --target migrator \
-  -t registry.example/wheretf/migrate:<sha> \
+  -t ghcr.io/ndemarco/wheretf/web:<sha> \
   --push ./web
 ```
 
@@ -105,13 +115,13 @@ Orchestration sequence:
 # 2. Run the one-shot migration task.
 docker run --rm \
   -e DATABASE_URL="postgresql://..." \
-  registry.example/wheretf/migrate:<sha>
+  ghcr.io/ndemarco/wheretf/migrate:<sha>
 
 # 3. Start the app (scale to N replicas as needed).
 docker run -d \
   -e DATABASE_URL="postgresql://..." \
   -p 3000:3000 \
-  registry.example/wheretf/web:<sha>
+  ghcr.io/ndemarco/wheretf/web:<sha>
 ```
 
 Roll forward: run the new migrator image, then roll the app replicas.
