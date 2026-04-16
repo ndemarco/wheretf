@@ -366,7 +366,7 @@ function ParamTypeahead({
 
 export default function TaxonomyPage() {
   const [tab, setTab] = useState<
-    "aspects" | "standards" | "parameters" | "categories"
+    "aspects" | "standards" | "parameters" | "categories" | "audit"
   >("aspects");
 
   return (
@@ -374,7 +374,7 @@ export default function TaxonomyPage() {
       {/* Tab header */}
       <div className="flex items-center gap-1 px-6 py-3 border-b border-slate-700">
         <h1 className="text-lg font-semibold text-slate-100 mr-4">Taxonomy</h1>
-        {(["aspects", "standards", "parameters", "categories"] as const).map((t) => (
+        {(["aspects", "standards", "parameters", "categories", "audit"] as const).map((t) => (
           <button
             key={t}
             onClick={() => setTab(t)}
@@ -393,6 +393,7 @@ export default function TaxonomyPage() {
       {tab === "standards" && <StandardsTab />}
       {tab === "parameters" && <ParametersTab />}
       {tab === "categories" && <CategoriesTab />}
+      {tab === "audit" && <AuditTab />}
     </div>
   );
 }
@@ -1609,6 +1610,196 @@ function ParamDefRow({
 }
 
 // --- Categories Tab ---
+
+// --- Audit Tab ---
+
+interface AuditSubject {
+  id: string;
+  name: string;
+}
+interface AuditCheckRow {
+  check: string;
+  severity: "info" | "warning" | "error";
+  subjects: AuditSubject[];
+  suggestion: string | null;
+}
+
+const AUDIT_LABELS: Record<string, string> = {
+  "param.no_description": "Parameter: no description",
+  "param.numeric_no_unit": "Parameter: numeric without unit",
+  "param.enum_no_values": "Parameter: enum without values",
+  "param.orphan": "Parameter: orphan (no aspect)",
+  "param.name_collision_with_searchterm": "Parameter: search-term collides with another name",
+  "param.duplicate_name_ignoring_separators": "Parameter: duplicate names (ignoring separators)",
+  "param.near_duplicate": "Parameter: near-duplicate (same type + unit, similar name)",
+  "param.value_outliers": "Parameter: value outlier (>10× median)",
+  "param.enum_free_text_drift": "Parameter: text with few distinct values (enum candidate)",
+  "aspect.empty": "Aspect: empty (no parameters)",
+  "aspect.no_items": "Aspect: never applied to items",
+  "aspect.duplicate_param_set": "Aspect: identical parameter sets",
+  "aspect.subset_overlap": "Aspect: parameter set is subset of another",
+  "aspect.name_similarity": "Aspect: similar name to another",
+};
+
+function AuditTab() {
+  const [checks, setChecks] = useState<AuditCheckRow[]>([]);
+  const [runAt, setRunAt] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  const run = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const res = await fetch("/api/taxonomy/audit");
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Audit failed");
+      setChecks(data.checks || []);
+      setRunAt(data.runAt ?? null);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Unknown error");
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    run();
+  }, [run]);
+
+  const grouped: Record<"error" | "warning" | "info", AuditCheckRow[]> = {
+    error: checks.filter((c) => c.severity === "error"),
+    warning: checks.filter((c) => c.severity === "warning"),
+    info: checks.filter((c) => c.severity === "info"),
+  };
+  const total = checks.reduce((n, c) => n + c.subjects.length, 0);
+
+  return (
+    <div className="flex-1 overflow-y-auto p-6">
+      <div className="flex items-center justify-between mb-4">
+        <div>
+          <h2 className="text-sm font-medium text-slate-200">Taxonomy audit</h2>
+          <p className="text-[11px] text-slate-500 mt-0.5">
+            {runAt ? (
+              <>run {timeAgo(runAt)} · {total} findings</>
+            ) : loading ? (
+              "running…"
+            ) : (
+              "never run"
+            )}
+          </p>
+        </div>
+        <button
+          onClick={run}
+          disabled={loading}
+          className="text-xs text-accent hover:brightness-110 disabled:opacity-50"
+        >
+          {loading ? "Running…" : "Re-run"}
+        </button>
+      </div>
+
+      {error && (
+        <div className="px-3 py-2 bg-red-900/30 border border-red-700/50 rounded text-red-300 text-xs mb-4">
+          {error}
+        </div>
+      )}
+
+      {!loading && checks.length === 0 && !error && (
+        <div className="text-slate-500 text-sm py-8 text-center">
+          No issues detected. Taxonomy looks clean.
+        </div>
+      )}
+
+      {(["error", "warning", "info"] as const).map((sev) => {
+        const list = grouped[sev];
+        if (list.length === 0) return null;
+        const n = list.reduce((x, c) => x + c.subjects.length, 0);
+        return (
+          <section key={sev} className="mb-6">
+            <h3
+              className={`text-xs font-semibold uppercase tracking-wider mb-2 ${
+                sev === "error"
+                  ? "text-red-400"
+                  : sev === "warning"
+                    ? "text-amber-400"
+                    : "text-slate-400"
+              }`}
+            >
+              {sev}s ({n})
+            </h3>
+            <div className="space-y-2">
+              {list.map((c) => (
+                <AuditCheckCard key={c.check} check={c} severity={sev} />
+              ))}
+            </div>
+          </section>
+        );
+      })}
+    </div>
+  );
+}
+
+function AuditCheckCard({
+  check,
+  severity,
+}: {
+  check: AuditCheckRow;
+  severity: "info" | "warning" | "error";
+}) {
+  const [expanded, setExpanded] = useState(false);
+  const borderColour =
+    severity === "error"
+      ? "border-red-800/60"
+      : severity === "warning"
+        ? "border-amber-800/60"
+        : "border-slate-700";
+  return (
+    <div className={`border rounded ${borderColour} bg-slate-900/30`}>
+      <button
+        onClick={() => setExpanded((v) => !v)}
+        className="w-full text-left px-3 py-2 flex items-center justify-between gap-3 hover:bg-slate-800/40 transition-colors"
+      >
+        <div>
+          <div className="text-sm text-slate-200">
+            {AUDIT_LABELS[check.check] ?? check.check}
+          </div>
+          {check.suggestion && (
+            <div className="text-[11px] text-slate-500 mt-0.5">
+              {check.suggestion}
+            </div>
+          )}
+        </div>
+        <span className="text-[10px] text-slate-500 tabular-nums shrink-0">
+          {check.subjects.length} {expanded ? "▼" : "▶"}
+        </span>
+      </button>
+      {expanded && (
+        <div className="px-3 pb-2 pt-1 flex flex-wrap gap-1.5 border-t border-slate-800">
+          {check.subjects.map((s) => (
+            <span
+              key={s.id}
+              className="text-[11px] px-1.5 py-0.5 rounded bg-slate-800 border border-slate-700 text-slate-300 font-mono"
+              title={s.id}
+            >
+              {s.name}
+            </span>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function timeAgo(iso: string): string {
+  const then = new Date(iso).getTime();
+  const now = Date.now();
+  const s = Math.floor((now - then) / 1000);
+  if (s < 5) return "just now";
+  if (s < 60) return `${s}s ago`;
+  if (s < 3600) return `${Math.floor(s / 60)}m ago`;
+  if (s < 86400) return `${Math.floor(s / 3600)}h ago`;
+  return new Date(iso).toLocaleString();
+}
 
 function CategoriesTab() {
   const [categories, setCategories] = useState<Category[]>([]);

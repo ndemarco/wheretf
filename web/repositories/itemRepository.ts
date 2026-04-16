@@ -15,6 +15,7 @@ import {
   itemStandards,
 } from "@/db/schema";
 import { transactionRepository } from "./transactionRepository";
+import { type AuditCheck } from "@/lib/audit";
 
 export const itemRepository = {
   async create({
@@ -331,6 +332,94 @@ export const itemRepository = {
    * can refine per-row for set generation). Simple first cut: any item
    * that has the same (standardId, designationId) applied.
    */
+  /**
+   * Cross-item audit: value outliers + free-text drift suggesting an
+   * enum promotion. Pulls all parameter values in one query then
+   * groups by parameterDefinitionId in Node.
+   */
+  async auditParameterValues(): Promise<AuditCheck[]> {
+    const rows = await db
+      .select({
+        itemId: itemParameterValues.itemId,
+        parameterDefinitionId: itemParameterValues.parameterDefinitionId,
+        value: itemParameterValues.value,
+      })
+      .from(itemParameterValues);
+
+    // Group values per parameter.
+    const byParam = new Map<string, Array<{ itemId: string; value: unknown }>>();
+    for (const r of rows) {
+      const bag = byParam.get(r.parameterDefinitionId) ?? [];
+      bag.push({ itemId: r.itemId, value: r.value });
+      byParam.set(r.parameterDefinitionId, bag);
+    }
+
+    // Need param metadata (name + dataType) so checks can report and
+    // qualify their work.
+    const paramRows = await db
+      .select({
+        id: parameterDefinitions.id,
+        name: parameterDefinitions.name,
+        dataType: parameterDefinitions.dataType,
+      })
+      .from(parameterDefinitions);
+    const paramById = new Map(paramRows.map((p) => [p.id, p]));
+
+    const outliers: Array<{ id: string; name: string }> = [];
+    const drift: Array<{ id: string; name: string }> = [];
+
+    for (const [paramId, values] of byParam) {
+      const meta = paramById.get(paramId);
+      if (!meta) continue;
+
+      if (meta.dataType === "numeric") {
+        const nums: number[] = values
+          .map((v) => (typeof v.value === "number" ? v.value : Number(v.value)))
+          .filter((n) => Number.isFinite(n)) as number[];
+        if (nums.length < 3) continue;
+        const sorted = [...nums].sort((a, b) => a - b);
+        const median = sorted[Math.floor(sorted.length / 2)];
+        if (median === 0) continue;
+        const hasOutlier = nums.some((n) => Math.abs(n / median) > 10);
+        if (hasOutlier) {
+          outliers.push({ id: meta.id, name: meta.name });
+        }
+      }
+
+      if (meta.dataType === "text") {
+        const distinct = new Set(
+          values
+            .map((v) => (typeof v.value === "string" ? v.value.trim() : null))
+            .filter((s): s is string => !!s)
+        );
+        if (distinct.size > 0 && distinct.size <= 20 && values.length >= 5) {
+          drift.push({ id: meta.id, name: meta.name });
+        }
+      }
+    }
+
+    const out: AuditCheck[] = [];
+    if (outliers.length > 0) {
+      out.push({
+        check: "param.value_outliers",
+        severity: "info",
+        subjects: outliers,
+        suggestion:
+          "A stored value is >10× the median — possibly wrong unit or missing SI prefix.",
+      });
+    }
+    if (drift.length > 0) {
+      out.push({
+        check: "param.enum_free_text_drift",
+        severity: "info",
+        subjects: drift,
+        suggestion:
+          "Text parameter has few distinct values — consider promoting to enum.",
+      });
+    }
+    return out;
+  },
+
   async findSimilar({
     standardId,
     designationId,
