@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import CreateFromDesignationDialog from "@/app/items/CreateFromDesignationDialog";
 import GenerateSetDialog from "@/app/items/GenerateSetDialog";
+import BulkAspectImport from "./BulkAspectImport";
 
 // --- Types ---
 
@@ -389,6 +390,7 @@ export default function TaxonomyPage() {
 
 function AspectsTab() {
   const [view, setView] = useState<"detail" | "matrix">("detail");
+  const [showBulkImport, setShowBulkImport] = useState(false);
   const [aspects, setAspects] = useState<Aspect[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [params, setParams] = useState<AspectParameter[]>([]);
@@ -547,12 +549,20 @@ function AspectsTab() {
           <span className="text-xs text-slate-400 uppercase tracking-wider font-medium">
             Aspects
           </span>
-          <button
-            onClick={() => setShowCreate(true)}
-            className="text-xs text-accent hover:brightness-110"
-          >
-            + New
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setShowBulkImport(true)}
+              className="text-[10px] text-slate-500 hover:text-accent"
+            >
+              Bulk import
+            </button>
+            <button
+              onClick={() => setShowCreate(true)}
+              className="text-xs text-accent hover:brightness-110"
+            >
+              + New
+            </button>
+          </div>
         </div>
 
         {showCreate && (
@@ -710,6 +720,15 @@ function AspectsTab() {
           </div>
         )}
       </div>
+
+      {showBulkImport && (
+        <BulkAspectImport
+          onComplete={() => {
+            fetchAspects();
+          }}
+          onClose={() => setShowBulkImport(false)}
+        />
+      )}
 
       {/* Delete confirmation modal */}
       {deleteTarget && (
