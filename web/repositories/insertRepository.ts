@@ -24,7 +24,9 @@ type InsertParentLocation = {
   id: string;
   path: string;
   pathSegments: unknown;
-  moduleId: string;
+  // Nullable since 0010_nullable_location_module — unplaced inserts
+  // carry no moduleId; reparent copies whatever the receptacle has.
+  moduleId: string | null;
 };
 
 /**

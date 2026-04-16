@@ -10,7 +10,11 @@ async function createAspect(name = "Machine Screw Threading") {
 }
 
 // Helper: create a parameter definition
-async function createParam(name: string, dataType = "numeric", unit?: string) {
+async function createParam(
+  name: string,
+  dataType: "numeric" | "text" | "boolean" | "enum" = "numeric",
+  unit?: string
+) {
   return parameterDefinitionRepository.create({ name, dataType, unit });
 }
 

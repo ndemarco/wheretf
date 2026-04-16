@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { useCallback, useEffect, useState } from "react";
+import { Suspense, useCallback, useEffect, useState } from "react";
 import TemplateEditor from "./_components/TemplateEditor";
 
 interface Template {
@@ -21,7 +21,7 @@ interface Template {
   } | null;
 }
 
-export default function TemplatesPage() {
+function TemplatesPageInner() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const selectedId = searchParams.get("selected");
@@ -186,5 +186,19 @@ export default function TemplatesPage() {
         </div>
       )}
     </div>
+  );
+}
+
+export default function TemplatesPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="flex-1 flex items-center justify-center text-slate-500">
+          Loading…
+        </div>
+      }
+    >
+      <TemplatesPageInner />
+    </Suspense>
   );
 }

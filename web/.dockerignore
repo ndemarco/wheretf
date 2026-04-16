@@ -1,0 +1,31 @@
+.git
+.gitignore
+.dockerignore
+Dockerfile
+docker-compose*.yml
+
+# Build outputs
+.next
+node_modules
+out
+dist
+coverage
+
+# Editor / OS
+.idea
+.vscode
+.DS_Store
+Thumbs.db
+
+# Env — never bake secrets into the image
+.env
+.env.*
+!.env.*.example
+
+# Tests + dev-only assets
+tests
+playwright-report
+*.log
+
+# Claude local state
+.claude

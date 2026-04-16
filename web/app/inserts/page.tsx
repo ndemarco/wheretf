@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
 import { CellGrid, type CellRow } from "@/app/_components/CellGrid";
 
 interface Insert {
@@ -28,7 +28,7 @@ interface TemplateOption {
   name: string;
 }
 
-export default function InsertsPage() {
+function InsertsPageInner() {
   const router = useRouter();
   const searchParams = useSearchParams();
 
@@ -1688,6 +1688,20 @@ function Field({
       </div>
       <div className="text-sm text-slate-200 mt-1">{children}</div>
     </div>
+  );
+}
+
+export default function InsertsPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="flex-1 flex items-center justify-center text-slate-500">
+          Loading…
+        </div>
+      }
+    >
+      <InsertsPageInner />
+    </Suspense>
   );
 }
 

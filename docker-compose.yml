@@ -1,15 +1,59 @@
-version: '3.8'
+# Reference compose for running the WhereTF image against a local
+# Postgres. The homelab deploy system should use its own orchestration
+# (Portainer / Ansible / etc.) — this file is here so anyone can run
+# the prod image end-to-end on a laptop with one command:
+#
+#   docker compose up --build
+#
+# Then open http://localhost:3000. For ongoing dev (hot-reload against
+# local sources) use docker-compose.dev.yml which only starts postgres.
+
 services:
-  mongodb:
-    image: mongo:7
-    ports:
-      - "27017:27017"
-    volumes:
-      - mongodb_data:/data/db
+  postgres:
+    image: postgres:16
+    restart: unless-stopped
     environment:
-      - MONGO_INITDB_DATABASE=wheretf
+      POSTGRES_DB: wheretf
+      POSTGRES_USER: wheretf
+      POSTGRES_PASSWORD: wheretf
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U wheretf"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  # One-shot job: applies drizzle migrations then exits. The app
+  # service waits for this to complete (service_completed_successfully)
+  # before starting. Deploy systems that prefer a separate migration
+  # task can run this container independently and skip the app waiting.
+  migrate:
+    build:
+      context: ./web
+      target: migrator
+    image: wheretf/migrate:local
+    environment:
+      DATABASE_URL: postgresql://wheretf:wheretf@postgres:5432/wheretf
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: "no"
+
+  app:
+    build:
+      context: ./web
+    image: wheretf/web:local
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: postgresql://wheretf:wheretf@postgres:5432/wheretf
+      NODE_ENV: production
+      PORT: "3000"
+    ports:
+      - "3000:3000"
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
 
 volumes:
-  mongodb_data:
-    name: wheretf-mongo-data
-    external: true
+  pgdata:
