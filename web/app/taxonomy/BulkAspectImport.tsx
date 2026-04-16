@@ -2,15 +2,34 @@
 
 import { useMemo, useState } from "react";
 
+interface ExistingDef {
+  id: string;
+  name: string;
+  dataType: string;
+  unit: string | null;
+  description: string | null;
+  constraints: {
+    enumValues?: string[];
+    min?: number;
+    max?: number;
+  } | null;
+}
+
 interface ParsedParam {
   name: string;
   slug: string;
   dataType: string;
   unit: string | null;
+  description: string;
+  searchTerms: string[];
   min: number | null;
   max: number | null;
   enumValues: string[];
   keep: boolean;
+  // Conflict detection is populated after parse.
+  conflictWith?: ExistingDef;
+  resolution?: "reuse" | "rename" | "skip";
+  renameTo?: string;
 }
 
 interface ParsedAspect {
@@ -39,6 +58,8 @@ fences, no trailing commentary:
           "name": "<human readable>",
           "dataType": "text" | "numeric" | "boolean" | "enum",
           "unit": "<unit e.g. ohm, mm, W>" | null,
+          "description": "<one sentence, <=120 chars, plain language>",
+          "searchTerms": ["alias", "synonym", "abbrev"],
           "min": <number> | null,
           "max": <number> | null,
           "enumValues": ["a", "b"]
@@ -55,6 +76,12 @@ Rules:
   measurement; enum when a finite list of values is typical; boolean
   when yes/no; else text.
 - unit is null unless dataType is numeric.
+- description: always a non-empty sentence answering "what does this
+  parameter describe?" (not "what value does it hold"). Keep to
+  ~120 characters. Plain language, no jargon unless necessary.
+- searchTerms: 2-5 common aliases, abbreviations, or unit synonyms
+  users might type when searching. Lowercase. Empty array allowed
+  but discouraged.
 - min / max: emit a number only when dataType is numeric AND a
   meaningful physical bound exists (e.g. tolerance % is 0..100; duty
   cycle is 0..100; resistance has no useful upper bound so both stay
@@ -76,7 +103,17 @@ const JSON_PLACEHOLDER = `{
     {
       "name": "Physical / Package",
       "params": [
-        { "slug": "case_size", "name": "Case size", "dataType": "text", "unit": null, "min": null, "max": null, "enumValues": [] }
+        {
+          "slug": "case_size",
+          "name": "Case size",
+          "dataType": "text",
+          "unit": null,
+          "description": "Imperial/metric package size code",
+          "searchTerms": ["package", "footprint", "size"],
+          "min": null,
+          "max": null,
+          "enumValues": []
+        }
       ]
     }
   ]
@@ -87,6 +124,8 @@ type RawParam = {
   name?: unknown;
   dataType?: unknown;
   unit?: unknown;
+  description?: unknown;
+  searchTerms?: unknown;
   min?: unknown;
   max?: unknown;
   enumValues?: unknown;
@@ -188,11 +227,43 @@ function validateAndNormalize(raw: unknown): ParsedAspect[] {
         // duplicate is allowed (save-path dedup); no hard error.
       }
       seenSlugs.add(pr.slug);
+
+      // description
+      let description = "";
+      if (pr.description !== undefined && pr.description !== null) {
+        if (typeof pr.description !== "string") {
+          throw new Error(
+            `aspects[${ai}].params[${pi}].description: expected string or null`
+          );
+        }
+        description = pr.description.trim();
+      }
+
+      // searchTerms
+      let searchTerms: string[] = [];
+      if (pr.searchTerms !== undefined && pr.searchTerms !== null) {
+        if (!Array.isArray(pr.searchTerms)) {
+          throw new Error(
+            `aspects[${ai}].params[${pi}].searchTerms: expected array of strings`
+          );
+        }
+        searchTerms = pr.searchTerms.map((v: unknown, ti: number) => {
+          if (typeof v !== "string") {
+            throw new Error(
+              `aspects[${ai}].params[${pi}].searchTerms[${ti}]: expected string`
+            );
+          }
+          return v.trim();
+        }).filter(Boolean);
+      }
+
       params.push({
         slug: pr.slug,
         name: pr.name,
         dataType: pr.dataType,
         unit,
+        description,
+        searchTerms,
         min,
         max,
         enumValues,
@@ -320,6 +391,8 @@ export default function BulkAspectImport({
             dataType: p.dataType,
           };
           if (p.unit) body.unit = p.unit;
+          if (p.description) body.description = p.description;
+          if (p.searchTerms.length > 0) body.searchTerms = p.searchTerms;
           const constraints: Record<string, unknown> = {};
           if (p.enumValues.length > 0) constraints.enumValues = p.enumValues;
           if (p.dataType === "numeric") {
