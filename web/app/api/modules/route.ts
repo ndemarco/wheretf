@@ -23,7 +23,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const module = await moduleRepository.create({
+    const mod = await moduleRepository.create({
       name,
       description,
       primaryDimensionLabel,
@@ -31,7 +31,7 @@ export async function POST(request: NextRequest) {
       metadata,
     });
 
-    return NextResponse.json({ module }, { status: 201 });
+    return NextResponse.json({ module: mod }, { status: 201 });
   } catch (err) {
     const message = err instanceof Error ? err.message : "Unknown error";
     return NextResponse.json({ error: message }, { status: 500 });

@@ -6,11 +6,11 @@ type RouteParams = { params: Promise<{ id: string }> };
 export async function GET(_request: NextRequest, { params }: RouteParams) {
   try {
     const { id } = await params;
-    const module = await moduleRepository.findById({ id });
-    if (!module) {
+    const mod = await moduleRepository.findById({ id });
+    if (!mod) {
       return NextResponse.json({ error: "Module not found" }, { status: 404 });
     }
-    return NextResponse.json({ module });
+    return NextResponse.json({ module: mod });
   } catch (err) {
     const message = err instanceof Error ? err.message : "Unknown error";
     return NextResponse.json({ error: message }, { status: 500 });
@@ -23,7 +23,7 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
     const body = await request.json();
     const { name, description, primaryDimensionLabel, primaryDimensionCount, metadata } = body;
 
-    const module = await moduleRepository.update({
+    const mod = await moduleRepository.update({
       id,
       name,
       description,
@@ -32,7 +32,7 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
       metadata,
     });
 
-    return NextResponse.json({ module });
+    return NextResponse.json({ module: mod });
   } catch (err) {
     const message = err instanceof Error ? err.message : "Unknown error";
     if (message.includes("not found")) {

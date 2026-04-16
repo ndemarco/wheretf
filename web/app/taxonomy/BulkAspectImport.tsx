@@ -650,7 +650,7 @@ export default function BulkAspectImport({
                               {param.slug}
                             </span>
                             <span className="text-[10px] text-amber-300/60">
-                              in "{parsed[ai].name}"
+                              in &ldquo;{parsed[ai].name}&rdquo;
                             </span>
                           </div>
                           <div className="grid grid-cols-2 gap-3 text-[11px]">
