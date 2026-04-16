@@ -403,6 +403,7 @@ export default function TaxonomyPage() {
 function AspectsTab() {
   const [view, setView] = useState<"detail" | "matrix">("detail");
   const [showBulkImport, setShowBulkImport] = useState(false);
+  const [filter, setFilter] = useState("");
   const [aspects, setAspects] = useState<Aspect[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [params, setParams] = useState<AspectParameter[]>([]);
@@ -611,6 +612,14 @@ function AspectsTab() {
           </div>
         )}
 
+        <div className="p-2 border-b border-slate-700">
+          <input
+            value={filter}
+            onChange={(e) => setFilter(e.target.value)}
+            placeholder="Filter aspects…"
+            className="w-full px-2 py-1 bg-slate-800 border border-slate-600 rounded text-xs text-slate-200 placeholder:text-slate-500 focus:border-accent focus:outline-none"
+          />
+        </div>
         <div className="flex-1 overflow-y-auto">
           {loading ? (
             <div className="p-4 text-center text-slate-500 text-sm">Loading...</div>
@@ -619,7 +628,16 @@ function AspectsTab() {
               No aspects defined yet.
             </div>
           ) : (
-            aspects.map((aspect) => (
+            aspects
+              .filter((a) => {
+                const q = filter.trim().toLowerCase();
+                if (!q) return true;
+                return (
+                  a.name.toLowerCase().includes(q) ||
+                  (a.description ?? "").toLowerCase().includes(q)
+                );
+              })
+              .map((aspect) => (
               <button
                 key={aspect.id}
                 onClick={() => setSelectedId(aspect.id)}
@@ -1177,6 +1195,7 @@ function ParametersTab() {
   const [newDataType, setNewDataType] = useState("text");
   const [newUnit, setNewUnit] = useState("");
   const [newEnumValues, setNewEnumValues] = useState("");
+  const [filter, setFilter] = useState("");
 
   const fetchParams = useCallback(async () => {
     setLoading(true);
@@ -1244,10 +1263,16 @@ function ParametersTab() {
 
   return (
     <div className="flex-1 overflow-y-auto p-6">
-      <div className="flex items-center justify-between mb-4">
+      <div className="flex items-center justify-between mb-4 gap-3">
         <h2 className="text-sm font-medium text-slate-300">
           Parameter Definitions
         </h2>
+        <input
+          value={filter}
+          onChange={(e) => setFilter(e.target.value)}
+          placeholder="Filter by name, unit, description, or search term…"
+          className="flex-1 max-w-md px-2 py-1 bg-slate-800 border border-slate-600 rounded text-xs text-slate-200 placeholder:text-slate-500 focus:border-accent focus:outline-none"
+        />
         <button
           onClick={() => setShowCreate(true)}
           className="text-xs text-accent hover:brightness-110"
@@ -1346,7 +1371,23 @@ function ParametersTab() {
             </tr>
           </thead>
           <tbody>
-            {paramDefs.map((pd) => (
+            {paramDefs
+              .filter((pd) => {
+                const q = filter.trim().toLowerCase();
+                if (!q) return true;
+                if (pd.name.toLowerCase().includes(q)) return true;
+                if ((pd.description ?? "").toLowerCase().includes(q)) return true;
+                if ((pd.unit ?? "").toLowerCase().includes(q)) return true;
+                if (
+                  (pd.searchTerms ?? []).some((t) =>
+                    t.toLowerCase().includes(q)
+                  )
+                ) {
+                  return true;
+                }
+                return false;
+              })
+              .map((pd) => (
               <ParamDefRow
                 key={pd.id}
                 pd={pd}
