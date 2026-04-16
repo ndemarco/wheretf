@@ -475,18 +475,18 @@ export function AspectsTab() {
     { itemId: string; itemName: string }[]
   >([]);
   const [showItems, setShowItems] = useState(false);
+  const [selectedParamDefId, setSelectedParamDefId] = useState<string | null>(
+    null
+  );
+  const [panelTab, setPanelTab] = useState<"parameter" | "info">("info");
+  const [deleteConfirmText, setDeleteConfirmText] = useState("");
+  const [deleteExpanded, setDeleteExpanded] = useState(false);
 
   // Create form
   const [showCreate, setShowCreate] = useState(false);
   const [newName, setNewName] = useState("");
   const [newDesc, setNewDesc] = useState("");
 
-  // Delete confirmation
-  const [deleteTarget, setDeleteTarget] = useState<{
-    aspect: Aspect;
-    itemCount: number;
-    parameterCount: number;
-  } | null>(null);
 
   const fetchAspects = useCallback(async () => {
     setLoading(true);
@@ -528,6 +528,10 @@ export function AspectsTab() {
     // Reset + lazily fetch items-using list on aspect change.
     setItemsUsing([]);
     setShowItems(false);
+    setSelectedParamDefId(null);
+    setPanelTab("info");
+    setDeleteConfirmText("");
+    setDeleteExpanded(false);
     if (!selectedId) return;
     (async () => {
       try {
@@ -568,32 +572,6 @@ export function AspectsTab() {
     }
   }
 
-  async function prepareDeleteAspect(aspect: Aspect) {
-    try {
-      const res = await fetch(`/api/aspects/${aspect.id}`);
-      const data = await res.json();
-      setDeleteTarget({
-        aspect,
-        itemCount: data.itemCount ?? 0,
-        parameterCount: data.parameters?.length ?? 0,
-      });
-    } catch (err) {
-      console.error(err);
-    }
-  }
-
-  async function confirmDeleteAspect() {
-    if (!deleteTarget) return;
-    try {
-      await fetch(`/api/aspects/${deleteTarget.aspect.id}`, { method: "DELETE" });
-      if (selectedId === deleteTarget.aspect.id) setSelectedId(null);
-      setDeleteTarget(null);
-      await fetchAspects();
-    } catch (err) {
-      console.error(err);
-    }
-  }
-
   async function addParamToAspect(parameterDefinitionId: string) {
     if (!selectedId) return;
     try {
@@ -603,6 +581,33 @@ export function AspectsTab() {
         body: JSON.stringify({ parameterDefinitionId }),
       });
       await fetchParams(selectedId);
+    } catch (err) {
+      console.error(err);
+    }
+  }
+
+  async function updateAspectMeta(updates: { name?: string; description?: string | null }) {
+    if (!selectedId) return;
+    try {
+      await fetch(`/api/aspects/${selectedId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(updates),
+      });
+      await fetchAspects();
+    } catch (err) {
+      console.error(err);
+    }
+  }
+
+  async function deleteSelectedAspect() {
+    if (!selectedId) return;
+    try {
+      await fetch(`/api/aspects/${selectedId}`, { method: "DELETE" });
+      setSelectedId(null);
+      setDeleteExpanded(false);
+      setDeleteConfirmText("");
+      await fetchAspects();
     } catch (err) {
       console.error(err);
     }
@@ -741,150 +746,164 @@ export function AspectsTab() {
         </div>
       </div>
 
-      {/* Aspect detail */}
-      <div className="flex-1 overflow-y-auto">
+      {/* Middle: aspect detail — editable header + parameters */}
+      <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
         {!selectedAspect ? (
-          <div className="flex-1 flex items-center justify-center h-full text-slate-500 text-sm">
+          <div className="flex-1 flex items-center justify-center text-slate-500 text-sm">
             Select an aspect to view its parameters.
           </div>
         ) : (
-          <div className="p-6 space-y-6">
-            <div className="flex items-start justify-between">
-              <div>
-                <h2 className="text-base font-semibold text-slate-100">
-                  {selectedAspect.name}
-                </h2>
-                {(selectedAspect.itemCount !== undefined ||
-                  selectedAspect.parameterCount !== undefined ||
-                  selectedAspect.standardCount !== undefined) && (
-                  <p className="text-xs text-slate-500 mt-0.5 tabular-nums">
-                    applied to{" "}
-                    <span className="text-slate-300">
-                      {selectedAspect.itemCount ?? 0}
-                    </span>{" "}
-                    item{(selectedAspect.itemCount ?? 0) === 1 ? "" : "s"} ·{" "}
-                    <span className="text-slate-300">
-                      {selectedAspect.parameterCount ?? 0}
-                    </span>{" "}
-                    parameter
-                    {(selectedAspect.parameterCount ?? 0) === 1 ? "" : "s"} ·{" "}
-                    <span className="text-slate-300">
-                      {selectedAspect.standardCount ?? 0}
-                    </span>{" "}
-                    standard
-                    {(selectedAspect.standardCount ?? 0) === 1 ? "" : "s"}
-                  </p>
-                )}
-                {selectedAspect.description && (
-                  <p className="text-sm text-slate-400 mt-1">
-                    {selectedAspect.description}
-                  </p>
-                )}
-              </div>
-              <button
-                onClick={() => prepareDeleteAspect(selectedAspect)}
-                className="text-xs text-red-400 hover:text-red-300"
-              >
-                Delete
-              </button>
-            </div>
-
-            {/* Current parameters */}
-            <div>
-              <h3 className="text-xs font-medium text-slate-400 uppercase tracking-wider mb-2">
-                Parameters ({params.length})
-              </h3>
-              {params.length === 0 ? (
-                <p className="text-sm text-slate-500">
-                  No parameters attached. Add one below.
-                </p>
-              ) : (
-                <div className="space-y-1">
-                  {params.map((p) => (
-                    <div
-                      key={p.id}
-                      className="flex items-center justify-between px-3 py-2 bg-slate-800/50 border border-slate-700 rounded"
-                    >
-                      <div className="flex items-center gap-2">
-                        <span className="text-sm text-slate-200">
-                          {p.parameterName}
-                        </span>
-                        <span className="text-[10px] px-1.5 py-0.5 rounded bg-slate-700 text-slate-400">
-                          {p.dataType}
-                        </span>
-                        {p.unit && (
-                          <span className="text-[10px] text-slate-500">
-                            {p.unit}
-                          </span>
-                        )}
-                        {p.required && (
-                          <span className="text-[10px] text-amber-400">
-                            required
-                          </span>
-                        )}
-                      </div>
-                      <button
-                        onClick={() =>
-                          removeParamFromAspect(p.parameterDefinitionId)
-                        }
-                        className="text-xs text-red-400 hover:text-red-300"
-                      >
-                        Remove
-                      </button>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-
-            {/* Add parameter (typeahead + inline create) */}
-            <div>
-              <h3 className="text-xs font-medium text-slate-400 uppercase tracking-wider mb-2">
-                Add Parameter
-              </h3>
-              <ParamTypeahead
-                available={availableParamDefs}
-                onAdd={async (pd) => addParamToAspect(pd.id)}
-                onCreateAndAdd={async (newDef) => addParamToAspect(newDef.id)}
-                aspectId={selectedId ?? undefined}
+          <>
+            <div className="px-6 py-4 border-b border-slate-700 shrink-0 space-y-1">
+              <EditableText
+                value={selectedAspect.name}
+                onSave={(name) => updateAspectMeta({ name })}
+                className="text-lg font-semibold text-slate-100"
+                placeholder="Aspect name"
+              />
+              <EditableText
+                value={selectedAspect.description ?? ""}
+                onSave={(description) =>
+                  updateAspectMeta({ description: description || null })
+                }
+                className="text-xs text-slate-500"
+                placeholder="Description…"
               />
             </div>
 
-            {/* Used by */}
-            <div>
-              <button
-                onClick={() => setShowItems((v) => !v)}
-                className="w-full flex items-center justify-between text-xs font-medium text-slate-400 uppercase tracking-wider mb-2 hover:text-slate-200 transition-colors"
-              >
-                <span>
-                  Used by {itemsUsing.length}{" "}
-                  item{itemsUsing.length === 1 ? "" : "s"}
-                </span>
-                <span className="text-[10px]">{showItems ? "▼" : "▶"}</span>
-              </button>
-              {showItems && (
-                <div className="space-y-1 max-h-64 overflow-y-auto">
-                  {itemsUsing.length === 0 ? (
-                    <p className="text-xs text-slate-500 italic">
-                      Not applied to any items yet.
-                    </p>
-                  ) : (
-                    itemsUsing.map((i) => (
-                      <a
-                        key={i.itemId}
-                        href={`/items?selected=${i.itemId}`}
-                        className="block px-3 py-1.5 bg-slate-800/40 border border-slate-700 rounded text-xs text-slate-300 hover:bg-slate-800 hover:text-accent transition-colors"
-                      >
-                        {i.itemName}
-                      </a>
-                    ))
-                  )}
-                </div>
-              )}
+            <div className="flex-1 overflow-y-auto p-6 space-y-6">
+              <div>
+                <h3 className="text-xs font-medium text-slate-400 uppercase tracking-wider mb-2">
+                  Parameters ({params.length})
+                </h3>
+                {params.length === 0 ? (
+                  <p className="text-sm text-slate-500">
+                    No parameters attached. Add one below.
+                  </p>
+                ) : (
+                  <div className="space-y-1">
+                    {params.map((p) => {
+                      const isSel =
+                        selectedParamDefId === p.parameterDefinitionId;
+                      return (
+                        <button
+                          key={p.id}
+                          onClick={() => {
+                            setSelectedParamDefId(p.parameterDefinitionId);
+                            setPanelTab("parameter");
+                          }}
+                          className={`w-full flex items-center justify-between px-3 py-2 border rounded transition-colors text-left ${
+                            isSel
+                              ? "bg-accent/10 border-accent"
+                              : "bg-slate-800/50 border-slate-700 hover:bg-slate-800"
+                          }`}
+                        >
+                          <div className="flex items-center gap-2">
+                            <span
+                              className={`text-sm ${
+                                isSel ? "text-accent" : "text-slate-200"
+                              }`}
+                            >
+                              {p.parameterName}
+                            </span>
+                            <span className="text-[10px] px-1.5 py-0.5 rounded bg-slate-700 text-slate-400">
+                              {p.dataType}
+                            </span>
+                            {p.unit && (
+                              <span className="text-[10px] text-slate-500">
+                                {p.unit}
+                              </span>
+                            )}
+                            {p.required && (
+                              <span className="text-[10px] text-amber-400">
+                                required
+                              </span>
+                            )}
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+
+              <div>
+                <h3 className="text-xs font-medium text-slate-400 uppercase tracking-wider mb-2">
+                  Add Parameter
+                </h3>
+                <ParamTypeahead
+                  available={availableParamDefs}
+                  onAdd={async (pd) => addParamToAspect(pd.id)}
+                  onCreateAndAdd={async (newDef) => addParamToAspect(newDef.id)}
+                  aspectId={selectedId ?? undefined}
+                />
+              </div>
             </div>
-          </div>
+          </>
         )}
       </div>
+
+      {/* Right: tabbed info / parameter panel */}
+      {selectedAspect && (
+        <aside className="w-80 shrink-0 border-l border-slate-700 bg-slate-800/20 overflow-y-auto flex flex-col">
+          <div className="flex border-b border-slate-700 shrink-0">
+            <button
+              onClick={() => setPanelTab("parameter")}
+              disabled={!selectedParamDefId}
+              className={`flex-1 px-3 py-2 text-xs font-medium transition-colors disabled:opacity-40 ${
+                panelTab === "parameter"
+                  ? "text-accent border-b-2 border-accent -mb-px"
+                  : "text-slate-400 hover:text-slate-200"
+              }`}
+            >
+              Parameter
+            </button>
+            <button
+              onClick={() => setPanelTab("info")}
+              className={`flex-1 px-3 py-2 text-xs font-medium transition-colors ${
+                panelTab === "info"
+                  ? "text-accent border-b-2 border-accent -mb-px"
+                  : "text-slate-400 hover:text-slate-200"
+              }`}
+            >
+              Info
+            </button>
+          </div>
+
+          {panelTab === "parameter" ? (
+            <AspectParamPanel
+              param={
+                selectedParamDefId
+                  ? params.find(
+                      (p) => p.parameterDefinitionId === selectedParamDefId
+                    ) ?? null
+                  : null
+              }
+              onRemove={async (pdId) => {
+                await removeParamFromAspect(pdId);
+                setSelectedParamDefId(null);
+                setPanelTab("info");
+              }}
+            />
+          ) : (
+            <AspectInfoPanel
+              aspect={selectedAspect}
+              itemsUsing={itemsUsing}
+              showItems={showItems}
+              onToggleItems={() => setShowItems((v) => !v)}
+              deleteExpanded={deleteExpanded}
+              onDeleteExpand={() => setDeleteExpanded(true)}
+              onDeleteCancel={() => {
+                setDeleteExpanded(false);
+                setDeleteConfirmText("");
+              }}
+              deleteConfirmText={deleteConfirmText}
+              onDeleteConfirmTextChange={setDeleteConfirmText}
+              onDelete={deleteSelectedAspect}
+            />
+          )}
+        </aside>
+      )}
 
       {showBulkImport && (
         <BulkAspectImport
@@ -895,16 +914,6 @@ export function AspectsTab() {
         />
       )}
 
-      {/* Delete confirmation modal */}
-      {deleteTarget && (
-        <DeleteAspectModal
-          aspect={deleteTarget.aspect}
-          itemCount={deleteTarget.itemCount}
-          parameterCount={deleteTarget.parameterCount}
-          onConfirm={confirmDeleteAspect}
-          onCancel={() => setDeleteTarget(null)}
-        />
-      )}
       </div>
     </div>
   );
@@ -1167,60 +1176,208 @@ function AspectParameterMatrix({
   );
 }
 
-// --- Delete Aspect Modal ---
+// --- Aspect right-pane panels ---
 
-function DeleteAspectModal({
+function AspectParamPanel({
+  param,
+  onRemove,
+}: {
+  param: AspectParameter | null;
+  onRemove: (parameterDefinitionId: string) => Promise<void> | void;
+}) {
+  if (!param) {
+    return (
+      <div className="flex-1 flex items-center justify-center text-slate-500 text-xs p-6 text-center">
+        Click a parameter on the left to see details here.
+      </div>
+    );
+  }
+  const c = (param.constraints ?? {}) as {
+    enumValues?: string[];
+    min?: number;
+    max?: number;
+  };
+  return (
+    <div className="flex-1 overflow-y-auto flex flex-col">
+      <div className="p-4 space-y-4 flex-1">
+        <div>
+          <div className="text-[10px] uppercase tracking-wider text-slate-500 mb-1">
+            Parameter
+          </div>
+          <div className="text-sm font-mono text-slate-100">
+            {param.parameterName}
+          </div>
+        </div>
+        <div className="grid grid-cols-2 gap-3 text-xs">
+          <div>
+            <div className="text-[10px] uppercase tracking-wider text-slate-500 mb-0.5">
+              Type
+            </div>
+            <span className="text-[11px] px-1.5 py-0.5 rounded bg-slate-700 text-slate-300">
+              {param.dataType}
+            </span>
+          </div>
+          <div>
+            <div className="text-[10px] uppercase tracking-wider text-slate-500 mb-0.5">
+              Unit
+            </div>
+            <div className="text-slate-300">{param.unit || "—"}</div>
+          </div>
+        </div>
+        {c.enumValues && c.enumValues.length > 0 && (
+          <div>
+            <div className="text-[10px] uppercase tracking-wider text-slate-500 mb-1">
+              Enum values
+            </div>
+            <div className="flex flex-wrap gap-1">
+              {c.enumValues.map((v) => (
+                <span
+                  key={v}
+                  className="text-[10px] px-1.5 py-0.5 rounded bg-slate-800 text-slate-300 border border-slate-700"
+                >
+                  {v}
+                </span>
+              ))}
+            </div>
+          </div>
+        )}
+        {(c.min !== undefined || c.max !== undefined) && (
+          <div>
+            <div className="text-[10px] uppercase tracking-wider text-slate-500 mb-1">
+              Range
+            </div>
+            <div className="text-xs text-slate-300 tabular-nums">
+              {c.min ?? "…"} … {c.max ?? "…"}
+            </div>
+          </div>
+        )}
+        {param.required && (
+          <div className="text-[11px] text-amber-400">
+            Required when this aspect is applied.
+          </div>
+        )}
+        <p className="text-[11px] text-slate-500">
+          Full edit — dataType, unit, constraints, description, search terms —
+          lives on{" "}
+          <a
+            href={`/taxonomy/parameters?selected=${param.parameterDefinitionId}`}
+            className="text-accent hover:brightness-110"
+          >
+            Taxonomy → Parameters
+          </a>
+          .
+        </p>
+      </div>
+      <div className="shrink-0 border-t border-slate-700 p-4">
+        <button
+          onClick={() => onRemove(param.parameterDefinitionId)}
+          className="w-full text-xs text-red-400 hover:text-red-300 border border-red-900/50 hover:border-red-700 rounded py-1.5 transition-colors"
+        >
+          Remove from this aspect
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function AspectInfoPanel({
   aspect,
-  itemCount,
-  parameterCount,
-  onConfirm,
-  onCancel,
+  itemsUsing,
+  showItems,
+  onToggleItems,
+  deleteExpanded,
+  onDeleteExpand,
+  onDeleteCancel,
+  deleteConfirmText,
+  onDeleteConfirmTextChange,
+  onDelete,
 }: {
   aspect: Aspect;
-  itemCount: number;
-  parameterCount: number;
-  onConfirm: () => void;
-  onCancel: () => void;
+  itemsUsing: { itemId: string; itemName: string }[];
+  showItems: boolean;
+  onToggleItems: () => void;
+  deleteExpanded: boolean;
+  onDeleteExpand: () => void;
+  onDeleteCancel: () => void;
+  deleteConfirmText: string;
+  onDeleteConfirmTextChange: (s: string) => void;
+  onDelete: () => void;
 }) {
-  const [confirmText, setConfirmText] = useState("");
-  const isConfirmed = confirmText === aspect.name;
-
+  const confirmed = deleteConfirmText === aspect.name;
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60">
-      <div className="bg-slate-800 border border-slate-600 rounded-lg shadow-xl w-full max-w-md mx-4">
-        <div className="p-5 border-b border-slate-700">
-          <h2 className="text-base font-semibold text-red-400">
-            Delete aspect: {aspect.name}
-          </h2>
-        </div>
-
-        <div className="p-5 space-y-4">
-          {/* Impact summary */}
-          <div className="space-y-2">
-            {itemCount > 0 ? (
-              <p className="text-sm text-slate-300">
-                Applied to{" "}
-                <span className="font-semibold text-slate-100">
-                  {itemCount} item{itemCount !== 1 ? "s" : ""}
-                </span>
-                . Their {parameterCount} parameter value
-                {parameterCount !== 1 ? "s" : ""} will be permanently erased.
-              </p>
-            ) : (
-              <p className="text-sm text-slate-400">
-                Not applied to any items.
-              </p>
-            )}
-
-            <p className="text-xs text-slate-500">
-              This cannot be undone. You would need to re-create the aspect
-              and re-enter all values manually.
-            </p>
+    <div className="flex-1 flex flex-col overflow-hidden">
+      <div className="flex-1 overflow-y-auto">
+        <div className="p-4 space-y-5 text-xs">
+          <div className="grid grid-cols-2 gap-2">
+            <Tile label="Items using" value={aspect.itemCount ?? 0} />
+            <Tile label="Parameters" value={aspect.parameterCount ?? 0} />
+            <Tile label="Standards" value={aspect.standardCount ?? 0} />
           </div>
 
-          {/* Type-to-confirm */}
           <div>
-            <label className="block text-xs text-slate-400 mb-1.5">
+            <button
+              onClick={onToggleItems}
+              className="w-full flex items-center justify-between text-[10px] uppercase tracking-wider text-slate-500 mb-1.5 hover:text-slate-200 transition-colors"
+            >
+              <span>
+                Applied to items ({itemsUsing.length})
+              </span>
+              <span>{showItems ? "▼" : "▶"}</span>
+            </button>
+            {showItems && (
+              <div className="space-y-1 max-h-64 overflow-y-auto">
+                {itemsUsing.length === 0 ? (
+                  <p className="text-[11px] text-slate-600 italic">
+                    Not applied yet.
+                  </p>
+                ) : (
+                  itemsUsing.map((i) => (
+                    <a
+                      key={i.itemId}
+                      href={`/items?selected=${i.itemId}`}
+                      className="block px-2 py-1 bg-slate-900/40 border border-slate-700 rounded text-[11px] text-slate-300 hover:text-accent hover:bg-slate-800 transition-colors truncate"
+                    >
+                      {i.itemName}
+                    </a>
+                  ))
+                )}
+              </div>
+            )}
+          </div>
+
+          {aspect.description && (
+            <div className="pt-3 border-t border-slate-800 text-[11px] text-slate-500">
+              {aspect.description}
+            </div>
+          )}
+        </div>
+      </div>
+      <div className="shrink-0 border-t border-slate-700 p-4 bg-slate-900/40">
+        {!deleteExpanded ? (
+          <button
+            onClick={onDeleteExpand}
+            className="w-full text-xs text-red-400 hover:text-red-300 border border-red-900/50 hover:border-red-700 rounded py-1.5 transition-colors"
+          >
+            Delete aspect…
+          </button>
+        ) : (
+          <div className="space-y-2">
+            <p className="text-[11px] text-slate-400 leading-snug">
+              {(aspect.itemCount ?? 0) > 0 ? (
+                <>
+                  Applied to{" "}
+                  <span className="text-slate-100 font-semibold">
+                    {aspect.itemCount} item
+                    {aspect.itemCount === 1 ? "" : "s"}
+                  </span>
+                  . Their parameter values for this aspect will be erased.
+                </>
+              ) : (
+                <>Not applied to any items.</>
+              )}{" "}
+              This cannot be undone.
+            </p>
+            <label className="block text-[11px] text-slate-400">
               Type{" "}
               <span className="font-mono text-slate-200 bg-slate-700 px-1.5 py-0.5 rounded">
                 {aspect.name}
@@ -1228,35 +1385,32 @@ function DeleteAspectModal({
               to confirm:
             </label>
             <input
-              type="text"
-              value={confirmText}
-              onChange={(e) => setConfirmText(e.target.value)}
-              autoFocus
-              className="w-full px-3 py-2 bg-slate-900 border border-slate-600 rounded text-sm text-slate-200 placeholder:text-slate-600 focus:border-red-500 focus:outline-none"
+              value={deleteConfirmText}
+              onChange={(e) => onDeleteConfirmTextChange(e.target.value)}
               placeholder={aspect.name}
+              className="w-full px-2 py-1 bg-slate-900 border border-slate-700 rounded text-xs text-slate-200 placeholder:text-slate-600 focus:border-red-500 focus:outline-none"
             />
+            <div className="flex items-center gap-2">
+              <button
+                onClick={onDelete}
+                disabled={!confirmed}
+                className={`flex-1 px-3 py-1.5 text-xs rounded transition-colors ${
+                  confirmed
+                    ? "bg-red-600 text-white hover:bg-red-500"
+                    : "bg-slate-700 text-slate-500 cursor-not-allowed"
+                }`}
+              >
+                Delete this aspect
+              </button>
+              <button
+                onClick={onDeleteCancel}
+                className="text-[11px] text-slate-500 hover:text-slate-300 px-2"
+              >
+                Cancel
+              </button>
+            </div>
           </div>
-        </div>
-
-        <div className="p-5 border-t border-slate-700 flex items-center justify-end gap-3">
-          <button
-            onClick={onCancel}
-            className="px-4 py-2 text-sm text-slate-300 hover:text-slate-100 transition-colors"
-          >
-            Cancel
-          </button>
-          <button
-            onClick={onConfirm}
-            disabled={!isConfirmed}
-            className={`px-4 py-2 text-sm rounded font-medium transition-all ${
-              isConfirmed
-                ? "bg-red-600 text-white hover:bg-red-500"
-                : "bg-slate-700 text-slate-500 cursor-not-allowed"
-            }`}
-          >
-            Delete this aspect
-          </button>
-        </div>
+        )}
       </div>
     </div>
   );
