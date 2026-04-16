@@ -312,12 +312,35 @@ export default function BulkAspectImport({
     }
   }
 
-  function parseJson() {
+  async function parseJson() {
     setValidationError(null);
     try {
       const data = JSON.parse(jsonText);
       const normalized = validateAndNormalize(data);
-      setParsed(normalized);
+
+      // Detect conflicts against existing parameter definitions.
+      const res = await fetch("/api/parameter-definitions");
+      const body = await res.json();
+      const byName = new Map<string, ExistingDef>(
+        (body.parameterDefinitions ?? []).map(
+          (d: ExistingDef) => [d.name, d] as const
+        )
+      );
+      const withConflicts = normalized.map((a) => ({
+        ...a,
+        params: a.params.map((p) => {
+          const existing = byName.get(p.slug);
+          if (existing) {
+            return {
+              ...p,
+              conflictWith: existing,
+              resolution: "reuse" as const,
+            };
+          }
+          return p;
+        }),
+      }));
+      setParsed(withConflicts);
       setStep("review");
     } catch (err) {
       setValidationError(
@@ -345,6 +368,15 @@ export default function BulkAspectImport({
     );
   }
 
+  // Find conflict params across all aspects (index pairs for in-place editing).
+  const conflicts: Array<{ ai: number; pi: number; param: ParsedParam }> = [];
+  for (let ai = 0; ai < parsed.length; ai++) {
+    for (let pi = 0; pi < parsed[ai].params.length; pi++) {
+      const p = parsed[ai].params[pi];
+      if (p.conflictWith) conflicts.push({ ai, pi, param: p });
+    }
+  }
+
   function toggleAspect(ai: number) {
     setParsed((prev) =>
       prev.map((a, i) => (i === ai ? { ...a, keep: !a.keep } : a))
@@ -363,11 +395,19 @@ export default function BulkAspectImport({
     const log: string[] = [];
 
     try {
-      const allParams = parsed
+      // Resolve effective slug per conflict resolution. Renames get the
+      // renameTo value; reuse and non-conflict rows keep their slug.
+      const resolvedParams = parsed
         .filter((a) => a.keep)
-        .flatMap((a) => a.params.filter((p) => p.keep));
+        .flatMap((a) => a.params.filter((p) => p.keep))
+        .map((p) => {
+          if (p.conflictWith && p.resolution === "rename" && p.renameTo) {
+            return { ...p, slug: p.renameTo.trim() };
+          }
+          return p;
+        });
       const uniqueBySlug = new Map<string, ParsedParam>();
-      for (const p of allParams) {
+      for (const p of resolvedParams) {
         if (!uniqueBySlug.has(p.slug)) uniqueBySlug.set(p.slug, p);
       }
 
@@ -448,7 +488,12 @@ export default function BulkAspectImport({
 
         for (const p of aspect.params) {
           if (!p.keep) continue;
-          const pdId = paramIdBySlug.get(p.slug);
+          // Effective slug follows conflict resolution (rename).
+          const effectiveSlug =
+            p.conflictWith && p.resolution === "rename" && p.renameTo
+              ? p.renameTo.trim()
+              : p.slug;
+          const pdId = paramIdBySlug.get(effectiveSlug);
           if (!pdId) continue;
           const linkRes = await fetch(`/api/aspects/${aspectId}/parameters`, {
             method: "POST",
@@ -456,13 +501,13 @@ export default function BulkAspectImport({
             body: JSON.stringify({ parameterDefinitionId: pdId }),
           });
           if (linkRes.ok) {
-            log.push(`  ✓ Linked "${p.slug}" → "${aspect.name}"`);
+            log.push(`  ✓ Linked "${effectiveSlug}" → "${aspect.name}"`);
           } else {
             const ld = await linkRes.json();
             if (ld.error?.includes("already")) {
-              log.push(`  ↳ "${p.slug}" already linked.`);
+              log.push(`  ↳ "${effectiveSlug}" already linked.`);
             } else {
-              log.push(`  ✗ Link "${p.slug}" failed: ${ld.error}`);
+              log.push(`  ✗ Link "${effectiveSlug}" failed: ${ld.error}`);
             }
           }
         }
@@ -551,6 +596,159 @@ export default function BulkAspectImport({
 
           {step === "review" && (
             <div className="space-y-4">
+              {conflicts.length > 0 && (
+                <div className="border border-amber-700/50 bg-amber-900/10 rounded">
+                  <div className="px-3 py-2 border-b border-amber-700/40 flex items-center justify-between">
+                    <div className="text-xs font-semibold text-amber-200">
+                      {conflicts.length} parameter
+                      {conflicts.length === 1 ? "" : "s"} already exist
+                    </div>
+                    <div className="text-[10px] text-amber-300/70">
+                      Resolve each before saving
+                    </div>
+                  </div>
+                  <div className="divide-y divide-amber-700/30">
+                    {conflicts.map(({ ai, pi, param }) => {
+                      const existing = param.conflictWith!;
+                      const resolution = param.resolution ?? "reuse";
+                      const existingC = (existing.constraints ?? {}) as {
+                        enumValues?: string[];
+                        min?: number;
+                        max?: number;
+                      };
+                      const existingSummary = [
+                        existing.dataType,
+                        existing.unit ?? null,
+                        existingC.enumValues?.length
+                          ? existingC.enumValues.join(", ")
+                          : existingC.min !== undefined ||
+                              existingC.max !== undefined
+                            ? `${existingC.min ?? "…"}…${existingC.max ?? "…"}`
+                            : null,
+                      ]
+                        .filter(Boolean)
+                        .join(" · ");
+                      const incomingSummary = [
+                        param.dataType,
+                        param.unit,
+                        param.enumValues.length
+                          ? param.enumValues.join(", ")
+                          : param.min !== null || param.max !== null
+                            ? `${param.min ?? "…"}…${param.max ?? "…"}`
+                            : null,
+                      ]
+                        .filter(Boolean)
+                        .join(" · ");
+                      return (
+                        <div
+                          key={`${ai}:${pi}`}
+                          className="px-3 py-2 space-y-1.5"
+                        >
+                          <div className="flex items-center gap-2">
+                            <span className="font-mono text-xs text-amber-100">
+                              {param.slug}
+                            </span>
+                            <span className="text-[10px] text-amber-300/60">
+                              in "{parsed[ai].name}"
+                            </span>
+                          </div>
+                          <div className="grid grid-cols-2 gap-3 text-[11px]">
+                            <div>
+                              <div className="text-amber-300/60">
+                                Existing
+                              </div>
+                              <div className="text-slate-300">
+                                {existingSummary || "—"}
+                              </div>
+                              {existing.description && (
+                                <div className="text-slate-500 italic mt-0.5">
+                                  {existing.description}
+                                </div>
+                              )}
+                            </div>
+                            <div>
+                              <div className="text-amber-300/60">Incoming</div>
+                              <div className="text-slate-300">
+                                {incomingSummary || "—"}
+                              </div>
+                              {param.description && (
+                                <div className="text-slate-500 italic mt-0.5">
+                                  {param.description}
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-3 text-[11px]">
+                            <label className="inline-flex items-center gap-1 cursor-pointer">
+                              <input
+                                type="radio"
+                                name={`resolution-${ai}-${pi}`}
+                                checked={resolution === "reuse"}
+                                onChange={() =>
+                                  updateParam(ai, pi, {
+                                    resolution: "reuse",
+                                    renameTo: undefined,
+                                    keep: true,
+                                  })
+                                }
+                                className="accent-accent"
+                              />
+                              <span className="text-slate-200">
+                                Reuse existing
+                              </span>
+                            </label>
+                            <label className="inline-flex items-center gap-1 cursor-pointer">
+                              <input
+                                type="radio"
+                                name={`resolution-${ai}-${pi}`}
+                                checked={resolution === "rename"}
+                                onChange={() =>
+                                  updateParam(ai, pi, {
+                                    resolution: "rename",
+                                    renameTo:
+                                      param.renameTo ?? `${param.slug}_2`,
+                                    keep: true,
+                                  })
+                                }
+                                className="accent-accent"
+                              />
+                              <span className="text-slate-200">Rename</span>
+                            </label>
+                            <label className="inline-flex items-center gap-1 cursor-pointer">
+                              <input
+                                type="radio"
+                                name={`resolution-${ai}-${pi}`}
+                                checked={resolution === "skip"}
+                                onChange={() =>
+                                  updateParam(ai, pi, {
+                                    resolution: "skip",
+                                    renameTo: undefined,
+                                    keep: false,
+                                  })
+                                }
+                                className="accent-accent"
+                              />
+                              <span className="text-slate-200">Skip</span>
+                            </label>
+                            {resolution === "rename" && (
+                              <input
+                                value={param.renameTo ?? ""}
+                                onChange={(e) =>
+                                  updateParam(ai, pi, {
+                                    renameTo: e.target.value,
+                                  })
+                                }
+                                placeholder="new_slug"
+                                className="flex-1 max-w-xs px-2 py-0.5 bg-slate-900 border border-slate-700 rounded text-xs font-mono text-slate-100 focus:border-accent focus:outline-none"
+                              />
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
               {parsed.map((aspect, ai) => (
                 <div
                   key={ai}
@@ -611,8 +809,28 @@ export default function BulkAspectImport({
                               />
                             </td>
                             <td className="px-2 py-1">
-                              <div className="text-slate-300 text-[11px]">
-                                {p.name}
+                              <div className="flex items-center gap-1.5">
+                                <div className="text-slate-300 text-[11px]">
+                                  {p.name}
+                                </div>
+                                {p.conflictWith && (
+                                  <span
+                                    className={`text-[9px] px-1 py-px rounded ${
+                                      p.resolution === "skip"
+                                        ? "bg-slate-700 text-slate-400"
+                                        : p.resolution === "rename"
+                                          ? "bg-blue-900/50 text-blue-300"
+                                          : "bg-amber-900/50 text-amber-300"
+                                    }`}
+                                    title="See Conflicts section above"
+                                  >
+                                    {p.resolution === "skip"
+                                      ? "skipped"
+                                      : p.resolution === "rename"
+                                        ? `→ ${p.renameTo || "…"}`
+                                        : "reusing"}
+                                  </span>
+                                )}
                               </div>
                               <input
                                 value={p.slug}
@@ -623,6 +841,14 @@ export default function BulkAspectImport({
                                 }
                                 className="w-full font-mono text-[11px] text-slate-400 bg-transparent border-b border-dashed border-transparent hover:border-slate-600 focus:border-accent outline-none"
                               />
+                              {p.description && (
+                                <div
+                                  className="text-[10px] text-slate-500 italic mt-0.5 truncate"
+                                  title={p.description}
+                                >
+                                  {p.description}
+                                </div>
+                              )}
                             </td>
                             <td className="px-2 py-1">
                               <select
