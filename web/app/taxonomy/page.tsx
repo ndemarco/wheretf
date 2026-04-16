@@ -50,8 +50,10 @@ interface Category {
   id: string;
   name: string;
   icon: string | null;
+  svg: string | null;
   color: string | null;
   sortOrder: number;
+  itemCount?: number;
 }
 
 // --- Reusable inline editable text ---
@@ -2356,13 +2358,31 @@ function timeAgo(iso: string): string {
   return new Date(iso).toLocaleString();
 }
 
+const CATEGORY_COLOR_PRESETS = [
+  "#ef4444", // red
+  "#f59e0b", // amber
+  "#eab308", // yellow
+  "#22c55e", // green
+  "#14b8a6", // teal
+  "#3b82f6", // blue
+  "#6366f1", // indigo
+  "#a855f7", // purple
+  "#ec4899", // pink
+  "#64748b", // slate
+];
+
 export function CategoriesTab() {
   const [categories, setCategories] = useState<Category[]>([]);
   const [loading, setLoading] = useState(true);
   const [showCreate, setShowCreate] = useState(false);
   const [newName, setNewName] = useState("");
-  const [newIcon, setNewIcon] = useState("");
-  const [newColor, setNewColor] = useState("");
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [filter, setFilter] = useState("");
+  const [itemsUsing, setItemsUsing] = useState<
+    { id: string; name: string }[]
+  >([]);
+  const [deleteExpanded, setDeleteExpanded] = useState(false);
+  const [deleteConfirmText, setDeleteConfirmText] = useState("");
 
   const fetchCategories = useCallback(async () => {
     setLoading(true);
@@ -2381,129 +2401,516 @@ export function CategoriesTab() {
     fetchCategories();
   }, [fetchCategories]);
 
+  useEffect(() => {
+    setItemsUsing([]);
+    setDeleteExpanded(false);
+    setDeleteConfirmText("");
+    if (!selectedId) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch(`/api/categories/${selectedId}/items`);
+        const data = await res.json();
+        if (!cancelled) setItemsUsing(data.items ?? []);
+      } catch (err) {
+        console.error(err);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedId]);
+
   async function createCategory() {
     if (!newName.trim()) return;
     try {
-      await fetch("/api/categories", {
+      const res = await fetch("/api/categories", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          name: newName.trim(),
-          icon: newIcon.trim() || null,
-          color: newColor.trim() || null,
-        }),
+        body: JSON.stringify({ name: newName.trim() }),
       });
+      const data = await res.json();
       setNewName("");
-      setNewIcon("");
-      setNewColor("");
       setShowCreate(false);
       await fetchCategories();
+      if (data.category?.id) setSelectedId(data.category.id);
     } catch (err) {
       console.error(err);
     }
   }
 
-  async function deleteCategory(id: string) {
-    if (!confirm("Delete this category? It will be removed from all items.")) return;
+  async function updateCategory(id: string, updates: Partial<Category>) {
+    await fetch(`/api/categories/${id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(updates),
+    });
+    await fetchCategories();
+  }
+
+  async function deleteSelectedCategory() {
+    if (!selectedId) return;
     try {
-      await fetch(`/api/categories/${id}`, { method: "DELETE" });
+      await fetch(`/api/categories/${selectedId}`, { method: "DELETE" });
+      setSelectedId(null);
+      setDeleteExpanded(false);
+      setDeleteConfirmText("");
       await fetchCategories();
     } catch (err) {
       console.error(err);
     }
   }
 
-  return (
-    <div className="flex-1 overflow-y-auto p-6">
-      <div className="flex items-center justify-between mb-4">
-        <h2 className="text-sm font-medium text-slate-300">Categories</h2>
-        <button
-          onClick={() => setShowCreate(true)}
-          className="text-xs text-accent hover:brightness-110"
-        >
-          + New Category
-        </button>
-      </div>
+  const filtered = categories.filter((c) => {
+    const q = filter.trim().toLowerCase();
+    if (!q) return true;
+    return c.name.toLowerCase().includes(q);
+  });
+  const selected = categories.find((c) => c.id === selectedId) ?? null;
 
-      {showCreate && (
-        <div className="mb-4 p-4 bg-slate-800/50 border border-slate-700 rounded space-y-3">
-          <div className="grid grid-cols-3 gap-3">
+  return (
+    <div className="flex-1 flex min-h-0 overflow-hidden">
+      {/* Left: category list */}
+      <div className="w-72 border-r border-slate-700 flex flex-col shrink-0">
+        <div className="p-3 border-b border-slate-700 flex items-center justify-between">
+          <span className="text-xs text-slate-400 uppercase tracking-wider font-medium">
+            Categories
+          </span>
+          <button
+            onClick={() => setShowCreate(true)}
+            className="text-xs text-accent hover:brightness-110"
+          >
+            + New
+          </button>
+        </div>
+
+        {showCreate && (
+          <div className="p-3 border-b border-slate-700 space-y-2">
             <input
               type="text"
               value={newName}
               onChange={(e) => setNewName(e.target.value)}
               placeholder="Category name"
               autoFocus
-              className="px-2 py-1.5 bg-slate-800 border border-slate-600 rounded text-sm text-slate-200 placeholder:text-slate-500 focus:border-accent focus:outline-none"
+              onKeyDown={(e) => {
+                if (e.key === "Enter") createCategory();
+                if (e.key === "Escape") setShowCreate(false);
+              }}
+              className="w-full px-2 py-1 bg-slate-800 border border-slate-600 rounded text-xs text-slate-200 placeholder:text-slate-500 focus:border-accent focus:outline-none"
             />
-            <input
-              type="text"
-              value={newIcon}
-              onChange={(e) => setNewIcon(e.target.value)}
-              placeholder="Icon (emoji or key)"
-              className="px-2 py-1.5 bg-slate-800 border border-slate-600 rounded text-sm text-slate-200 placeholder:text-slate-500 focus:border-accent focus:outline-none"
-            />
-            <input
-              type="text"
-              value={newColor}
-              onChange={(e) => setNewColor(e.target.value)}
-              placeholder="Color (#hex)"
-              className="px-2 py-1.5 bg-slate-800 border border-slate-600 rounded text-sm text-slate-200 placeholder:text-slate-500 focus:border-accent focus:outline-none"
-            />
-          </div>
-          <div className="flex gap-2">
-            <button
-              onClick={createCategory}
-              className="px-3 py-1 bg-accent text-white rounded text-xs hover:brightness-110"
-            >
-              Create
-            </button>
-            <button
-              onClick={() => setShowCreate(false)}
-              className="text-xs text-slate-500 hover:text-slate-400"
-            >
-              Cancel
-            </button>
-          </div>
-        </div>
-      )}
-
-      {loading ? (
-        <div className="text-center text-slate-500 text-sm py-8">Loading...</div>
-      ) : categories.length === 0 ? (
-        <div className="text-center text-slate-500 text-sm py-8">
-          No categories yet.
-        </div>
-      ) : (
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4">
-          {categories.map((cat) => (
-            <div
-              key={cat.id}
-              className="p-3 bg-slate-800/50 border border-slate-700 rounded-md flex items-center justify-between"
-            >
-              <div className="flex items-center gap-2">
-                {cat.icon && <span className="text-lg">{cat.icon}</span>}
-                <div>
-                  <span className="text-sm text-slate-200">{cat.name}</span>
-                  {cat.color && (
-                    <span
-                      className="inline-block w-3 h-3 rounded-full ml-2 align-middle"
-                      style={{ backgroundColor: cat.color }}
-                    />
-                  )}
-                </div>
-              </div>
+            <div className="flex gap-2">
               <button
-                onClick={() => deleteCategory(cat.id)}
-                className="text-xs text-red-400 hover:text-red-300"
+                onClick={createCategory}
+                className="px-3 py-1 bg-accent text-white rounded text-xs hover:brightness-110"
               >
-                Delete
+                Create
+              </button>
+              <button
+                onClick={() => setShowCreate(false)}
+                className="text-xs text-slate-500 hover:text-slate-400"
+              >
+                Cancel
               </button>
             </div>
-          ))}
+          </div>
+        )}
+
+        <div className="p-2 border-b border-slate-700">
+          <input
+            value={filter}
+            onChange={(e) => setFilter(e.target.value)}
+            placeholder="Filter categories…"
+            className="w-full px-2 py-1 bg-slate-800 border border-slate-600 rounded text-xs text-slate-200 placeholder:text-slate-500 focus:border-accent focus:outline-none"
+          />
         </div>
+        <div className="flex-1 overflow-y-auto">
+          {loading ? (
+            <div className="p-4 text-center text-slate-500 text-sm">
+              Loading…
+            </div>
+          ) : filtered.length === 0 ? (
+            <div className="p-4 text-center text-slate-500 text-sm">
+              {categories.length === 0 ? "No categories yet." : "No matches."}
+            </div>
+          ) : (
+            filtered.map((cat) => {
+              const isSel = cat.id === selectedId;
+              return (
+                <button
+                  key={cat.id}
+                  onClick={() => setSelectedId(cat.id)}
+                  className={`w-full text-left px-3 py-2 border-b border-slate-700/50 transition-colors flex items-center gap-2.5 ${
+                    isSel ? "bg-slate-700/50" : "hover:bg-slate-800/30"
+                  }`}
+                >
+                  <CategoryGlyph cat={cat} size="sm" />
+                  <span
+                    className={`flex-1 text-sm truncate ${
+                      isSel ? "text-accent" : "text-slate-200"
+                    }`}
+                  >
+                    {cat.name}
+                  </span>
+                  <span className="text-[10px] text-slate-500 tabular-nums shrink-0">
+                    {cat.itemCount ?? 0}
+                  </span>
+                </button>
+              );
+            })
+          )}
+        </div>
+      </div>
+
+      {/* Middle: editor */}
+      <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
+        {!selected ? (
+          <div className="flex-1 flex items-center justify-center text-slate-500 text-sm">
+            Select a category to edit.
+          </div>
+        ) : (
+          <CategoryEditor
+            key={selected.id}
+            cat={selected}
+            onSave={(updates) => updateCategory(selected.id, updates)}
+          />
+        )}
+      </div>
+
+      {/* Right: usage panel */}
+      {selected && (
+        <CategoryInfoPanel
+          cat={selected}
+          itemsUsing={itemsUsing}
+          deleteExpanded={deleteExpanded}
+          onDeleteExpand={() => setDeleteExpanded(true)}
+          onDeleteCancel={() => {
+            setDeleteExpanded(false);
+            setDeleteConfirmText("");
+          }}
+          deleteConfirmText={deleteConfirmText}
+          onDeleteConfirmTextChange={setDeleteConfirmText}
+          onDelete={deleteSelectedCategory}
+        />
       )}
     </div>
+  );
+}
+
+function CategoryGlyph({
+  cat,
+  size = "md",
+}: {
+  cat: Category;
+  size?: "sm" | "md" | "lg";
+}) {
+  const pxSize = size === "sm" ? 16 : size === "lg" ? 32 : 24;
+  const dot = cat.color ? (
+    <span
+      className="rounded-full shrink-0"
+      style={{
+        backgroundColor: cat.color,
+        width: pxSize,
+        height: pxSize,
+      }}
+    />
+  ) : (
+    <span
+      className="rounded-full bg-slate-700 shrink-0"
+      style={{ width: pxSize, height: pxSize }}
+    />
+  );
+  if (cat.svg && cat.svg.trim()) {
+    return (
+      <span
+        className="shrink-0 inline-flex items-center justify-center"
+        style={{ width: pxSize, height: pxSize, color: cat.color ?? undefined }}
+        dangerouslySetInnerHTML={{ __html: cat.svg }}
+      />
+    );
+  }
+  if (cat.icon && cat.icon.trim()) {
+    return (
+      <span
+        className="shrink-0 inline-flex items-center justify-center"
+        style={{ width: pxSize, height: pxSize, fontSize: pxSize - 4 }}
+      >
+        {cat.icon}
+      </span>
+    );
+  }
+  return dot;
+}
+
+function CategoryEditor({
+  cat,
+  onSave,
+}: {
+  cat: Category;
+  onSave: (updates: Partial<Category>) => Promise<void>;
+}) {
+  const [name, setName] = useState(cat.name);
+  const [icon, setIcon] = useState(cat.icon ?? "");
+  const [svg, setSvg] = useState(cat.svg ?? "");
+  const [color, setColor] = useState(cat.color ?? "#64748b");
+  const [saving, setSaving] = useState(false);
+
+  async function commit() {
+    setSaving(true);
+    try {
+      await onSave({
+        name: name.trim() || cat.name,
+        icon: icon.trim() || null,
+        svg: svg.trim() || null,
+        color: color || null,
+      });
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  const preview: Category = {
+    ...cat,
+    name,
+    icon: icon.trim() || null,
+    svg: svg.trim() || null,
+    color,
+  };
+
+  return (
+    <>
+      <div className="px-6 py-4 border-b border-slate-700 shrink-0 flex items-center justify-between gap-4">
+        <div className="flex items-center gap-3 flex-1 min-w-0">
+          <CategoryGlyph cat={preview} size="lg" />
+          <input
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            className="text-lg font-semibold text-slate-100 bg-transparent border-b border-dashed border-transparent hover:border-slate-600 focus:border-accent outline-none w-full"
+          />
+        </div>
+        <button
+          onClick={commit}
+          disabled={saving}
+          className="shrink-0 px-3 py-1 bg-accent text-white rounded text-xs hover:brightness-110 disabled:opacity-50"
+        >
+          {saving ? "Saving…" : "Save"}
+        </button>
+      </div>
+
+      <div className="flex-1 overflow-y-auto p-6 space-y-5">
+        <label className="block max-w-xs">
+          <span className="text-[10px] uppercase tracking-wider text-slate-500">
+            Icon (emoji / short text)
+          </span>
+          <input
+            value={icon}
+            onChange={(e) => setIcon(e.target.value)}
+            placeholder="🔩"
+            className="mt-1 w-full px-2 py-1.5 bg-slate-800 border border-slate-600 rounded text-sm text-slate-200 placeholder:text-slate-600 focus:border-accent focus:outline-none"
+          />
+          <span className="text-[10px] text-slate-500 mt-1 block">
+            Used when no SVG is set.
+          </span>
+        </label>
+
+        <div>
+          <span className="text-[10px] uppercase tracking-wider text-slate-500">
+            Color
+          </span>
+          <div className="mt-1 flex items-center gap-2">
+            <input
+              type="color"
+              value={color}
+              onChange={(e) => setColor(e.target.value)}
+              className="h-8 w-10 bg-transparent border border-slate-600 rounded cursor-pointer"
+            />
+            <input
+              value={color}
+              onChange={(e) => setColor(e.target.value)}
+              placeholder="#64748b"
+              className="w-28 px-2 py-1.5 bg-slate-800 border border-slate-600 rounded text-xs font-mono text-slate-200 focus:border-accent focus:outline-none"
+            />
+            <div className="flex flex-wrap gap-1">
+              {CATEGORY_COLOR_PRESETS.map((c) => (
+                <button
+                  key={c}
+                  onClick={() => setColor(c)}
+                  title={c}
+                  className={`w-5 h-5 rounded-full border ${
+                    color.toLowerCase() === c.toLowerCase()
+                      ? "border-slate-100"
+                      : "border-slate-700"
+                  }`}
+                  style={{ backgroundColor: c }}
+                />
+              ))}
+            </div>
+          </div>
+        </div>
+
+        <div>
+          <span className="text-[10px] uppercase tracking-wider text-slate-500">
+            SVG markup
+          </span>
+          <textarea
+            value={svg}
+            onChange={(e) => setSvg(e.target.value)}
+            rows={10}
+            placeholder={`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">\n  <path d="M4 6h16M4 12h10M4 18h6" />\n</svg>`}
+            className="mt-1 w-full px-3 py-2 bg-slate-900 border border-slate-600 rounded text-xs text-slate-200 font-mono placeholder:text-slate-600 focus:border-accent focus:outline-none"
+          />
+          <p className="text-[10px] text-slate-500 mt-1">
+            Use <span className="font-mono">currentColor</span> for strokes/fills
+            to inherit the selected color. Trust only SVG you authored.
+          </p>
+        </div>
+
+        <div>
+          <span className="text-[10px] uppercase tracking-wider text-slate-500 mb-1 block">
+            Preview
+          </span>
+          <div className="flex items-center gap-4 p-4 bg-slate-900/40 border border-slate-700 rounded">
+            <CategoryGlyph cat={preview} size="sm" />
+            <CategoryGlyph cat={preview} size="md" />
+            <CategoryGlyph cat={preview} size="lg" />
+            <span className="text-sm text-slate-300 ml-2">{preview.name}</span>
+          </div>
+        </div>
+      </div>
+    </>
+  );
+}
+
+function CategoryInfoPanel({
+  cat,
+  itemsUsing,
+  deleteExpanded,
+  onDeleteExpand,
+  onDeleteCancel,
+  deleteConfirmText,
+  onDeleteConfirmTextChange,
+  onDelete,
+}: {
+  cat: Category;
+  itemsUsing: { id: string; name: string }[];
+  deleteExpanded: boolean;
+  onDeleteExpand: () => void;
+  onDeleteCancel: () => void;
+  deleteConfirmText: string;
+  onDeleteConfirmTextChange: (s: string) => void;
+  onDelete: () => void;
+}) {
+  const confirmed = deleteConfirmText === cat.name;
+  return (
+    <aside className="w-80 shrink-0 border-l border-slate-700 bg-slate-800/20 overflow-y-auto flex flex-col">
+      <div className="flex border-b border-slate-700 shrink-0">
+        <button className="flex-1 px-3 py-2 text-xs font-medium text-accent border-b-2 border-accent -mb-px">
+          Info
+        </button>
+      </div>
+
+      <div className="flex-1 overflow-y-auto">
+        <div className="p-4 space-y-5 text-xs">
+          <div className="grid grid-cols-1 gap-2">
+            <Tile label="Items using" value={cat.itemCount ?? 0} />
+          </div>
+
+          <div>
+            <div className="flex items-center justify-between mb-1.5">
+              <div className="text-[10px] uppercase tracking-wider text-slate-500">
+                Items ({itemsUsing.length})
+              </div>
+              {(cat.itemCount ?? 0) > 0 && (
+                <a
+                  href={`/items?category=${cat.id}`}
+                  className="text-[11px] text-accent hover:brightness-110"
+                >
+                  Open in /items →
+                </a>
+              )}
+            </div>
+            {itemsUsing.length === 0 ? (
+              <p className="text-[11px] text-slate-600 italic">
+                No items in this category.
+              </p>
+            ) : (
+              <ul className="space-y-0.5 max-h-72 overflow-y-auto">
+                {itemsUsing.map((i) => (
+                  <li key={i.id}>
+                    <a
+                      href={`/items?selected=${i.id}`}
+                      className="block px-2 py-1 rounded bg-slate-900/40 border border-slate-700 text-[11px] text-slate-300 hover:text-accent hover:bg-slate-800 transition-colors truncate"
+                    >
+                      {i.name}
+                    </a>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        </div>
+      </div>
+
+      <div className="shrink-0 border-t border-slate-700 p-4 bg-slate-900/40">
+        {!deleteExpanded ? (
+          <button
+            onClick={onDeleteExpand}
+            className="w-full text-xs text-red-400 hover:text-red-300 border border-red-900/50 hover:border-red-700 rounded py-1.5 transition-colors"
+          >
+            Delete category…
+          </button>
+        ) : (
+          <div className="space-y-2">
+            <p className="text-[11px] text-slate-400 leading-snug">
+              {(cat.itemCount ?? 0) > 0 ? (
+                <>
+                  Applied to{" "}
+                  <span className="text-slate-100 font-semibold">
+                    {cat.itemCount} item{cat.itemCount === 1 ? "" : "s"}
+                  </span>
+                  . Category is removed from those items; the items
+                  themselves remain.
+                </>
+              ) : (
+                <>Not applied to any items.</>
+              )}{" "}
+              This cannot be undone.
+            </p>
+            <label className="block text-[11px] text-slate-400">
+              Type{" "}
+              <span className="font-mono text-slate-200 bg-slate-700 px-1.5 py-0.5 rounded">
+                {cat.name}
+              </span>{" "}
+              to confirm:
+            </label>
+            <input
+              value={deleteConfirmText}
+              onChange={(e) => onDeleteConfirmTextChange(e.target.value)}
+              placeholder={cat.name}
+              className="w-full px-2 py-1 bg-slate-900 border border-slate-700 rounded text-xs text-slate-200 placeholder:text-slate-600 focus:border-red-500 focus:outline-none"
+            />
+            <div className="flex items-center gap-2">
+              <button
+                onClick={onDelete}
+                disabled={!confirmed}
+                className={`flex-1 px-3 py-1.5 text-xs rounded transition-colors ${
+                  confirmed
+                    ? "bg-red-600 text-white hover:bg-red-500"
+                    : "bg-slate-700 text-slate-500 cursor-not-allowed"
+                }`}
+              >
+                Delete this category
+              </button>
+              <button
+                onClick={onDeleteCancel}
+                className="text-[11px] text-slate-500 hover:text-slate-300 px-2"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
+    </aside>
   );
 }
 

@@ -14,7 +14,8 @@ import { items } from "./items";
 export const categories = pgTable("categories", {
   id: uuid("id").primaryKey().defaultRandom(),
   name: text("name").notNull().unique(),
-  icon: text("icon"), // icon key for grid tile rendering
+  icon: text("icon"), // short icon key / emoji; fallback when `svg` is null
+  svg: text("svg"), // inline SVG markup — preferred over `icon` when set
   color: text("color"), // hex color for visual grouping
   sortOrder: integer("sort_order").default(0).notNull(),
   createdAt: timestamp("created_at").defaultNow().notNull(),

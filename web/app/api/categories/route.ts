@@ -3,7 +3,7 @@ import { categoryRepository } from "@/repositories/categoryRepository";
 
 export async function GET() {
   try {
-    const categories = await categoryRepository.list();
+    const categories = await categoryRepository.listWithUsage();
     return NextResponse.json({ categories });
   } catch (err) {
     return NextResponse.json(
