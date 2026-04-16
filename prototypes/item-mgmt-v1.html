@@ -1,0 +1,1645 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>WhereTF — Item Management Prototype v1</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  background: #0f172a;
+  color: #e2e8f0;
+  display: flex;
+  height: 100vh;
+  overflow: hidden;
+  font-size: 14px;
+}
+
+/* ─── Sidebar ─── */
+.sidebar {
+  width: 56px;
+  background: #1e293b;
+  border-right: 1px solid #334155;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 12px 0;
+  gap: 16px;
+  flex-shrink: 0;
+}
+.sidebar-icon {
+  width: 32px;
+  height: 32px;
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  color: #94a3b8;
+  transition: all 0.15s;
+}
+.sidebar-icon:hover, .sidebar-icon.active {
+  background: #334155;
+  color: #ff6600;
+}
+.sidebar-icon svg { width: 20px; height: 20px; }
+
+/* ─── Layout ─── */
+.left-panel {
+  width: 280px;
+  background: #1e293b;
+  border-right: 1px solid #334155;
+  display: flex;
+  flex-direction: column;
+  flex-shrink: 0;
+  overflow-y: auto;
+}
+.center-panel {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  position: relative;
+}
+.right-panel {
+  width: 320px;
+  background: #1e293b;
+  border-left: 1px solid #334155;
+  flex-shrink: 0;
+  overflow-y: auto;
+}
+
+/* ─── Left Panel ─── */
+.search-container {
+  padding: 12px;
+  border-bottom: 1px solid #334155;
+}
+.search-wrapper {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+.search-icon {
+  position: absolute;
+  left: 10px;
+  color: #64748b;
+  pointer-events: none;
+  font-size: 14px;
+}
+.search-input {
+  width: 100%;
+  padding: 8px 32px 8px 32px;
+  background: #0f172a;
+  border: 1px solid #334155;
+  border-radius: 6px;
+  color: #e2e8f0;
+  font-size: 13px;
+  font-family: inherit;
+  outline: none;
+  transition: border-color 0.15s;
+}
+.search-input:focus { border-color: #ff6600; }
+.search-input::placeholder { color: #475569; }
+.search-clear {
+  position: absolute;
+  right: 8px;
+  background: none;
+  border: none;
+  color: #64748b;
+  cursor: pointer;
+  font-size: 16px;
+  display: none;
+  padding: 2px;
+}
+.search-clear:hover { color: #e2e8f0; }
+
+.filter-pills-section {
+  padding: 8px 12px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  min-height: 0;
+}
+.filter-pills-section:empty { display: none; }
+.filter-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 8px;
+  background: #1a0f00;
+  border: 1px solid #ff660044;
+  border-radius: 12px;
+  font-size: 11px;
+  color: #ff6600;
+  white-space: nowrap;
+}
+.filter-pill .pill-x {
+  cursor: pointer;
+  margin-left: 2px;
+  font-size: 13px;
+  line-height: 1;
+  transition: color 0.15s;
+}
+.filter-pill .pill-x:hover { color: #ef4444; }
+
+.category-section {
+  padding: 8px 12px;
+  border-top: 1px solid #334155;
+}
+.category-section-header {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: #64748b;
+  margin-bottom: 6px;
+  padding: 4px 0;
+}
+.category-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: background 0.12s;
+  font-size: 13px;
+}
+.category-item:hover { background: #334155; }
+.category-item.active { background: #1a0f00; color: #ff6600; }
+.category-icon {
+  width: 20px;
+  text-align: center;
+  font-size: 14px;
+}
+.category-name { flex: 1; }
+.category-count {
+  color: #64748b;
+  font-size: 11px;
+}
+
+/* ─── Center Panel — Grid ─── */
+.grid-header-bar {
+  display: flex;
+  align-items: center;
+  padding: 10px 16px;
+  border-bottom: 1px solid #334155;
+  background: #1e293b;
+  flex-shrink: 0;
+}
+.grid-title {
+  font-size: 16px;
+  font-weight: 600;
+}
+.grid-count {
+  margin-left: 8px;
+  color: #64748b;
+  font-size: 13px;
+}
+
+.grid-scroll-container {
+  flex: 1;
+  overflow: auto;
+  position: relative;
+}
+
+.item-grid {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+  table-layout: fixed;
+}
+.item-grid thead {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+}
+.item-grid th {
+  background: #1e293b;
+  border-bottom: 2px solid #334155;
+  padding: 8px 10px;
+  text-align: left;
+  font-weight: 600;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: #94a3b8;
+  cursor: pointer;
+  user-select: none;
+  white-space: nowrap;
+  position: relative;
+}
+.item-grid th:hover { color: #e2e8f0; }
+.item-grid th .sort-arrow {
+  margin-left: 4px;
+  font-size: 10px;
+  color: #ff6600;
+}
+.item-grid th.frozen {
+  position: sticky;
+  z-index: 11;
+  background: #1e293b;
+}
+.item-grid th.col-name { left: 0; width: 180px; min-width: 180px; }
+.item-grid th.col-cat { left: 180px; width: 36px; min-width: 36px; text-align: center; }
+
+.item-grid td {
+  padding: 6px 10px;
+  border-bottom: 1px solid #1e293b;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  height: 36px;
+  vertical-align: middle;
+}
+.item-grid td.frozen {
+  position: sticky;
+  z-index: 5;
+}
+.item-grid td.col-name {
+  left: 0;
+  font-weight: 500;
+  cursor: pointer;
+}
+.item-grid td.col-cat { left: 180px; text-align: center; font-size: 14px; }
+
+.item-grid tbody tr {
+  cursor: pointer;
+  transition: background 0.1s;
+}
+.item-grid tbody tr:nth-child(odd) { background: #0f172a; }
+.item-grid tbody tr:nth-child(even) { background: #111827; }
+.item-grid tbody tr:hover { background: #1a2332; }
+.item-grid tbody tr.selected {
+  background: #1a0f00 !important;
+  border-left: 3px solid #ff6600;
+}
+.item-grid tbody tr.selected td.col-name { padding-left: 7px; }
+.item-grid tbody tr.selected td.frozen { background: #1a0f00; }
+.item-grid tbody tr td.frozen { background: inherit; }
+
+/* Editable cell */
+.cell-editing {
+  background: #0f172a !important;
+  padding: 2px !important;
+}
+.cell-editing input, .cell-editing select {
+  width: 100%;
+  padding: 4px 6px;
+  background: #0f172a;
+  border: 1px solid #ff6600;
+  border-radius: 3px;
+  color: #e2e8f0;
+  font-size: 13px;
+  font-family: inherit;
+  outline: none;
+}
+.cell-flash {
+  animation: cellFlash 0.6s ease-out;
+}
+@keyframes cellFlash {
+  0% { background: #166534; }
+  100% { background: transparent; }
+}
+
+/* ─── Right Panel — Detail ─── */
+.detail-empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  color: #475569;
+  font-size: 13px;
+  text-align: center;
+  padding: 24px;
+}
+
+.detail-content { padding: 16px; }
+.detail-name {
+  font-size: 18px;
+  font-weight: 700;
+  margin-bottom: 4px;
+  cursor: pointer;
+  padding: 4px;
+  border-radius: 4px;
+  transition: background 0.12s;
+}
+.detail-name:hover { background: #334155; }
+.detail-desc {
+  font-size: 13px;
+  color: #94a3b8;
+  cursor: pointer;
+  padding: 4px;
+  border-radius: 4px;
+  margin-bottom: 12px;
+  transition: background 0.12s;
+}
+.detail-desc:hover { background: #334155; }
+.detail-desc.empty-val { color: #475569; font-style: italic; }
+
+.detail-edit-input {
+  width: 100%;
+  padding: 4px 6px;
+  background: #0f172a;
+  border: 1px solid #ff6600;
+  border-radius: 4px;
+  color: #e2e8f0;
+  font-family: inherit;
+  outline: none;
+}
+.detail-edit-input.name-input { font-size: 18px; font-weight: 700; }
+.detail-edit-input.desc-input { font-size: 13px; }
+
+.detail-section {
+  margin-top: 16px;
+}
+.detail-section-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: #64748b;
+  padding: 6px 0;
+  border-bottom: 1px solid #334155;
+  margin-bottom: 6px;
+}
+.detail-section-header .section-title { flex: 1; }
+
+/* Categories */
+.category-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+.category-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 8px;
+  border-radius: 4px;
+  font-size: 12px;
+  border: 1px solid #334155;
+  background: #0f172a;
+}
+.category-tag .tag-star {
+  cursor: pointer;
+  color: #475569;
+  font-size: 13px;
+  transition: color 0.15s;
+}
+.category-tag .tag-star:hover { color: #ff6600; }
+.category-tag .tag-star.primary { color: #ff6600; }
+.category-tag .tag-x {
+  cursor: pointer;
+  color: #475569;
+  font-size: 14px;
+  margin-left: 2px;
+  transition: color 0.15s;
+}
+.category-tag .tag-x:hover { color: #ef4444; }
+.add-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 8px;
+  border-radius: 4px;
+  font-size: 12px;
+  border: 1px dashed #475569;
+  background: transparent;
+  color: #64748b;
+  cursor: pointer;
+  transition: all 0.15s;
+  font-family: inherit;
+}
+.add-btn:hover { border-color: #ff6600; color: #ff6600; }
+
+/* Aspects */
+.aspect-block {
+  margin-bottom: 8px;
+  border: 1px solid #334155;
+  border-radius: 6px;
+  overflow: hidden;
+}
+.aspect-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 10px;
+  background: #111827;
+  cursor: pointer;
+  user-select: none;
+  font-size: 13px;
+  font-weight: 500;
+}
+.aspect-header:hover { background: #1a2332; }
+.aspect-chevron {
+  font-size: 10px;
+  color: #64748b;
+  transition: transform 0.15s;
+  width: 12px;
+}
+.aspect-chevron.open { transform: rotate(90deg); }
+.aspect-name { flex: 1; }
+.aspect-completeness {
+  font-size: 11px;
+  padding: 1px 6px;
+  border-radius: 8px;
+  font-weight: 400;
+}
+.aspect-completeness.complete { color: #22c55e; background: #052e16; }
+.aspect-completeness.partial { color: #f59e0b; background: #1c1006; }
+.aspect-completeness.empty { color: #64748b; background: #1e293b; }
+.aspect-remove {
+  color: #475569;
+  cursor: pointer;
+  font-size: 14px;
+  padding: 0 4px;
+  transition: color 0.15s;
+}
+.aspect-remove:hover { color: #ef4444; }
+
+.aspect-params {
+  padding: 4px 0;
+}
+.param-row {
+  display: flex;
+  align-items: center;
+  padding: 4px 10px;
+  font-size: 13px;
+  gap: 6px;
+}
+.param-row:hover { background: #1a2332; }
+.param-label {
+  width: 110px;
+  flex-shrink: 0;
+  color: #94a3b8;
+  font-size: 12px;
+}
+.param-value {
+  flex: 1;
+  cursor: pointer;
+  padding: 2px 4px;
+  border-radius: 3px;
+  transition: background 0.12s;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.param-value:hover { background: #334155; }
+.param-value.empty-val {
+  color: #475569;
+  font-style: italic;
+}
+.param-unit {
+  color: #475569;
+  font-size: 11px;
+  flex-shrink: 0;
+}
+.param-filter {
+  cursor: pointer;
+  color: #334155;
+  font-size: 13px;
+  flex-shrink: 0;
+  transition: color 0.15s;
+  padding: 2px;
+}
+.param-filter:hover { color: #ff6600; }
+.param-filter.disabled { visibility: hidden; }
+
+/* Locations */
+.location-link {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 0;
+  font-size: 13px;
+}
+.location-path {
+  color: #ff6600;
+  cursor: pointer;
+  text-decoration: none;
+}
+.location-path:hover { text-decoration: underline; }
+.location-badge {
+  font-size: 10px;
+  padding: 1px 6px;
+  border-radius: 8px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.location-badge.placed { background: #052e16; color: #22c55e; }
+.location-badge.provisional { background: #1c1006; color: #f59e0b; }
+
+/* Delete */
+.delete-btn {
+  margin-top: 16px;
+  padding: 6px 12px;
+  background: transparent;
+  border: 1px solid transparent;
+  color: #ef4444;
+  font-size: 13px;
+  cursor: pointer;
+  border-radius: 4px;
+  font-family: inherit;
+  transition: all 0.15s;
+}
+.delete-btn:hover { background: #1c0606; border-color: #ef444444; }
+
+/* ─── FAB ─── */
+.fab {
+  position: absolute;
+  bottom: 20px;
+  right: 20px;
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  background: #ff6600;
+  color: #fff;
+  border: none;
+  font-size: 24px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 4px 16px rgba(255,102,0,0.4);
+  transition: all 0.15s;
+  z-index: 20;
+  font-family: inherit;
+}
+.fab:hover { transform: scale(1.1); box-shadow: 0 6px 24px rgba(255,102,0,0.5); }
+
+/* ─── Undo Toast ─── */
+.undo-toast {
+  position: fixed;
+  bottom: 24px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: #1e293b;
+  border: 1px solid #334155;
+  border-radius: 8px;
+  padding: 10px 16px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 13px;
+  box-shadow: 0 4px 24px rgba(0,0,0,0.5);
+  z-index: 100;
+  animation: toastIn 0.2s ease-out;
+}
+@keyframes toastIn {
+  from { opacity: 0; transform: translateX(-50%) translateY(20px); }
+  to { opacity: 1; transform: translateX(-50%) translateY(0); }
+}
+.undo-toast .undo-btn {
+  color: #ff6600;
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 600;
+  font-family: inherit;
+}
+.undo-toast .undo-btn:hover { text-decoration: underline; }
+
+/* ─── Dropdown ─── */
+.dropdown-menu {
+  position: absolute;
+  background: #1e293b;
+  border: 1px solid #334155;
+  border-radius: 6px;
+  padding: 4px 0;
+  min-width: 180px;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+  z-index: 50;
+  max-height: 240px;
+  overflow-y: auto;
+}
+.dropdown-item {
+  padding: 6px 12px;
+  font-size: 13px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.dropdown-item:hover { background: #334155; }
+
+/* Scrollbar */
+::-webkit-scrollbar { width: 8px; height: 8px; }
+::-webkit-scrollbar-track { background: #0f172a; }
+::-webkit-scrollbar-thumb { background: #334155; border-radius: 4px; }
+::-webkit-scrollbar-thumb:hover { background: #475569; }
+
+/* Multi-select info */
+.multi-select-info {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  color: #94a3b8;
+  font-size: 15px;
+  text-align: center;
+  padding: 24px;
+}
+</style>
+</head>
+<body>
+
+<!-- Sidebar -->
+<div class="sidebar">
+  <div class="sidebar-icon" title="Modules">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
+  </div>
+  <div class="sidebar-icon active" title="Items">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"/></svg>
+  </div>
+  <div class="sidebar-icon" title="Templates">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9"/></svg>
+  </div>
+  <div class="sidebar-icon" title="Activity">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 8v4l3 3"/><circle cx="12" cy="12" r="9"/></svg>
+  </div>
+</div>
+
+<div class="left-panel" id="leftPanel">
+  <div class="search-container">
+    <div class="search-wrapper">
+      <span class="search-icon">&#x1F50D;</span>
+      <input type="text" class="search-input" id="searchInput" placeholder="Search items...">
+      <button class="search-clear" id="searchClear">&times;</button>
+    </div>
+  </div>
+  <div class="filter-pills-section" id="filterPills"></div>
+  <div class="category-section">
+    <div class="category-section-header">Categories</div>
+    <div id="categoryList"></div>
+  </div>
+</div>
+
+<div class="center-panel" id="centerPanel">
+  <div class="grid-header-bar">
+    <span class="grid-title">Items</span>
+    <span class="grid-count" id="gridCount"></span>
+  </div>
+  <div class="grid-scroll-container" id="gridScrollContainer">
+    <table class="item-grid" id="itemGrid">
+      <thead id="gridHead"></thead>
+      <tbody id="gridBody"></tbody>
+    </table>
+  </div>
+  <button class="fab" id="fabBtn" title="Add Item">+</button>
+</div>
+
+<div class="right-panel" id="rightPanel">
+  <div class="detail-empty" id="detailEmpty">Select an item to view details</div>
+  <div class="detail-content" id="detailContent" style="display:none;"></div>
+</div>
+
+<script>
+// ─────────────────────────────────────────────────────────────
+// MOCK DATA
+// ─────────────────────────────────────────────────────────────
+
+const CATEGORIES = [
+  { id: 'fasteners', name: 'Fasteners', icon: '🔩', color: '#60a5fa' },
+  { id: 'electronics', name: 'Electronics', icon: '⚡', color: '#a78bfa' },
+  { id: 'hardware', name: 'Hardware', icon: '🔧', color: '#34d399' },
+  { id: 'tools', name: 'Tools', icon: '🛠️', color: '#f472b6' },
+  { id: 'adhesives', name: 'Adhesives', icon: '🧴', color: '#fbbf24' },
+];
+
+const PARAM_DEFS = {
+  thread_diameter: { name: 'Thread diameter', unit: null, type: 'text' },
+  thread_pitch: { name: 'Thread pitch', unit: 'mm', type: 'number' },
+  thread_direction: { name: 'Thread direction', unit: null, type: 'enum', options: ['Right', 'Left'] },
+  drive_style: { name: 'Drive style', unit: null, type: 'enum', options: ['Hex socket', 'Phillips', 'Torx', 'Slotted', 'Hex'] },
+  drive_size: { name: 'Drive size', unit: 'mm', type: 'text' },
+  head_type: { name: 'Head type', unit: null, type: 'enum', options: ['Socket cap', 'Pan', 'Flat', 'Button', 'Hex'] },
+  length: { name: 'Length', unit: 'mm', type: 'number' },
+  material: { name: 'Material', unit: null, type: 'enum', options: ['Stainless steel', 'Carbon steel', 'Alloy steel', 'Brass', 'Nylon'] },
+  finish: { name: 'Finish', unit: null, type: 'enum', options: ['Black oxide', 'Zinc', 'Plain', 'Nickel', 'Chrome'] },
+  resistance: { name: 'Resistance', unit: null, type: 'text' },
+  tolerance: { name: 'Tolerance', unit: '%', type: 'enum', options: ['1', '5', '10', '20'] },
+  power_rating: { name: 'Power rating', unit: 'W', type: 'text' },
+  package_code: { name: 'Package code', unit: null, type: 'text' },
+  package_type: { name: 'Package type', unit: null, type: 'enum', options: ['SMD', 'Through-hole', 'Radial', 'Axial'] },
+  voltage_rating: { name: 'Voltage rating', unit: 'V', type: 'text' },
+  color: { name: 'Color', unit: null, type: 'text' },
+};
+
+const ASPECTS = {
+  thread: { name: 'Thread', params: ['thread_diameter', 'thread_pitch', 'thread_direction'] },
+  drive: { name: 'Drive', params: ['drive_style', 'drive_size'] },
+  head: { name: 'Head', params: ['head_type'] },
+  material_aspect: { name: 'Material', params: ['material', 'finish'] },
+  electrical: { name: 'Electrical', params: ['resistance', 'tolerance', 'power_rating'] },
+  package: { name: 'Package', params: ['package_code', 'package_type'] },
+};
+
+let nextItemId = 100;
+function genId() { return nextItemId++; }
+
+let items = [
+  {
+    id: genId(), name: 'M3x10 SHCS', description: 'Socket head cap screw, stainless',
+    categories: ['fasteners', 'hardware'], primaryCategory: 'fasteners',
+    aspects: ['thread', 'drive', 'head', 'material_aspect'],
+    params: { thread_diameter: 'M3', thread_pitch: 0.5, thread_direction: 'Right', drive_style: 'Hex socket', drive_size: '2.5', head_type: 'Socket cap', length: 10, material: 'Stainless steel', finish: 'Plain' },
+    standaloneParams: ['length'],
+    locations: [{ path: 'MUSE > Level 2 > A3', type: 'placed' }],
+  },
+  {
+    id: genId(), name: 'M3x16 SHCS', description: 'Socket head cap screw, black oxide',
+    categories: ['fasteners', 'hardware'], primaryCategory: 'fasteners',
+    aspects: ['thread', 'drive', 'head', 'material_aspect'],
+    params: { thread_diameter: 'M3', thread_pitch: 0.5, thread_direction: 'Right', drive_style: 'Hex socket', drive_size: '2.5', head_type: 'Socket cap', length: 16, material: 'Alloy steel', finish: 'Black oxide' },
+    standaloneParams: ['length'],
+    locations: [{ path: 'MUSE > Level 2 > A4', type: 'placed' }],
+  },
+  {
+    id: genId(), name: 'M3x10 Pan Head Phillips', description: 'Pan head machine screw',
+    categories: ['fasteners'], primaryCategory: 'fasteners',
+    aspects: ['thread', 'drive', 'head', 'material_aspect'],
+    params: { thread_diameter: 'M3', thread_pitch: 0.5, thread_direction: 'Right', drive_style: 'Phillips', drive_size: '#1', head_type: 'Pan', length: 10, material: 'Stainless steel', finish: 'Plain' },
+    standaloneParams: ['length'],
+    locations: [{ path: 'MUSE > Level 2 > B1', type: 'placed' }],
+  },
+  {
+    id: genId(), name: 'M4x12 SHCS', description: 'Socket head cap screw M4',
+    categories: ['fasteners', 'hardware'], primaryCategory: 'fasteners',
+    aspects: ['thread', 'drive', 'head', 'material_aspect'],
+    params: { thread_diameter: 'M4', thread_pitch: 0.7, thread_direction: 'Right', drive_style: 'Hex socket', drive_size: '3', head_type: 'Socket cap', length: 12, material: 'Alloy steel', finish: 'Black oxide' },
+    standaloneParams: ['length'],
+    locations: [{ path: 'MUSE > Level 3 > A1', type: 'placed' }],
+  },
+  {
+    id: genId(), name: 'M5x20 Hex Bolt', description: 'Hex bolt, zinc plated',
+    categories: ['fasteners'], primaryCategory: 'fasteners',
+    aspects: ['thread', 'head', 'material_aspect'],
+    params: { thread_diameter: 'M5', thread_pitch: 0.8, thread_direction: 'Right', head_type: 'Hex', length: 20, material: 'Carbon steel', finish: 'Zinc' },
+    standaloneParams: ['length'],
+    locations: [],
+  },
+  {
+    id: genId(), name: 'M3 Nylon Lock Nut', description: 'Nylon insert lock nut',
+    categories: ['fasteners', 'hardware'], primaryCategory: 'fasteners',
+    aspects: ['thread', 'material_aspect'],
+    params: { thread_diameter: 'M3', thread_pitch: 0.5, thread_direction: 'Right', material: 'Stainless steel', finish: 'Plain' },
+    standaloneParams: [],
+    locations: [{ path: 'MUSE > Level 2 > A3', type: 'placed' }],
+  },
+  {
+    id: genId(), name: '10kΩ 0805 Resistor', description: 'Thick film chip resistor',
+    categories: ['electronics'], primaryCategory: 'electronics',
+    aspects: ['electrical', 'package'],
+    params: { resistance: '10kΩ', tolerance: '5', power_rating: '0.125', package_code: '0805', package_type: 'SMD' },
+    standaloneParams: [],
+    locations: [{ path: 'FLUX > Level 1 > B2', type: 'placed' }],
+  },
+  {
+    id: genId(), name: '4.7kΩ 0805 Resistor', description: 'Thick film chip resistor',
+    categories: ['electronics'], primaryCategory: 'electronics',
+    aspects: ['electrical', 'package'],
+    params: { resistance: '4.7kΩ', tolerance: '5', power_rating: '0.125', package_code: '0805', package_type: 'SMD' },
+    standaloneParams: [],
+    locations: [{ path: 'FLUX > Level 1 > B3', type: 'placed' }],
+  },
+  {
+    id: genId(), name: '100Ω 0603 Resistor', description: 'Thin film precision resistor',
+    categories: ['electronics'], primaryCategory: 'electronics',
+    aspects: ['electrical', 'package'],
+    params: { resistance: '100Ω', tolerance: '1', power_rating: '0.1', package_code: '0603', package_type: 'SMD' },
+    standaloneParams: [],
+    locations: [{ path: 'FLUX > Level 1 > B2', type: 'provisional' }],
+  },
+  {
+    id: genId(), name: '10µF Ceramic Cap', description: 'MLCC capacitor X5R',
+    categories: ['electronics'], primaryCategory: 'electronics',
+    aspects: ['electrical', 'package'],
+    params: { resistance: '10µF', tolerance: '20', power_rating: null, package_code: '0805', package_type: 'SMD', voltage_rating: '16' },
+    standaloneParams: ['voltage_rating'],
+    locations: [],
+  },
+  {
+    id: genId(), name: '100nF 0402 Cap', description: 'Decoupling capacitor C0G',
+    categories: ['electronics'], primaryCategory: 'electronics',
+    aspects: ['electrical', 'package'],
+    params: { resistance: '100nF', tolerance: '10', power_rating: null, package_code: '0402', package_type: 'SMD', voltage_rating: '25' },
+    standaloneParams: ['voltage_rating'],
+    locations: [{ path: 'FLUX > Level 1 > C1', type: 'placed' }],
+  },
+  {
+    id: genId(), name: '5mm Red LED', description: 'Through-hole indicator LED',
+    categories: ['electronics'], primaryCategory: 'electronics',
+    aspects: ['package'],
+    params: { package_code: '5mm', package_type: 'Through-hole', color: 'Red', voltage_rating: '2.0' },
+    standaloneParams: ['color', 'voltage_rating'],
+    locations: [{ path: 'FLUX > Level 2 > A1', type: 'placed' }],
+  },
+  {
+    id: genId(), name: '5mm Green LED', description: 'Through-hole indicator LED',
+    categories: ['electronics'], primaryCategory: 'electronics',
+    aspects: ['package'],
+    params: { package_code: '5mm', package_type: 'Through-hole', color: 'Green', voltage_rating: '2.2' },
+    standaloneParams: ['color', 'voltage_rating'],
+    locations: [],
+  },
+  {
+    id: genId(), name: 'Blue Loctite 242', description: 'Medium-strength threadlocker',
+    categories: ['adhesives'], primaryCategory: 'adhesives',
+    aspects: [],
+    params: { color: 'Blue' },
+    standaloneParams: ['color'],
+    locations: [{ path: 'NEON > Level 1 > A1', type: 'placed' }],
+  },
+  {
+    id: genId(), name: 'Super Glue', description: 'Cyanoacrylate adhesive',
+    categories: ['adhesives'], primaryCategory: 'adhesives',
+    aspects: [],
+    params: {},
+    standaloneParams: [],
+    locations: [],
+  },
+  {
+    id: genId(), name: 'Needle Nose Pliers', description: '6" precision pliers',
+    categories: ['tools'], primaryCategory: 'tools',
+    aspects: [],
+    params: { length: 152 },
+    standaloneParams: ['length'],
+    locations: [{ path: 'NEON > Level 2 > C1', type: 'placed' }],
+  },
+  {
+    id: genId(), name: 'Wire Strippers', description: 'Automatic wire strippers 24-10 AWG',
+    categories: ['tools', 'electronics'], primaryCategory: 'tools',
+    aspects: [],
+    params: {},
+    standaloneParams: [],
+    locations: [{ path: 'NEON > Level 2 > C2', type: 'placed' }],
+  },
+];
+
+// ─────────────────────────────────────────────────────────────
+// STATE
+// ─────────────────────────────────────────────────────────────
+
+let filterPills = []; // { type: 'param'|'category', key: string, value: string }
+let searchText = '';
+let selectedIds = new Set();
+let sortCol = null;
+let sortDir = 'asc';
+let toastTimeout = null;
+let undoData = null;
+
+// ─────────────────────────────────────────────────────────────
+// FILTERING
+// ─────────────────────────────────────────────────────────────
+
+function getFilteredItems() {
+  let result = items;
+
+  // search filter
+  if (searchText.length >= 2) {
+    const q = searchText.toLowerCase();
+    result = result.filter(item => {
+      if (item.name.toLowerCase().includes(q)) return true;
+      if (item.description && item.description.toLowerCase().includes(q)) return true;
+      for (const v of Object.values(item.params)) {
+        if (v != null && String(v).toLowerCase().includes(q)) return true;
+      }
+      return false;
+    });
+  }
+
+  // pill filters
+  for (const pill of filterPills) {
+    if (pill.type === 'category') {
+      result = result.filter(item => item.categories.includes(pill.value));
+    } else if (pill.type === 'param') {
+      result = result.filter(item => {
+        const val = item.params[pill.key];
+        return val != null && String(val) === pill.value;
+      });
+    }
+  }
+
+  return result;
+}
+
+function sortItems(arr) {
+  if (!sortCol) return arr;
+  const copy = [...arr];
+  copy.sort((a, b) => {
+    let va, vb;
+    if (sortCol === 'name') { va = a.name; vb = b.name; }
+    else if (sortCol === 'description') { va = a.description || ''; vb = b.description || ''; }
+    else { va = a.params[sortCol]; vb = b.params[sortCol]; }
+    if (va == null) va = '';
+    if (vb == null) vb = '';
+    if (typeof va === 'number' && typeof vb === 'number') {
+      return sortDir === 'asc' ? va - vb : vb - va;
+    }
+    va = String(va).toLowerCase(); vb = String(vb).toLowerCase();
+    if (va < vb) return sortDir === 'asc' ? -1 : 1;
+    if (va > vb) return sortDir === 'asc' ? 1 : -1;
+    return 0;
+  });
+  return copy;
+}
+
+// ─────────────────────────────────────────────────────────────
+// DYNAMIC COLUMNS
+// ─────────────────────────────────────────────────────────────
+
+function getDynamicColumns(visibleItems) {
+  if (visibleItems.length === 0) return ['description'];
+
+  // Count parameter occurrences
+  const counts = {};
+  for (const item of visibleItems) {
+    for (const key of Object.keys(item.params)) {
+      if (item.params[key] != null && item.params[key] !== '') {
+        counts[key] = (counts[key] || 0) + 1;
+      }
+    }
+  }
+
+  const threshold = Math.max(1, Math.floor(visibleItems.length * 0.3));
+  const cols = Object.entries(counts)
+    .filter(([, c]) => c >= threshold)
+    .sort((a, b) => b[1] - a[1])
+    .map(([k]) => k);
+
+  // Always include description at front
+  return ['description', ...cols.filter(c => c !== 'description')];
+}
+
+// ─────────────────────────────────────────────────────────────
+// RENDERING
+// ─────────────────────────────────────────────────────────────
+
+function render() {
+  const filtered = getFilteredItems();
+  const sorted = sortItems(filtered);
+  const dynCols = getDynamicColumns(filtered);
+
+  renderCategoryList(filtered);
+  renderPills();
+  renderGrid(sorted, dynCols);
+  renderDetail();
+  document.getElementById('gridCount').textContent = `(${sorted.length} of ${items.length})`;
+
+  // Search clear button visibility
+  const clearBtn = document.getElementById('searchClear');
+  clearBtn.style.display = searchText ? 'block' : 'none';
+}
+
+function renderPills() {
+  const container = document.getElementById('filterPills');
+  container.innerHTML = '';
+  for (let i = 0; i < filterPills.length; i++) {
+    const pill = filterPills[i];
+    const el = document.createElement('div');
+    el.className = 'filter-pill';
+    const label = pill.type === 'category'
+      ? `Category: ${CATEGORIES.find(c => c.id === pill.value)?.name || pill.value}`
+      : `${PARAM_DEFS[pill.key]?.name || pill.key}: ${pill.value}`;
+    el.innerHTML = `<span>${label}</span><span class="pill-x" data-idx="${i}">&times;</span>`;
+    container.appendChild(el);
+  }
+  container.querySelectorAll('.pill-x').forEach(x => {
+    x.addEventListener('click', e => {
+      e.stopPropagation();
+      filterPills.splice(parseInt(x.dataset.idx), 1);
+      render();
+    });
+  });
+}
+
+function renderCategoryList(filteredItems) {
+  const container = document.getElementById('categoryList');
+  container.innerHTML = '';
+  for (const cat of CATEGORIES) {
+    const count = filteredItems.filter(i => i.categories.includes(cat.id)).length;
+    const isActive = filterPills.some(p => p.type === 'category' && p.value === cat.id);
+    const el = document.createElement('div');
+    el.className = 'category-item' + (isActive ? ' active' : '');
+    el.innerHTML = `<span class="category-icon">${cat.icon}</span><span class="category-name">${cat.name}</span><span class="category-count">(${count})</span>`;
+    el.addEventListener('click', () => {
+      if (isActive) {
+        filterPills = filterPills.filter(p => !(p.type === 'category' && p.value === cat.id));
+      } else {
+        filterPills.push({ type: 'category', key: null, value: cat.id });
+      }
+      render();
+    });
+    container.appendChild(el);
+  }
+}
+
+function renderGrid(sorted, dynCols) {
+  const head = document.getElementById('gridHead');
+  const body = document.getElementById('gridBody');
+
+  // Header
+  let headHtml = '<tr>';
+  headHtml += `<th class="frozen col-name" data-col="name">Name${sortArrow('name')}</th>`;
+  headHtml += `<th class="frozen col-cat">&nbsp;</th>`;
+  for (const col of dynCols) {
+    const label = col === 'description' ? 'Description' : (PARAM_DEFS[col]?.name || col);
+    headHtml += `<th data-col="${col}" style="min-width:100px;">${label}${sortArrow(col)}</th>`;
+  }
+  headHtml += '</tr>';
+  head.innerHTML = headHtml;
+
+  // Bind sort
+  head.querySelectorAll('th').forEach(th => {
+    th.addEventListener('click', () => {
+      const col = th.dataset.col;
+      if (!col) return;
+      if (sortCol === col) { sortDir = sortDir === 'asc' ? 'desc' : 'asc'; }
+      else { sortCol = col; sortDir = 'asc'; }
+      render();
+    });
+  });
+
+  // Body
+  let bodyHtml = '';
+  for (const item of sorted) {
+    const sel = selectedIds.has(item.id);
+    bodyHtml += `<tr data-id="${item.id}" class="${sel ? 'selected' : ''}">`;
+    bodyHtml += `<td class="frozen col-name">${esc(item.name)}</td>`;
+    const pCat = CATEGORIES.find(c => c.id === item.primaryCategory);
+    bodyHtml += `<td class="frozen col-cat" title="${pCat?.name || ''}">${pCat?.icon || ''}</td>`;
+    for (const col of dynCols) {
+      let val;
+      if (col === 'description') val = item.description || '';
+      else val = item.params[col];
+      const display = val != null && val !== '' ? esc(String(val)) : '<span style="color:#475569;">—</span>';
+      const unit = col !== 'description' && PARAM_DEFS[col]?.unit && val != null && val !== ''
+        ? `<span style="color:#475569;font-size:11px;margin-left:2px;">${PARAM_DEFS[col].unit}</span>` : '';
+      bodyHtml += `<td data-col="${col}" data-id="${item.id}">${display}${unit}</td>`;
+    }
+    bodyHtml += '</tr>';
+  }
+  body.innerHTML = bodyHtml;
+
+  // Row click
+  body.querySelectorAll('tr').forEach(tr => {
+    tr.addEventListener('click', e => {
+      const id = parseInt(tr.dataset.id);
+      if (e.ctrlKey || e.metaKey) {
+        if (selectedIds.has(id)) selectedIds.delete(id);
+        else selectedIds.add(id);
+      } else {
+        selectedIds.clear();
+        selectedIds.add(id);
+      }
+      render();
+    });
+  });
+
+  // Inline cell edit (double-click)
+  body.querySelectorAll('td[data-col]').forEach(td => {
+    td.addEventListener('dblclick', e => {
+      e.stopPropagation();
+      const itemId = parseInt(td.dataset.id);
+      const col = td.dataset.col;
+      const item = items.find(i => i.id === itemId);
+      if (!item) return;
+      startCellEdit(td, item, col);
+    });
+  });
+}
+
+function startCellEdit(td, item, col) {
+  if (td.querySelector('input, select')) return;
+  const paramDef = col === 'description' ? { type: 'text' } : PARAM_DEFS[col];
+  if (!paramDef) return;
+  const curVal = col === 'description' ? (item.description || '') : (item.params[col] ?? '');
+
+  td.classList.add('cell-editing');
+  let inputEl;
+
+  if (paramDef.type === 'enum' && paramDef.options) {
+    inputEl = document.createElement('select');
+    inputEl.innerHTML = `<option value="">—</option>` + paramDef.options.map(o =>
+      `<option value="${esc(o)}" ${String(curVal) === o ? 'selected' : ''}>${esc(o)}</option>`
+    ).join('');
+  } else {
+    inputEl = document.createElement('input');
+    inputEl.type = paramDef.type === 'number' ? 'number' : 'text';
+    inputEl.value = curVal;
+  }
+
+  td.innerHTML = '';
+  td.appendChild(inputEl);
+  inputEl.focus();
+  if (inputEl.select) inputEl.select();
+
+  const finish = (save) => {
+    td.classList.remove('cell-editing');
+    if (save) {
+      let newVal = inputEl.value;
+      if (paramDef.type === 'number' && newVal !== '') newVal = parseFloat(newVal);
+      if (col === 'description') item.description = newVal;
+      else item.params[col] = newVal === '' ? null : newVal;
+      td.classList.add('cell-flash');
+      setTimeout(() => td.classList.remove('cell-flash'), 600);
+    }
+    render();
+  };
+
+  inputEl.addEventListener('keydown', e => {
+    if (e.key === 'Enter') finish(true);
+    if (e.key === 'Escape') finish(false);
+  });
+  inputEl.addEventListener('blur', () => finish(true));
+}
+
+function sortArrow(col) {
+  if (sortCol !== col) return '';
+  return `<span class="sort-arrow">${sortDir === 'asc' ? '▲' : '▼'}</span>`;
+}
+
+function esc(str) {
+  const div = document.createElement('div');
+  div.textContent = str;
+  return div.innerHTML;
+}
+
+// ─────────────────────────────────────────────────────────────
+// DETAIL PANEL
+// ─────────────────────────────────────────────────────────────
+
+function renderDetail() {
+  const detailEmpty = document.getElementById('detailEmpty');
+  const detailContent = document.getElementById('detailContent');
+
+  if (selectedIds.size === 0) {
+    detailEmpty.style.display = 'flex';
+    detailContent.style.display = 'none';
+    detailEmpty.textContent = 'Select an item to view details';
+    return;
+  }
+  if (selectedIds.size > 1) {
+    detailEmpty.style.display = 'flex';
+    detailContent.style.display = 'none';
+    detailEmpty.textContent = `${selectedIds.size} items selected`;
+    return;
+  }
+
+  detailEmpty.style.display = 'none';
+  detailContent.style.display = 'block';
+
+  const itemId = [...selectedIds][0];
+  const item = items.find(i => i.id === itemId);
+  if (!item) { detailEmpty.style.display = 'flex'; detailContent.style.display = 'none'; return; }
+
+  let html = '';
+
+  // Header
+  html += `<div class="detail-name" id="detailName">${esc(item.name)}</div>`;
+  html += `<div class="detail-desc ${!item.description ? 'empty-val' : ''}" id="detailDesc">${item.description ? esc(item.description) : 'No description'}</div>`;
+
+  // Categories
+  html += `<div class="detail-section"><div class="detail-section-header"><span class="section-title">Categories</span></div>`;
+  html += `<div class="category-tags">`;
+  for (const catId of item.categories) {
+    const cat = CATEGORIES.find(c => c.id === catId);
+    if (!cat) continue;
+    const isPrimary = catId === item.primaryCategory;
+    html += `<div class="category-tag">
+      <span class="tag-star ${isPrimary ? 'primary' : ''}" data-catid="${catId}" title="${isPrimary ? 'Primary' : 'Set as primary'}">★</span>
+      <span>${cat.icon} ${cat.name}</span>
+      <span class="tag-x" data-catid="${catId}">&times;</span>
+    </div>`;
+  }
+  html += `<button class="add-btn" id="addCategoryBtn">+ Add</button>`;
+  html += `</div></div>`;
+
+  // Aspects
+  html += `<div class="detail-section"><div class="detail-section-header"><span class="section-title">Aspects</span></div>`;
+  for (const aspId of item.aspects) {
+    const asp = ASPECTS[aspId];
+    if (!asp) continue;
+    const filled = asp.params.filter(p => item.params[p] != null && item.params[p] !== '').length;
+    const total = asp.params.length;
+    const compClass = filled === total ? 'complete' : filled > 0 ? 'partial' : 'empty';
+
+    html += `<div class="aspect-block" data-asp="${aspId}">`;
+    html += `<div class="aspect-header" data-asp="${aspId}">
+      <span class="aspect-chevron open" data-asp="${aspId}">&#9654;</span>
+      <span class="aspect-name">${asp.name}</span>
+      <span class="aspect-completeness ${compClass}">${filled}/${total}</span>
+      <span class="aspect-remove" data-asp="${aspId}" title="Remove aspect">&times;</span>
+    </div>`;
+    html += `<div class="aspect-params" data-asp="${aspId}">`;
+    for (const paramKey of asp.params) {
+      const pd = PARAM_DEFS[paramKey];
+      if (!pd) continue;
+      const val = item.params[paramKey];
+      const hasVal = val != null && val !== '';
+      html += `<div class="param-row">
+        <span class="param-label">${pd.name}</span>
+        <span class="param-value ${!hasVal ? 'empty-val' : ''}" data-param="${paramKey}">${hasVal ? esc(String(val)) : '—'}</span>
+        ${pd.unit && hasVal ? `<span class="param-unit">${pd.unit}</span>` : ''}
+        <span class="param-filter ${!hasVal ? 'disabled' : ''}" data-param="${paramKey}" data-val="${hasVal ? esc(String(val)) : ''}" title="Filter by this value">&#x1F50D;</span>
+      </div>`;
+    }
+    html += `</div></div>`;
+  }
+  html += `<button class="add-btn" id="addAspectBtn" style="margin-top:4px;">+ Apply Aspect</button>`;
+  html += `</div>`;
+
+  // Standalone Parameters
+  const standaloneKeys = (item.standaloneParams || []).filter(k => !item.aspects.some(a => ASPECTS[a]?.params.includes(k)));
+  html += `<div class="detail-section"><div class="detail-section-header"><span class="section-title">Other Parameters</span></div>`;
+  for (const paramKey of standaloneKeys) {
+    const pd = PARAM_DEFS[paramKey];
+    if (!pd) continue;
+    const val = item.params[paramKey];
+    const hasVal = val != null && val !== '';
+    html += `<div class="param-row">
+      <span class="param-label">${pd.name}</span>
+      <span class="param-value ${!hasVal ? 'empty-val' : ''}" data-param="${paramKey}">${hasVal ? esc(String(val)) : '—'}</span>
+      ${pd.unit && hasVal ? `<span class="param-unit">${pd.unit}</span>` : ''}
+      <span class="param-filter ${!hasVal ? 'disabled' : ''}" data-param="${paramKey}" data-val="${hasVal ? esc(String(val)) : ''}" title="Filter by this value">&#x1F50D;</span>
+    </div>`;
+  }
+  html += `<button class="add-btn" id="addParamBtn" style="margin-top:4px;">+ Add Parameter</button>`;
+  html += `</div>`;
+
+  // Locations
+  html += `<div class="detail-section"><div class="detail-section-header"><span class="section-title">Stored At</span></div>`;
+  if (item.locations.length === 0) {
+    html += `<div style="color:#475569;font-size:13px;padding:4px 0;">No locations assigned</div>`;
+  } else {
+    for (const loc of item.locations) {
+      html += `<div class="location-link">
+        <span class="location-path">${esc(loc.path)}</span>
+        <span class="location-badge ${loc.type}">${loc.type}</span>
+      </div>`;
+    }
+  }
+  html += `</div>`;
+
+  // Delete
+  html += `<button class="delete-btn" id="deleteItemBtn">Delete Item</button>`;
+
+  detailContent.innerHTML = html;
+
+  // ── Bind detail events ──
+
+  // Edit name
+  const nameEl = document.getElementById('detailName');
+  nameEl.addEventListener('click', () => {
+    nameEl.innerHTML = `<input class="detail-edit-input name-input" value="${esc(item.name)}">`;
+    const inp = nameEl.querySelector('input');
+    inp.focus(); inp.select();
+    const done = (save) => { if (save) item.name = inp.value; render(); };
+    inp.addEventListener('keydown', e => { if (e.key === 'Enter') done(true); if (e.key === 'Escape') done(false); });
+    inp.addEventListener('blur', () => done(true));
+  });
+
+  // Edit description
+  const descEl = document.getElementById('detailDesc');
+  descEl.addEventListener('click', () => {
+    descEl.innerHTML = `<input class="detail-edit-input desc-input" value="${esc(item.description || '')}">`;
+    const inp = descEl.querySelector('input');
+    inp.focus(); inp.select();
+    const done = (save) => { if (save) item.description = inp.value; render(); };
+    inp.addEventListener('keydown', e => { if (e.key === 'Enter') done(true); if (e.key === 'Escape') done(false); });
+    inp.addEventListener('blur', () => done(true));
+  });
+
+  // Star primary
+  detailContent.querySelectorAll('.tag-star').forEach(el => {
+    el.addEventListener('click', e => {
+      e.stopPropagation();
+      item.primaryCategory = el.dataset.catid;
+      render();
+    });
+  });
+
+  // Remove category
+  detailContent.querySelectorAll('.tag-x').forEach(el => {
+    el.addEventListener('click', e => {
+      e.stopPropagation();
+      const catId = el.dataset.catid;
+      const removed = catId;
+      item.categories = item.categories.filter(c => c !== catId);
+      if (item.primaryCategory === catId && item.categories.length > 0) item.primaryCategory = item.categories[0];
+      showToast('Category removed', () => {
+        item.categories.push(removed);
+        if (item.primaryCategory !== removed && item.categories.length === 1) item.primaryCategory = removed;
+        render();
+      });
+      render();
+    });
+  });
+
+  // Add category
+  document.getElementById('addCategoryBtn')?.addEventListener('click', function(e) {
+    e.stopPropagation();
+    closeDropdowns();
+    const available = CATEGORIES.filter(c => !item.categories.includes(c.id));
+    if (available.length === 0) return;
+    const dd = createDropdown(this, available.map(c => ({
+      label: `${c.icon} ${c.name}`,
+      action: () => { item.categories.push(c.id); render(); }
+    })));
+  });
+
+  // Aspect chevron toggle
+  detailContent.querySelectorAll('.aspect-header').forEach(el => {
+    el.addEventListener('click', e => {
+      if (e.target.classList.contains('aspect-remove')) return;
+      const aspId = el.dataset.asp;
+      const paramsEl = detailContent.querySelector(`.aspect-params[data-asp="${aspId}"]`);
+      const chevron = el.querySelector('.aspect-chevron');
+      if (paramsEl.style.display === 'none') {
+        paramsEl.style.display = 'block';
+        chevron.classList.add('open');
+      } else {
+        paramsEl.style.display = 'none';
+        chevron.classList.remove('open');
+      }
+    });
+  });
+
+  // Remove aspect
+  detailContent.querySelectorAll('.aspect-remove').forEach(el => {
+    el.addEventListener('click', e => {
+      e.stopPropagation();
+      const aspId = el.dataset.asp;
+      const asp = ASPECTS[aspId];
+      const removedParams = {};
+      if (asp) asp.params.forEach(p => { removedParams[p] = item.params[p]; });
+      item.aspects = item.aspects.filter(a => a !== aspId);
+      if (asp) asp.params.forEach(p => { delete item.params[p]; });
+      showToast('Aspect removed', () => {
+        item.aspects.push(aspId);
+        Object.assign(item.params, removedParams);
+        render();
+      });
+      render();
+    });
+  });
+
+  // Add aspect
+  document.getElementById('addAspectBtn')?.addEventListener('click', function(e) {
+    e.stopPropagation();
+    closeDropdowns();
+    const available = Object.entries(ASPECTS).filter(([id]) => !item.aspects.includes(id));
+    if (available.length === 0) return;
+    const dd = createDropdown(this, available.map(([id, asp]) => ({
+      label: asp.name,
+      action: () => {
+        item.aspects.push(id);
+        // Initialize params if not present
+        for (const p of asp.params) {
+          if (!(p in item.params)) item.params[p] = null;
+        }
+        render();
+      }
+    })));
+  });
+
+  // Add standalone param
+  document.getElementById('addParamBtn')?.addEventListener('click', function(e) {
+    e.stopPropagation();
+    closeDropdowns();
+    const usedParams = new Set([...item.standaloneParams, ...item.aspects.flatMap(a => ASPECTS[a]?.params || [])]);
+    const available = Object.entries(PARAM_DEFS).filter(([k]) => !usedParams.has(k));
+    if (available.length === 0) return;
+    const dd = createDropdown(this, available.map(([k, pd]) => ({
+      label: pd.name,
+      action: () => {
+        item.standaloneParams.push(k);
+        if (!(k in item.params)) item.params[k] = null;
+        render();
+      }
+    })));
+  });
+
+  // Param value edit
+  detailContent.querySelectorAll('.param-value').forEach(el => {
+    el.addEventListener('click', () => {
+      const paramKey = el.dataset.param;
+      const pd = PARAM_DEFS[paramKey];
+      if (!pd) return;
+      const curVal = item.params[paramKey] ?? '';
+
+      let inputEl;
+      if (pd.type === 'enum' && pd.options) {
+        inputEl = document.createElement('select');
+        inputEl.className = 'detail-edit-input';
+        inputEl.style.fontSize = '13px';
+        inputEl.innerHTML = `<option value="">—</option>` + pd.options.map(o =>
+          `<option value="${esc(o)}" ${String(curVal) === o ? 'selected' : ''}>${esc(o)}</option>`
+        ).join('');
+      } else {
+        inputEl = document.createElement('input');
+        inputEl.className = 'detail-edit-input';
+        inputEl.style.fontSize = '13px';
+        inputEl.type = pd.type === 'number' ? 'number' : 'text';
+        inputEl.value = curVal;
+      }
+
+      el.innerHTML = '';
+      el.appendChild(inputEl);
+      inputEl.focus();
+      if (inputEl.select) inputEl.select();
+
+      const finish = (save) => {
+        if (save) {
+          let newVal = inputEl.value;
+          if (pd.type === 'number' && newVal !== '') newVal = parseFloat(newVal);
+          item.params[paramKey] = newVal === '' ? null : newVal;
+        }
+        render();
+      };
+      inputEl.addEventListener('keydown', e => {
+        if (e.key === 'Enter') finish(true);
+        if (e.key === 'Escape') finish(false);
+      });
+      inputEl.addEventListener('blur', () => finish(true));
+    });
+  });
+
+  // Filter icons
+  detailContent.querySelectorAll('.param-filter:not(.disabled)').forEach(el => {
+    el.addEventListener('click', e => {
+      e.stopPropagation();
+      const paramKey = el.dataset.param;
+      const val = el.dataset.val;
+      // Don't add duplicate
+      if (filterPills.some(p => p.type === 'param' && p.key === paramKey && p.value === val)) return;
+      filterPills.push({ type: 'param', key: paramKey, value: val });
+      render();
+    });
+  });
+
+  // Delete item
+  document.getElementById('deleteItemBtn')?.addEventListener('click', () => {
+    const idx = items.findIndex(i => i.id === item.id);
+    if (idx === -1) return;
+    const removed = items.splice(idx, 1)[0];
+    selectedIds.delete(item.id);
+    showToast('Item deleted', () => {
+      items.splice(idx, 0, removed);
+      selectedIds.add(removed.id);
+      render();
+    });
+    render();
+  });
+}
+
+// ─────────────────────────────────────────────────────────────
+// DROPDOWN
+// ─────────────────────────────────────────────────────────────
+
+function closeDropdowns() {
+  document.querySelectorAll('.dropdown-menu').forEach(d => d.remove());
+}
+
+function createDropdown(anchorEl, options) {
+  closeDropdowns();
+  const dd = document.createElement('div');
+  dd.className = 'dropdown-menu';
+
+  for (const opt of options) {
+    const item = document.createElement('div');
+    item.className = 'dropdown-item';
+    item.textContent = opt.label;
+    item.addEventListener('click', e => {
+      e.stopPropagation();
+      opt.action();
+      dd.remove();
+    });
+    dd.appendChild(item);
+  }
+
+  document.body.appendChild(dd);
+  const rect = anchorEl.getBoundingClientRect();
+  dd.style.left = rect.left + 'px';
+  dd.style.top = (rect.bottom + 4) + 'px';
+
+  // If it overflows bottom, flip up
+  requestAnimationFrame(() => {
+    const ddRect = dd.getBoundingClientRect();
+    if (ddRect.bottom > window.innerHeight) {
+      dd.style.top = (rect.top - ddRect.height - 4) + 'px';
+    }
+    if (ddRect.right > window.innerWidth) {
+      dd.style.left = (window.innerWidth - ddRect.width - 8) + 'px';
+    }
+  });
+
+  // Close on outside click
+  setTimeout(() => {
+    const handler = (e) => {
+      if (!dd.contains(e.target)) { dd.remove(); document.removeEventListener('click', handler); }
+    };
+    document.addEventListener('click', handler);
+  }, 0);
+
+  return dd;
+}
+
+// ─────────────────────────────────────────────────────────────
+// TOAST
+// ─────────────────────────────────────────────────────────────
+
+function showToast(message, undoFn) {
+  // Remove existing toast
+  document.querySelectorAll('.undo-toast').forEach(t => t.remove());
+  if (toastTimeout) clearTimeout(toastTimeout);
+
+  const toast = document.createElement('div');
+  toast.className = 'undo-toast';
+  toast.innerHTML = `<span>${esc(message)}</span><button class="undo-btn">Undo</button>`;
+  document.body.appendChild(toast);
+
+  toast.querySelector('.undo-btn').addEventListener('click', () => {
+    undoFn();
+    toast.remove();
+    if (toastTimeout) clearTimeout(toastTimeout);
+  });
+
+  toastTimeout = setTimeout(() => toast.remove(), 5000);
+}
+
+// ─────────────────────────────────────────────────────────────
+// FAB — New Item
+// ─────────────────────────────────────────────────────────────
+
+document.getElementById('fabBtn').addEventListener('click', () => {
+  const newItem = {
+    id: genId(),
+    name: 'New Item',
+    description: '',
+    categories: [],
+    primaryCategory: null,
+    aspects: [],
+    params: {},
+    standaloneParams: [],
+    locations: [],
+  };
+  items.unshift(newItem);
+  selectedIds.clear();
+  selectedIds.add(newItem.id);
+  render();
+
+  // Focus the name cell
+  requestAnimationFrame(() => {
+    const nameCell = document.querySelector(`tr[data-id="${newItem.id}"] td.col-name`);
+    if (nameCell) {
+      nameCell.classList.add('cell-editing');
+      const inp = document.createElement('input');
+      inp.value = newItem.name;
+      inp.style.cssText = 'width:100%;padding:4px 6px;background:#0f172a;border:1px solid #ff6600;border-radius:3px;color:#e2e8f0;font-size:13px;font-family:inherit;outline:none;';
+      nameCell.innerHTML = '';
+      nameCell.appendChild(inp);
+      inp.focus();
+      inp.select();
+      const finish = (save) => {
+        nameCell.classList.remove('cell-editing');
+        if (save && inp.value.trim()) newItem.name = inp.value.trim();
+        render();
+      };
+      inp.addEventListener('keydown', e => { if (e.key === 'Enter') finish(true); if (e.key === 'Escape') finish(false); });
+      inp.addEventListener('blur', () => finish(true));
+    }
+  });
+});
+
+// ─────────────────────────────────────────────────────────────
+// SEARCH
+// ─────────────────────────────────────────────────────────────
+
+document.getElementById('searchInput').addEventListener('input', e => {
+  searchText = e.target.value;
+  render();
+});
+document.getElementById('searchClear').addEventListener('click', () => {
+  searchText = '';
+  document.getElementById('searchInput').value = '';
+  render();
+});
+
+// Close dropdowns on escape
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape') closeDropdowns();
+});
+
+// ─────────────────────────────────────────────────────────────
+// INIT
+// ─────────────────────────────────────────────────────────────
+render();
+</script>
+</body>
+</html>

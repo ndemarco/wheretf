@@ -1,0 +1,27 @@
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.idea/
+*.swp
+*.swo
+*~
+
+# Claude Code local state
+.claude/settings.local.json
+.claude/project-context.json
+
+# Environment
+.env
+.env.*
+!.env.*.example
+
+# Data / runtime
+data/
+
+# Node (root-level scripts)
+node_modules/
+
+# Docker volumes
+docker-data/

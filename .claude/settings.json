@@ -1,0 +1,24 @@
+{
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "echo \"$CLAUDE_TOOL_INPUT\" | grep -qE '(npm test|npx vitest|vitest run)' && /home/nick/projects/nickydoes/wheretf/.claude/hooks/check-docker.sh || true"
+          }
+        ]
+      }
+    ]
+  },
+  "permissions": {
+    "allow": [
+      "Bash(DATABASE_URL=\"postgresql://wheretf:wheretf@localhost:5432/wheretf_test\" npx vitest run)",
+      "WebSearch"
+    ],
+    "additionalDirectories": [
+      "/home/nick/projects/nickydoes/wheretf/web/app/api/modules"
+    ]
+  }
+}

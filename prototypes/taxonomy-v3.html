@@ -1,0 +1,1548 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>WhereTF — Taxonomy Admin v3</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  background: #0f172a;
+  color: #e2e8f0;
+  display: flex;
+  height: 100vh;
+  overflow: hidden;
+  font-size: 14px;
+}
+
+/* ─── Sidebar ─── */
+.sidebar {
+  width: 56px;
+  background: #1e293b;
+  border-right: 1px solid #334155;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 12px 0;
+  gap: 16px;
+  flex-shrink: 0;
+}
+.sidebar-icon {
+  width: 32px; height: 32px; border-radius: 6px;
+  display: flex; align-items: center; justify-content: center;
+  cursor: pointer; color: #94a3b8; transition: all 0.15s;
+}
+.sidebar-icon:hover, .sidebar-icon.active { background: #334155; color: #ff6600; }
+.sidebar-icon svg { width: 20px; height: 20px; }
+
+/* ─── Left Panel ─── */
+.left-panel {
+  width: 280px;
+  background: #1e293b;
+  border-right: 1px solid #334155;
+  display: flex;
+  flex-direction: column;
+  flex-shrink: 0;
+  overflow: hidden;
+}
+.search-container {
+  padding: 8px;
+  border-bottom: 1px solid #334155;
+}
+.search-wrapper {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+.search-icon {
+  position: absolute;
+  left: 10px;
+  color: #64748b;
+  pointer-events: none;
+  font-size: 13px;
+}
+.search-input {
+  width: 100%;
+  padding: 5px 8px 5px 28px;
+  background: #0f172a;
+  border: 1px solid #334155;
+  border-radius: 4px;
+  color: #e2e8f0;
+  font-size: 12px;
+  font-family: inherit;
+  outline: none;
+  transition: border-color 0.15s;
+}
+.search-input:focus { border-color: #ff6600; }
+.search-input::placeholder { color: #475569; }
+
+/* Left panel sections */
+.section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 10px 4px;
+  cursor: pointer;
+  user-select: none;
+}
+.section-label {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: #64748b;
+  font-weight: 600;
+}
+.section-count {
+  font-size: 10px;
+  color: #475569;
+}
+.section-list {
+  overflow-y: auto;
+  flex: 1;
+  min-height: 0;
+}
+.entity-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 10px;
+  cursor: pointer;
+  transition: background 0.12s;
+  font-size: 12px;
+}
+.entity-item:hover { background: #334155; }
+.entity-item.active { background: #1a0f00; color: #ff6600; }
+.entity-item.expanded { background: #111827; }
+.entity-name { flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.entity-badge {
+  font-size: 10px;
+  padding: 1px 6px;
+  border-radius: 8px;
+  color: #64748b;
+  background: rgba(51,65,85,0.5);
+  flex-shrink: 0;
+}
+.entity-item.active .entity-badge { color: #ff6600; background: rgba(255,102,0,0.15); }
+.entity-chevron {
+  width: 12px;
+  font-size: 9px;
+  color: #475569;
+  flex-shrink: 0;
+  transition: transform 0.15s;
+}
+.entity-chevron.open { transform: rotate(90deg); color: #64748b; }
+
+/* Child parameter items (indented under expanded aspect) */
+.child-params {
+  overflow: hidden;
+  transition: max-height 0.2s ease;
+}
+.child-param-item {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 10px 3px 26px;
+  cursor: pointer;
+  transition: background 0.12s;
+  font-size: 11px;
+  color: #94a3b8;
+}
+.child-param-item:hover { background: #334155; color: #e2e8f0; }
+.child-param-item.active { background: #1a0f00; color: #ff6600; }
+.child-param-role {
+  font-size: 9px;
+  padding: 1px 5px;
+  border-radius: 3px;
+  flex-shrink: 0;
+}
+.child-param-role.role-key { color: #fbbf24; background: rgba(120,53,15,0.4); }
+.child-param-role.role-derived { color: #64748b; background: rgba(51,65,85,0.5); }
+.child-param-role.role-info { color: #475569; background: rgba(51,65,85,0.3); }
+
+.type-indicator {
+  width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0;
+}
+.type-numeric { background: #60a5fa; }
+.type-enum { background: #a78bfa; }
+.type-boolean { background: #34d399; }
+.type-text { background: #94a3b8; }
+.hidden-badge {
+  font-size: 9px;
+  padding: 1px 5px;
+  border-radius: 2px;
+  background: #78350f;
+  color: #fbbf24;
+  flex-shrink: 0;
+}
+.entity-item.hidden-entity { opacity: 0.5; }
+.section-divider {
+  height: 1px;
+  background: #334155;
+  margin: 4px 0;
+}
+.toggle-hidden {
+  padding: 6px 12px;
+  font-size: 11px;
+  color: #475569;
+  cursor: pointer;
+  transition: color 0.12s;
+}
+.toggle-hidden:hover { color: #94a3b8; }
+.toggle-hidden.active { color: #fbbf24; }
+
+/* ─── Center Panel ─── */
+.center-panel {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  position: relative;
+}
+.grid-header-bar {
+  display: flex;
+  align-items: center;
+  padding: 6px 16px;
+  border-bottom: 1px solid #334155;
+  background: #1e293b;
+  flex-shrink: 0;
+  gap: 8px;
+}
+.grid-title { font-size: 14px; font-weight: 600; }
+.grid-count { color: #64748b; font-size: 11px; }
+.breadcrumb { font-size: 12px; color: #94a3b8; }
+.breadcrumb a { color: #94a3b8; text-decoration: none; cursor: pointer; }
+.breadcrumb a:hover { color: #ff6600; }
+.breadcrumb .sep { margin: 0 6px; color: #475569; }
+
+.grid-scroll-container {
+  flex: 1;
+  overflow: auto;
+  position: relative;
+}
+
+/* Data table in center */
+.data-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+.data-table thead { position: sticky; top: 0; z-index: 10; }
+.data-table th {
+  background: #1e293b;
+  border-bottom: 1px solid #334155;
+  padding: 4px 10px;
+  text-align: left;
+  font-weight: 600;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: #94a3b8;
+  cursor: pointer;
+  user-select: none;
+  white-space: nowrap;
+}
+.data-table th:hover { color: #e2e8f0; }
+.data-table td {
+  padding: 4px 10px;
+  border-bottom: 1px solid #1e293b;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  vertical-align: middle;
+}
+.data-table tbody tr {
+  cursor: pointer;
+  transition: background 0.1s;
+}
+.data-table tbody tr:nth-child(odd) { background: #0f172a; }
+.data-table tbody tr:nth-child(even) { background: #111827; }
+.data-table tbody tr:hover { background: #1a2332; }
+.data-table tbody tr.selected {
+  background: #1a0f00 !important;
+  border-left: 3px solid #ff6600;
+}
+.data-table tbody tr.selected td:first-child { padding-left: 9px; }
+
+/* Badge */
+.badge {
+  font-size: 10px;
+  padding: 2px 7px;
+  border-radius: 3px;
+  background: rgba(51,65,85,0.6);
+}
+.badge.type-numeric { color: #60a5fa; }
+.badge.type-enum { color: #a78bfa; }
+.badge.type-boolean { color: #34d399; }
+.badge.type-text { color: #94a3b8; }
+.badge.role-key { color: #fbbf24; background: rgba(120,53,15,0.4); }
+.badge.role-derived { color: #94a3b8; }
+.badge.role-info { color: #64748b; }
+
+/* ─── Right Panel ─── */
+.right-panel {
+  width: 320px;
+  background: #1e293b;
+  border-left: 1px solid #334155;
+  flex-shrink: 0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+}
+.detail-empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  color: #475569;
+  font-size: 13px;
+  text-align: center;
+  padding: 24px;
+}
+.detail-content { padding: 12px; display: none; }
+
+.detail-name {
+  font-size: 15px;
+  font-weight: 700;
+  margin-bottom: 2px;
+  cursor: pointer;
+  padding: 3px;
+  border-radius: 4px;
+  transition: background 0.12s;
+}
+.detail-name:hover { background: #334155; }
+.detail-desc {
+  font-size: 12px;
+  color: #94a3b8;
+  cursor: pointer;
+  padding: 3px;
+  border-radius: 4px;
+  margin-bottom: 8px;
+  transition: background 0.12s;
+}
+.detail-desc:hover { background: #334155; }
+.detail-desc.empty-val { color: #475569; font-style: italic; }
+
+.detail-edit-input {
+  width: 100%;
+  padding: 4px 6px;
+  background: #0f172a;
+  border: 1px solid #ff6600;
+  border-radius: 4px;
+  color: #e2e8f0;
+  font-family: inherit;
+  outline: none;
+}
+.detail-edit-input.name-input { font-size: 18px; font-weight: 700; }
+.detail-edit-input.desc-input { font-size: 13px; }
+
+.detail-section { margin-top: 10px; }
+.detail-section-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: #64748b;
+  padding: 4px 0;
+  border-bottom: 1px solid #334155;
+  margin-bottom: 4px;
+}
+.detail-section-header .section-title { flex: 1; }
+
+/* Property rows */
+.prop-row {
+  display: flex;
+  align-items: center;
+  padding: 3px 0;
+  font-size: 12px;
+  gap: 6px;
+}
+.prop-label {
+  width: 72px;
+  flex-shrink: 0;
+  color: #64748b;
+  font-size: 11px;
+}
+.prop-value { flex: 1; color: #e2e8f0; }
+.prop-value.muted { color: #94a3b8; }
+
+/* Tags */
+.tag-list { display: flex; flex-wrap: wrap; gap: 4px; }
+.tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 2px 6px;
+  border-radius: 3px;
+  font-size: 11px;
+  border: 1px solid #334155;
+  background: #0f172a;
+  cursor: pointer;
+  transition: border-color 0.12s;
+}
+.tag:hover { border-color: #ff6600; color: #ff6600; }
+.tag .tag-x {
+  color: #475569;
+  font-size: 14px;
+  margin-left: 2px;
+  cursor: pointer;
+  transition: color 0.15s;
+}
+.tag .tag-x:hover { color: #ef4444; }
+
+/* Add button */
+.add-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 8px;
+  border-radius: 4px;
+  font-size: 12px;
+  border: 1px dashed #475569;
+  background: transparent;
+  color: #64748b;
+  cursor: pointer;
+  transition: all 0.15s;
+  font-family: inherit;
+}
+.add-btn:hover { border-color: #ff6600; color: #ff6600; }
+
+/* Danger zone */
+.danger-zone {
+  margin-top: 12px;
+  padding-top: 8px;
+  border-top: 1px solid #334155;
+}
+.btn-danger {
+  padding: 6px 12px;
+  background: transparent;
+  border: 1px solid transparent;
+  color: #ef4444;
+  font-size: 13px;
+  cursor: pointer;
+  border-radius: 4px;
+  font-family: inherit;
+  transition: all 0.15s;
+}
+.btn-danger:hover { background: #1c0606; border-color: #ef444444; }
+.btn-hide {
+  padding: 6px 12px;
+  background: transparent;
+  border: 1px solid transparent;
+  color: #fbbf24;
+  font-size: 13px;
+  cursor: pointer;
+  border-radius: 4px;
+  font-family: inherit;
+  transition: all 0.15s;
+}
+.btn-hide:hover { background: #1c1006; border-color: #78350f; }
+
+/* Enum tag editor */
+.enum-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 4px;
+}
+.enum-tag {
+  padding: 2px 8px;
+  border-radius: 3px;
+  font-size: 11px;
+  background: #334155;
+  color: #e2e8f0;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.enum-tag .etag-x {
+  color: #64748b;
+  cursor: pointer;
+  font-size: 12px;
+}
+.enum-tag .etag-x:hover { color: #ef4444; }
+
+/* Constraint inputs */
+.constraint-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  margin-top: 4px;
+}
+.constraint-input {
+  width: 80px;
+  padding: 4px 6px;
+  background: #0f172a;
+  border: 1px solid #334155;
+  border-radius: 4px;
+  color: #e2e8f0;
+  font-size: 12px;
+  font-family: inherit;
+  outline: none;
+}
+.constraint-input:focus { border-color: #ff6600; }
+.constraint-label { font-size: 11px; color: #64748b; }
+
+/* Center detail sections */
+.center-detail-section {
+  padding: 8px 16px;
+  border-bottom: 1px solid #334155;
+}
+.center-detail-section:last-child { border-bottom: none; }
+.center-detail-name {
+  font-size: 15px;
+  font-weight: 700;
+  margin-bottom: 2px;
+}
+.center-detail-desc {
+  font-size: 12px;
+  color: #94a3b8;
+}
+.center-section-label {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: #64748b;
+  font-weight: 600;
+  padding: 4px 0 2px;
+  border-bottom: 1px solid #334155;
+  margin-bottom: 2px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.center-standard-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 3px 0;
+  cursor: pointer;
+  font-size: 12px;
+  transition: color 0.12s;
+}
+.center-standard-row:hover { color: #ff6600; }
+.center-standard-row .std-name { flex: 1; }
+.center-standard-row .std-meta { color: #475569; font-size: 10px; }
+.center-standard-row .std-domain { color: #64748b; font-size: 10px; }
+
+.center-param-detail {
+  padding: 10px 16px;
+  background: #0f172a;
+  border-top: 2px solid #ff6600;
+}
+.center-param-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+.center-param-name {
+  font-size: 14px;
+  font-weight: 600;
+}
+.center-param-props {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr 1fr;
+  gap: 4px 12px;
+}
+.center-prop-item {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+.center-prop-label {
+  font-size: 9px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: #64748b;
+}
+.center-prop-value {
+  font-size: 12px;
+  color: #e2e8f0;
+}
+.center-used-by-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 2px;
+}
+
+/* FAB */
+.fab {
+  position: absolute;
+  bottom: 20px;
+  right: 20px;
+  width: 48px; height: 48px;
+  border-radius: 50%;
+  background: #ff6600;
+  color: white;
+  border: none;
+  font-size: 24px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 4px 16px rgba(255,102,0,0.4);
+  transition: all 0.15s;
+  z-index: 20;
+  font-family: inherit;
+}
+.fab:hover { transform: scale(1.1); box-shadow: 0 6px 24px rgba(255,102,0,0.5); }
+
+/* Undo toast */
+.undo-toast {
+  position: fixed;
+  bottom: 24px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: #1e293b;
+  border: 1px solid #334155;
+  border-radius: 8px;
+  padding: 10px 16px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 13px;
+  box-shadow: 0 4px 24px rgba(0,0,0,0.5);
+  z-index: 100;
+  animation: toastIn 0.2s ease-out;
+}
+@keyframes toastIn {
+  from { opacity: 0; transform: translateX(-50%) translateY(20px); }
+  to { opacity: 1; transform: translateX(-50%) translateY(0); }
+}
+.undo-toast .undo-btn {
+  color: #ff6600;
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 600;
+  font-family: inherit;
+}
+.undo-toast .undo-btn:hover { text-decoration: underline; }
+
+/* Scrollbar */
+::-webkit-scrollbar { width: 8px; height: 8px; }
+::-webkit-scrollbar-track { background: #0f172a; }
+::-webkit-scrollbar-thumb { background: #334155; border-radius: 4px; }
+::-webkit-scrollbar-thumb:hover { background: #475569; }
+</style>
+</head>
+<body>
+
+<!-- Sidebar -->
+<div class="sidebar">
+  <div class="sidebar-icon" title="Storage"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg></div>
+  <div class="sidebar-icon" title="Items"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"/></svg></div>
+  <div class="sidebar-icon" title="Templates"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="9" y1="9" x2="9" y2="21"/></svg></div>
+  <div class="sidebar-icon active" title="Taxonomy"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="5" r="3"/><circle cx="5" cy="19" r="3"/><circle cx="19" cy="19" r="3"/><line x1="12" y1="8" x2="5" y2="16"/><line x1="12" y1="8" x2="19" y2="16"/></svg></div>
+  <div class="sidebar-icon" title="Activity"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg></div>
+</div>
+
+<!-- Left Panel -->
+<div class="left-panel">
+  <div class="search-container">
+    <div class="search-wrapper">
+      <span class="search-icon">&#x1F50D;</span>
+      <input type="text" class="search-input" id="searchInput" placeholder="Search taxonomy...">
+    </div>
+  </div>
+
+  <!-- Aspects section -->
+  <div class="section-header" onclick="toggleSection('aspects')">
+    <span class="section-label">Aspects</span>
+    <span class="section-count" id="aspect-count">5</span>
+  </div>
+  <div class="section-list" id="aspect-list">
+    <!-- populated by JS -->
+  </div>
+
+  <div class="section-divider"></div>
+
+  <!-- Parameters section -->
+  <div class="section-header" onclick="toggleSection('params')">
+    <span class="section-label">Parameters</span>
+    <span class="section-count" id="param-count">16</span>
+  </div>
+  <div class="section-list" id="param-list" style="flex:1;">
+    <!-- populated by JS -->
+  </div>
+
+  <div class="toggle-hidden" id="toggle-hidden" onclick="toggleHidden()">Show hidden</div>
+</div>
+
+<!-- Center Panel -->
+<div class="center-panel">
+  <div class="grid-header-bar">
+    <div class="breadcrumb" id="breadcrumb">
+      <span>Taxonomy</span>
+    </div>
+    <div style="flex:1;"></div>
+    <span class="grid-count" id="center-count"></span>
+  </div>
+
+  <div class="grid-scroll-container">
+    <!-- Aspect detail (shown when an aspect is selected) -->
+    <div id="center-aspect-view" style="display:none;"></div>
+
+    <!-- Parameter detail below aspect (shown when param selected in aspect context) -->
+    <div id="center-param-in-aspect-view" style="display:none;"></div>
+
+    <!-- Standalone parameter view (selected from flat list) -->
+    <div id="center-param-view" style="display:none;"></div>
+
+    <!-- Standards designation table -->
+    <div id="center-standard-view" style="display:none;">
+      <table class="data-table" id="standard-desig-table">
+        <thead>
+          <tr id="standard-desig-thead"></tr>
+        </thead>
+        <tbody id="standard-desig-tbody"></tbody>
+      </table>
+    </div>
+
+    <!-- Empty state -->
+    <div id="center-empty" style="display:flex;align-items:center;justify-content:center;height:100%;color:#475569;font-size:13px;">
+      Select an aspect or parameter to view details.
+    </div>
+  </div>
+
+  <button class="fab" id="fabBtn" title="New">+</button>
+</div>
+
+<!-- Right Panel -->
+<div class="right-panel">
+  <div class="detail-empty" id="detailEmpty">Select an aspect or parameter to view details.</div>
+  <div class="detail-content" id="detailContent"></div>
+</div>
+
+<script>
+// ─── Data ───
+const aspects = [
+  { id: 'mst', name: 'Machine Screw Threading', desc: 'Thread parameters for machine screws and bolts', items: 24, hidden: false,
+    params: [
+      { name: 'pitch', role: 'key' },
+      { name: 'major_dia', role: 'key' },
+      { name: 'minor_dia', role: 'derived' },
+      { name: 'thread_angle', role: 'info' },
+      { name: 'class_of_fit', role: 'info' },
+    ],
+  },
+  { id: 'pt', name: 'Pipe Threading', desc: 'Thread parameters for pipe fittings', items: 8, hidden: false,
+    params: [
+      { name: 'pitch', role: 'key' },
+      { name: 'major_dia', role: 'key' },
+      { name: 'minor_dia', role: 'derived' },
+      { name: 'thread_angle', role: 'info' },
+      { name: 'tapered', role: 'info' },
+    ],
+  },
+  { id: 'smd', name: 'SMD Package', desc: 'Surface mount device package dimensions', items: 31, hidden: false,
+    params: [
+      { name: 'length', role: 'key' },
+      { name: 'width', role: 'key' },
+      { name: 'height', role: 'derived' },
+      { name: 'lead_count', role: 'info' },
+    ],
+  },
+  { id: 'fd', name: 'Fastener Drive', desc: 'Drive type, system, and size for fasteners', items: 16, hidden: false,
+    params: [
+      { name: 'drive_type', role: 'key' },
+      { name: 'drive_system', role: 'key' },
+      { name: 'drive_size', role: 'derived' },
+    ],
+  },
+  { id: 'wg', name: 'Wire Gauge', desc: 'Wire diameter, cross-section, and resistance', items: 5, hidden: false,
+    params: [
+      { name: 'diameter', role: 'key' },
+      { name: 'cross_section', role: 'derived' },
+      { name: 'resistance_per_km', role: 'derived' },
+    ],
+  },
+  { id: 'er', name: 'Electrical Rating', desc: 'Voltage and current ratings', items: 2, hidden: true,
+    params: [
+      { name: 'voltage_rating', role: 'key' },
+      { name: 'current_rating', role: 'key' },
+      { name: 'power_rating', role: 'derived' },
+    ],
+  },
+];
+
+// Top-level standards — each may link to one or more aspects
+const standards = [
+  { id: 'iso-4762', name: 'ISO 4762 Cap Screw', domainTag: 'Cap Screw', designationCount: 12,
+    aspectIds: ['mst', 'fd'] },  // spans both threading AND drive aspects
+  { id: 'iso-metric', name: 'ISO Metric (ISO 261)', domainTag: 'Metric Thread', designationCount: 28,
+    aspectIds: ['mst'] },
+  { id: 'unc', name: 'Unified Coarse (UNC)', domainTag: 'Unified Thread Standard', designationCount: 22,
+    aspectIds: ['mst'] },
+  { id: 'unf', name: 'Unified Fine (UNF)', domainTag: 'Unified Thread Standard', designationCount: 18,
+    aspectIds: ['mst'] },
+  { id: 'npt', name: 'NPT', domainTag: null, designationCount: 14,
+    aspectIds: ['pt'] },
+  { id: 'bspt', name: 'BSPT', domainTag: null, designationCount: 10,
+    aspectIds: ['pt'] },
+  { id: 'jedec', name: 'JEDEC Standard', domainTag: null, designationCount: 12,
+    aspectIds: ['smd'] },
+  { id: 'ipc', name: 'IPC Naming', domainTag: null, designationCount: 8,
+    aspectIds: ['smd'] },
+  { id: 'phillips', name: 'Phillips', domainTag: 'Cross Drive', designationCount: 5,
+    aspectIds: ['fd'] },
+  { id: 'torx', name: 'Torx', domainTag: 'Star Drive', designationCount: 12,
+    aspectIds: ['fd'] },
+  { id: 'hex-socket', name: 'Hex Socket (Allen)', domainTag: 'Hex Drive', designationCount: 8,
+    aspectIds: ['fd'] },
+  { id: 'awg', name: 'AWG', domainTag: null, designationCount: 40,
+    aspectIds: ['wg'] },
+];
+
+// Coverage map: which param names each standard covers per aspect
+// standardCoverage[stdId][aspectId] = [paramName, ...]
+const standardCoverage = {
+  'iso-4762': {
+    'mst': ['pitch', 'major_dia'],
+    'fd':  ['drive_type', 'drive_size'],
+  },
+  'iso-metric': { 'mst': ['pitch', 'major_dia', 'minor_dia'] },
+  'unc':        { 'mst': ['pitch', 'major_dia', 'minor_dia'] },
+  'unf':        { 'mst': ['pitch', 'major_dia', 'minor_dia'] },
+  'npt':        { 'pt':  ['pitch', 'major_dia', 'minor_dia', 'tapered'] },
+  'bspt':       { 'pt':  ['pitch', 'major_dia', 'minor_dia', 'tapered'] },
+  'jedec':      { 'smd': ['length', 'width', 'height'] },
+  'ipc':        { 'smd': ['length', 'width'] },
+  'phillips':   { 'fd':  ['drive_type', 'drive_system', 'drive_size'] },
+  'torx':       { 'fd':  ['drive_type', 'drive_system', 'drive_size'] },
+  'hex-socket': { 'fd':  ['drive_type', 'drive_system', 'drive_size'] },
+  'awg':        { 'wg':  ['diameter', 'cross_section', 'resistance_per_km'] },
+};
+
+// Helper: get standards linked to an aspect
+function getStandardsForAspect(aspId) {
+  return standards.filter(s => s.aspectIds.includes(aspId));
+}
+
+// Helper: render coverage dots for a standard within an aspect context
+function renderCoverageDots(std, asp) {
+  const covered = (standardCoverage[std.id] || {})[asp.id] || [];
+  const total = asp.params.length;
+  const coveredCount = asp.params.filter(ap => covered.includes(ap.name)).length;
+  const dots = asp.params.map(ap => {
+    const hit = covered.includes(ap.name);
+    return `<span title="${ap.name}" style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${hit ? '#ff6600' : '#1e293b'};border:1px solid ${hit ? '#ff6600' : '#475569'};margin-right:2px;"></span>`;
+  }).join('');
+  return `<span style="display:inline-flex;align-items:center;gap:0;" title="${coveredCount}/${total} parameters covered">${dots}</span>`;
+}
+
+const paramDefs = [
+  { name: 'pitch', type: 'numeric', unit: 'mm', aspects: ['Machine Screw Threading', 'Pipe Threading'] },
+  { name: 'major_dia', type: 'numeric', unit: 'mm', aspects: ['Machine Screw Threading', 'Pipe Threading'] },
+  { name: 'minor_dia', type: 'numeric', unit: 'mm', aspects: ['Machine Screw Threading', 'Pipe Threading'] },
+  { name: 'thread_angle', type: 'numeric', unit: 'deg', aspects: ['Machine Screw Threading', 'Pipe Threading'] },
+  { name: 'class_of_fit', type: 'enum', unit: null, aspects: ['Machine Screw Threading'], enumValues: ['6g', '6H', '4g6g', '4H5H'] },
+  { name: 'tapered', type: 'boolean', unit: null, aspects: ['Pipe Threading'] },
+  { name: 'length', type: 'numeric', unit: 'mm', aspects: ['SMD Package'] },
+  { name: 'width', type: 'numeric', unit: 'mm', aspects: ['SMD Package'] },
+  { name: 'height', type: 'numeric', unit: 'mm', aspects: ['SMD Package'] },
+  { name: 'lead_count', type: 'numeric', unit: null, aspects: ['SMD Package'] },
+  { name: 'drive_type', type: 'enum', unit: null, aspects: ['Fastener Drive'], enumValues: ['cross', 'slotted', 'hex', 'star', 'square'] },
+  { name: 'drive_system', type: 'enum', unit: null, aspects: ['Fastener Drive'], enumValues: ['Phillips', 'Pozidriv', 'Torx', 'Allen', 'Robertson'] },
+  { name: 'drive_size', type: 'numeric', unit: 'mm', aspects: ['Fastener Drive'] },
+  { name: 'diameter', type: 'numeric', unit: 'mm', aspects: ['Wire Gauge'] },
+  { name: 'cross_section', type: 'numeric', unit: 'mm\u00B2', aspects: ['Wire Gauge'] },
+  { name: 'resistance_per_km', type: 'numeric', unit: '\u03A9/km', aspects: ['Wire Gauge'] },
+  { name: 'voltage_rating', type: 'numeric', unit: 'V', aspects: ['Electrical Rating'], hidden: true },
+  { name: 'current_rating', type: 'numeric', unit: 'A', aspects: ['Electrical Rating'], hidden: true },
+  { name: 'power_rating', type: 'numeric', unit: 'W', aspects: ['Electrical Rating'], hidden: true },
+];
+
+// Standard designation mock data
+const designations = {
+  'iso-metric': [
+    { label: 'M2', values: { pitch: 0.4, major_dia: 2.0, minor_dia: 1.567 } },
+    { label: 'M2.5', values: { pitch: 0.45, major_dia: 2.5, minor_dia: 2.013 } },
+    { label: 'M3', values: { pitch: 0.5, major_dia: 3.0, minor_dia: 2.459 } },
+    { label: 'M4', values: { pitch: 0.7, major_dia: 4.0, minor_dia: 3.242 } },
+    { label: 'M5', values: { pitch: 0.8, major_dia: 5.0, minor_dia: 4.134 } },
+    { label: 'M6', values: { pitch: 1.0, major_dia: 6.0, minor_dia: 4.917 } },
+    { label: 'M8', values: { pitch: 1.25, major_dia: 8.0, minor_dia: 6.647 } },
+    { label: 'M10', values: { pitch: 1.5, major_dia: 10.0, minor_dia: 8.376 } },
+  ],
+  'unc': [
+    { label: '#2-56', values: { pitch: 0.453, major_dia: 2.184, minor_dia: 1.628 }, source: { pitch_val: 56, pitch_unit: 'TPI' } },
+    { label: '#4-40', values: { pitch: 0.635, major_dia: 2.845, minor_dia: 2.157 }, source: { pitch_val: 40, pitch_unit: 'TPI' } },
+    { label: '#6-32', values: { pitch: 0.794, major_dia: 3.505, minor_dia: 2.764 }, source: { pitch_val: 32, pitch_unit: 'TPI' } },
+    { label: '#8-32', values: { pitch: 0.794, major_dia: 4.166, minor_dia: 3.378 }, source: { pitch_val: 32, pitch_unit: 'TPI' } },
+    { label: '#10-24', values: { pitch: 1.058, major_dia: 4.826, minor_dia: 3.860 }, source: { pitch_val: 24, pitch_unit: 'TPI' } },
+    { label: '1/4-20', values: { pitch: 1.270, major_dia: 6.350, minor_dia: 5.190 }, source: { pitch_val: 20, pitch_unit: 'TPI' } },
+  ],
+  'phillips': [
+    { label: '#0 Phillips', values: { drive_type: 'cross', drive_system: 'Phillips', drive_size: 2.0 } },
+    { label: '#1 Phillips', values: { drive_type: 'cross', drive_system: 'Phillips', drive_size: 3.0 } },
+    { label: '#2 Phillips', values: { drive_type: 'cross', drive_system: 'Phillips', drive_size: 5.0 } },
+    { label: '#3 Phillips', values: { drive_type: 'cross', drive_system: 'Phillips', drive_size: 7.0 } },
+  ],
+  'awg': [
+    { label: '30 AWG', values: { diameter: 0.255, cross_section: 0.0507, resistance_per_km: 338.6 } },
+    { label: '28 AWG', values: { diameter: 0.321, cross_section: 0.0804, resistance_per_km: 213.5 } },
+    { label: '26 AWG', values: { diameter: 0.405, cross_section: 0.1280, resistance_per_km: 134.4 } },
+    { label: '24 AWG', values: { diameter: 0.511, cross_section: 0.2050, resistance_per_km: 84.22 } },
+    { label: '22 AWG', values: { diameter: 0.644, cross_section: 0.3260, resistance_per_km: 52.96 } },
+    { label: '20 AWG', values: { diameter: 0.812, cross_section: 0.5180, resistance_per_km: 33.31 } },
+    { label: '18 AWG', values: { diameter: 1.024, cross_section: 0.8230, resistance_per_km: 20.95 } },
+  ],
+};
+
+// ─── State ───
+let selectedType = null; // 'aspect' | 'param' | 'standard'
+let selectedId = null;
+let selectedStandardAspect = null; // parent aspect when viewing a standard
+let expandedAspect = null; // which aspect is expanded in the tree
+let showHidden = false;
+let searchText = '';
+
+// ─── Render Left Panel ───
+function renderLeftPanel() {
+  const search = searchText.toLowerCase();
+
+  // Aspects (with tree expansion)
+  const aspectList = document.getElementById('aspect-list');
+  let aspectHtml = '';
+  let visibleAspects = 0;
+  for (const asp of aspects) {
+    if (asp.hidden && !showHidden) continue;
+    if (search && !asp.name.toLowerCase().includes(search)) continue;
+    visibleAspects++;
+    const isExpanded = expandedAspect === asp.id;
+    const isActive = selectedType === 'aspect' && selectedId === asp.id;
+    const hiddenClass = asp.hidden ? ' hidden-entity' : '';
+    const expandedClass = isExpanded ? ' expanded' : '';
+    const aspStdCount = getStandardsForAspect(asp.id).length;
+    aspectHtml += `<div class="entity-item${isActive ? ' active' : ''}${hiddenClass}${expandedClass}" onclick="toggleAspectExpand('${asp.id}')">
+      <span class="entity-chevron${isExpanded ? ' open' : ''}">&#9654;</span>
+      <span class="entity-name">${esc(asp.name)}</span>
+      ${asp.hidden ? '<span class="hidden-badge">Hidden</span>' : ''}
+      <span class="entity-badge">${asp.params.length}p · ${aspStdCount}s</span>
+    </div>`;
+    // Render child parameters if expanded
+    if (isExpanded) {
+      aspectHtml += `<div class="child-params">`;
+      for (const ap of asp.params) {
+        const pd = paramDefs.find(p => p.name === ap.name);
+        if (!pd) continue;
+        const pdIdx = paramDefs.indexOf(pd);
+        const isChildActive = selectedType === 'param' && selectedId === pdIdx && selectedStandardAspect === asp.id;
+        aspectHtml += `<div class="child-param-item${isChildActive ? ' active' : ''}" onclick="event.stopPropagation(); selectParamInContext('${asp.id}', ${pdIdx})">
+          <span class="type-indicator type-${pd.type}"></span>
+          <span class="entity-name">${esc(pd.name)}</span>
+          <span class="child-param-role role-${ap.role}">${ap.role}</span>
+        </div>`;
+      }
+      // Standards sub-section within expanded aspect
+      const aspStandards = getStandardsForAspect(asp.id);
+      if (aspStandards.length > 0) {
+        aspectHtml += `<div style="padding:4px 12px 2px 20px;font-size:9px;text-transform:uppercase;letter-spacing:0.06em;color:#475569;margin-top:2px;">Standards</div>`;
+        for (const std of aspStandards) {
+          const isStdActive = selectedType === 'standard' && selectedId === std.id;
+          const covered = (standardCoverage[std.id] || {})[asp.id] || [];
+          const coverageRatio = `${covered.length}/${asp.params.length}`;
+          aspectHtml += `<div class="child-param-item${isStdActive ? ' active' : ''}" onclick="event.stopPropagation(); selectStandard('${asp.id}', '${std.id}')" style="padding-left:20px;">
+            <span style="color:#64748b;font-size:11px;">&#9671;</span>
+            <span class="entity-name">${esc(std.name)}</span>
+            <span style="font-size:9px;color:#475569;">${coverageRatio}</span>
+          </div>`;
+        }
+      }
+      aspectHtml += `</div>`;
+    }
+  }
+  aspectList.innerHTML = aspectHtml;
+  document.getElementById('aspect-count').textContent = visibleAspects;
+
+  // Parameters (flat list — all parameters regardless of aspect)
+  const paramList = document.getElementById('param-list');
+  let paramHtml = '';
+  let visibleParams = 0;
+  for (let i = 0; i < paramDefs.length; i++) {
+    const p = paramDefs[i];
+    if (p.hidden && !showHidden) continue;
+    if (search && !p.name.toLowerCase().includes(search)) continue;
+    visibleParams++;
+    const isActive = selectedType === 'param' && selectedId === i && !selectedStandardAspect;
+    const hiddenClass = p.hidden ? ' hidden-entity' : '';
+    paramHtml += `<div class="entity-item${isActive ? ' active' : ''}${hiddenClass}" onclick="selectParam(${i})">
+      <span class="type-indicator type-${p.type}"></span>
+      <span class="entity-name">${esc(p.name)}</span>
+      ${p.hidden ? '<span class="hidden-badge">Hidden</span>' : ''}
+      <span class="entity-badge">${p.aspects.length}a</span>
+    </div>`;
+  }
+  paramList.innerHTML = paramHtml;
+  document.getElementById('param-count').textContent = visibleParams;
+
+  // Hidden toggle
+  const hiddenToggle = document.getElementById('toggle-hidden');
+  hiddenToggle.className = 'toggle-hidden' + (showHidden ? ' active' : '');
+  hiddenToggle.textContent = showHidden ? 'Hide hidden' : 'Show hidden';
+}
+
+// ─── Toggle Aspect Expand (tree) ───
+function toggleAspectExpand(id) {
+  if (expandedAspect === id) {
+    // Collapse: if we're viewing something under this aspect, clear it
+    expandedAspect = null;
+    // If the aspect itself was selected, keep it; otherwise clear
+    if (selectedType !== 'aspect' || selectedId !== id) {
+      clearSelection();
+      return;
+    }
+  } else {
+    // Expand new aspect, collapse previous
+    expandedAspect = id;
+  }
+  // Select the aspect itself
+  selectedType = 'aspect';
+  selectedId = id;
+  selectedStandardAspect = null;
+  renderLeftPanel();
+  renderCenterAspect(id);
+  renderRightAspect(id);
+}
+
+// ─── Select Param In Context (from aspect tree or aspect's param table) ───
+function selectParamInContext(aspectId, paramIdx) {
+  selectedType = 'param';
+  selectedId = paramIdx;
+  selectedStandardAspect = aspectId;
+  expandedAspect = aspectId;
+
+  const asp = aspects.find(a => a.id === aspectId);
+  const p = paramDefs[paramIdx];
+
+  // Breadcrumb
+  if (asp && p) {
+    document.getElementById('breadcrumb').innerHTML = `<a onclick="clearSelection()">Taxonomy</a><span class="sep">/</span><a onclick="toggleAspectExpand('${asp.id}')">${esc(asp.name)}</a><span class="sep">/</span><span>${esc(p.name)}</span>`;
+    document.getElementById('center-count').textContent = `${asp.params.length} parameters · ${getStandardsForAspect(asp.id).length} standards`;
+  }
+
+  // Center: aspect detail on top (re-render to update selected row highlight)
+  renderCenterAspect(aspectId);
+  // Center: param detail below
+  renderCenterParamInAspect(aspectId, paramIdx);
+
+  // Right panel: parameter properties
+  renderRightParam(paramIdx);
+
+  // Left panel
+  renderLeftPanel();
+}
+
+// ─── Select Aspect ───
+function selectAspect(id) {
+  selectedType = 'aspect';
+  selectedId = id;
+  selectedStandardAspect = null;
+  expandedAspect = id;
+  renderLeftPanel();
+  renderCenterAspect(id);
+  renderRightAspect(id);
+}
+
+function hideCenterViews() {
+  document.getElementById('center-empty').style.display = 'none';
+  document.getElementById('center-aspect-view').style.display = 'none';
+  document.getElementById('center-param-in-aspect-view').style.display = 'none';
+  document.getElementById('center-param-view').style.display = 'none';
+  document.getElementById('center-standard-view').style.display = 'none';
+}
+
+function renderCenterAspect(id) {
+  const asp = aspects.find(a => a.id === id);
+  if (!asp) return;
+
+  hideCenterViews();
+  document.getElementById('center-aspect-view').style.display = '';
+
+  document.getElementById('breadcrumb').innerHTML = `<a onclick="clearSelection()">Taxonomy</a><span class="sep">/</span><span>${esc(asp.name)}</span>`;
+  document.getElementById('center-count').textContent = `${asp.params.length} parameters · ${getStandardsForAspect(asp.id).length} standards`;
+
+  let html = '';
+  // Description
+  html += `<div class="center-detail-section">`;
+  html += `<div class="center-detail-name">${esc(asp.name)}</div>`;
+  html += `<div class="center-detail-desc">${asp.desc ? esc(asp.desc) : '<span style="color:#475569;font-style:italic;">No description</span>'}</div>`;
+  html += `</div>`;
+
+  // Parameters table
+  html += `<div class="center-detail-section">`;
+  html += `<div class="center-section-label"><span>Parameters</span><button class="add-btn" style="font-size:11px;">+ Add</button></div>`;
+  html += `<table class="data-table"><thead><tr>
+    <th>Parameter</th><th>Type</th><th>Unit</th><th>Role</th><th></th>
+  </tr></thead><tbody>`;
+  for (const ap of asp.params) {
+    const pd = paramDefs.find(p => p.name === ap.name);
+    if (!pd) continue;
+    const pdIdx = paramDefs.indexOf(pd);
+    const isSelected = selectedType === 'param' && selectedId === pdIdx && selectedStandardAspect === asp.id;
+    html += `<tr onclick="selectParamInContext('${id}', ${pdIdx})" class="${isSelected ? 'selected' : ''}">
+      <td style="font-weight:500;">${esc(pd.name)}</td>
+      <td><span class="badge type-${pd.type}">${pd.type}</span></td>
+      <td style="color:#94a3b8;">${pd.unit || '\u2014'}</td>
+      <td><span class="badge role-${ap.role}">${ap.role}</span></td>
+      <td style="text-align:right;"><button class="btn-danger" style="font-size:11px;padding:2px 8px;opacity:0;" onmouseover="this.style.opacity=1" onmouseout="this.style.opacity=0" onclick="event.stopPropagation()">Remove</button></td>
+    </tr>`;
+  }
+  html += `</tbody></table></div>`;
+
+  // Standards — coverage table
+  const aspStds = getStandardsForAspect(asp.id);
+  html += `<div class="center-detail-section">`;
+  html += `<div class="center-section-label"><span>Standards</span><button class="add-btn" style="font-size:11px;" onclick="showToast('Link Standard — coming soon')">+ Link</button></div>`;
+  if (aspStds.length === 0) {
+    html += `<div style="color:#475569;font-size:12px;padding:8px 0;">No standards linked. Standards provide lookup tables mapping designations to parameter values.</div>`;
+  } else {
+    html += `<table class="data-table" style="margin-top:2px;"><thead><tr>
+      <th style="width:40%;">Name</th>
+      <th>Domain</th>
+      <th>Coverage</th>
+      <th style="text-align:right;">Desig.</th>
+    </tr></thead><tbody>`;
+    for (const std of aspStds) {
+      const isSelected = selectedType === 'standard' && selectedId === std.id;
+      const coveredNames = (standardCoverage[std.id] || {})[asp.id] || [];
+      const coverageTitle = asp.params.map(ap => ap.name + (coveredNames.includes(ap.name) ? ' ✓' : ' ✗')).join(', ');
+      html += `<tr onclick="selectStandard('${asp.id}', '${std.id}')" class="${isSelected ? 'selected' : ''}">
+        <td style="font-weight:500;">${esc(std.name)}${std.aspectIds.length > 1 ? ' <span style="font-size:9px;color:#64748b;" title="Spans multiple aspects">↔</span>' : ''}</td>
+        <td style="color:#64748b;">${std.domainTag ? esc(std.domainTag) : '—'}</td>
+        <td><span title="${coverageTitle}">${renderCoverageDots(std, asp)}</span> <span style="font-size:10px;color:#64748b;">${coveredNames.length}/${asp.params.length}</span></td>
+        <td style="text-align:right;color:#64748b;">${std.designationCount}</td>
+      </tr>`;
+    }
+    html += `</tbody></table>`;
+  }
+  html += `</div>`;
+
+  // Usage
+  html += `<div class="center-detail-section">`;
+  html += `<div class="center-section-label"><span>Usage</span></div>`;
+  html += `<div style="font-size:13px;color:#94a3b8;">Applied to <strong style="color:#e2e8f0;">${asp.items}</strong> items</div>`;
+  html += `</div>`;
+
+  document.getElementById('center-aspect-view').innerHTML = html;
+}
+
+function renderCenterParamInAspect(aspectId, paramIdx) {
+  const asp = aspects.find(a => a.id === aspectId);
+  const p = paramDefs[paramIdx];
+  if (!asp || !p) return;
+
+  const view = document.getElementById('center-param-in-aspect-view');
+  view.style.display = '';
+
+  const ap = asp.params.find(ap => ap.name === p.name);
+
+  let html = `<div class="center-param-detail">`;
+  html += `<div class="center-param-header">`;
+  html += `<span class="type-indicator type-${p.type}"></span>`;
+  html += `<span class="center-param-name">${esc(p.name)}</span>`;
+  html += `<span class="badge role-${ap ? ap.role : 'info'}">${ap ? ap.role : 'info'} in ${esc(asp.name)}</span>`;
+  html += `</div>`;
+
+  html += `<div class="center-param-props">`;
+  html += `<div class="center-prop-item"><span class="center-prop-label">Type</span><span class="center-prop-value"><span class="badge type-${p.type}">${p.type}</span></span></div>`;
+  html += `<div class="center-prop-item"><span class="center-prop-label">Unit</span><span class="center-prop-value">${p.unit || '\u2014'}</span></div>`;
+  html += `<div class="center-prop-item"><span class="center-prop-label">Default</span><span class="center-prop-value" style="color:#475569;">\u2014</span></div>`;
+
+  // Constraints inline
+  if (p.type === 'numeric') {
+    html += `<div class="center-prop-item"><span class="center-prop-label">Constraints</span><span class="center-prop-value" style="color:#475569;">No min/max set</span></div>`;
+  } else if (p.type === 'enum' && p.enumValues) {
+    html += `<div class="center-prop-item"><span class="center-prop-label">Values</span><span class="center-prop-value"><span class="enum-tags" style="margin:0;">`;
+    for (const v of p.enumValues) {
+      html += `<span class="enum-tag">${esc(v)}</span>`;
+    }
+    html += `</span></span></div>`;
+  }
+  html += `</div>`; // close grid
+
+  // Used by aspects
+  html += `<div style="margin-top:12px;">`;
+  html += `<div class="center-section-label" style="border:none;padding-bottom:0;margin-bottom:2px;"><span>Used By Aspects</span></div>`;
+  html += `<div class="center-used-by-list">`;
+  for (const aspName of p.aspects) {
+    const a = aspects.find(a => a.name === aspName);
+    if (a) {
+      const isCurrent = a.id === aspectId;
+      html += `<span class="tag${isCurrent ? '' : ''}" onclick="event.stopPropagation(); toggleAspectExpand('${a.id}')" style="${isCurrent ? 'border-color:#ff6600;color:#ff6600;' : ''}">${esc(a.name)}${isCurrent ? ' (current)' : ''}</span>`;
+    }
+  }
+  html += `</div></div>`;
+
+  html += `</div>`; // close center-param-detail
+  view.innerHTML = html;
+}
+
+function renderRightAspect(id) {
+  const asp = aspects.find(a => a.id === id);
+  if (!asp) return;
+
+  document.getElementById('detailEmpty').style.display = 'none';
+  const dc = document.getElementById('detailContent');
+  dc.style.display = 'block';
+
+  let html = '';
+  html += `<div class="detail-name">${esc(asp.name)}</div>`;
+  html += `<div class="detail-desc ${!asp.desc ? 'empty-val' : ''}">${asp.desc ? esc(asp.desc) : 'No description'}</div>`;
+
+  // Standards section
+  html += `<div class="detail-section"><div class="detail-section-header"><span class="section-title">Standards</span></div>`;
+  if (asp.standardsList.length === 0) {
+    html += `<div style="color:#475569;font-size:12px;padding:4px 0;">No standards. Standards provide lookup tables that map designations to parameter values.</div>`;
+  } else {
+    for (const std of asp.standardsList) {
+      html += `<div class="tag" onclick="selectStandard('${asp.id}', '${std.id}')" style="margin-bottom:4px;display:flex;justify-content:space-between;width:100%;">
+        <span>${esc(std.name)}</span>
+        <span style="color:#64748b;font-size:10px;">${std.designationCount} desig.</span>
+      </div>`;
+      if (std.domainTag) {
+        html += `<div style="font-size:10px;color:#475569;margin:-2px 0 4px 8px;">${esc(std.domainTag)}</div>`;
+      }
+    }
+  }
+  html += `<button class="add-btn" style="margin-top:4px;">+ Add Standard</button>`;
+  html += `</div>`;
+
+  // Usage
+  html += `<div class="detail-section"><div class="detail-section-header"><span class="section-title">Usage</span></div>`;
+  html += `<div style="font-size:13px;color:#94a3b8;">Applied to <strong style="color:#e2e8f0;">${asp.items}</strong> items</div>`;
+  html += `</div>`;
+
+  // Danger zone
+  html += `<div class="danger-zone">`;
+  if (asp.items > 0) {
+    html += `<button class="btn-hide" onclick="showToast('Aspect hidden')">Hide Aspect</button>`;
+    html += `<div style="font-size:11px;color:#475569;margin-top:4px;">In use by ${asp.items} items. Cannot delete.</div>`;
+  } else {
+    html += `<button class="btn-danger">Delete Aspect</button>`;
+  }
+  html += `</div>`;
+
+  dc.innerHTML = html;
+}
+
+// ─── Select Parameter (from flat list, no aspect context) ───
+function selectParam(idx) {
+  selectedType = 'param';
+  selectedId = idx;
+  selectedStandardAspect = null;
+  expandedAspect = null;
+  renderLeftPanel();
+  renderCenterParam(idx);
+  renderRightParam(idx);
+}
+
+function renderCenterParam(idx) {
+  const p = paramDefs[idx];
+  if (!p) return;
+
+  hideCenterViews();
+  document.getElementById('center-param-view').style.display = '';
+
+  document.getElementById('breadcrumb').innerHTML = `<a onclick="clearSelection()">Taxonomy</a><span class="sep">/</span><span>${esc(p.name)}</span>`;
+  document.getElementById('center-count').textContent = `${p.aspects.length} aspects`;
+
+  let html = '';
+  // Parameter detail
+  html += `<div class="center-detail-section">`;
+  html += `<div class="center-detail-name">${esc(p.name)}</div>`;
+  html += `<div class="center-param-props" style="margin-top:8px;">`;
+  html += `<div class="center-prop-item"><span class="center-prop-label">Type</span><span class="center-prop-value"><span class="badge type-${p.type}">${p.type}</span></span></div>`;
+  html += `<div class="center-prop-item"><span class="center-prop-label">Unit</span><span class="center-prop-value">${p.unit || '\u2014'}</span></div>`;
+  html += `<div class="center-prop-item"><span class="center-prop-label">Default</span><span class="center-prop-value" style="color:#475569;">\u2014</span></div>`;
+  if (p.type === 'enum' && p.enumValues) {
+    html += `<div class="center-prop-item"><span class="center-prop-label">Values</span><span class="center-prop-value"><span class="enum-tags" style="margin:0;">`;
+    for (const v of p.enumValues) html += `<span class="enum-tag">${esc(v)}</span>`;
+    html += `</span></span></div>`;
+  }
+  html += `</div></div>`;
+
+  // Used by aspects
+  html += `<div class="center-detail-section">`;
+  html += `<div class="center-section-label"><span>Used By Aspects</span></div>`;
+  html += `<table class="data-table"><thead><tr>
+    <th>Aspect</th><th>Role</th><th>Items</th>
+  </tr></thead><tbody>`;
+  for (const aspName of p.aspects) {
+    const asp = aspects.find(a => a.name === aspName);
+    if (!asp) continue;
+    const ap = asp.params.find(ap => ap.name === p.name);
+    html += `<tr onclick="toggleAspectExpand('${asp.id}')">
+      <td style="font-weight:500;">${esc(asp.name)}</td>
+      <td><span class="badge role-${ap ? ap.role : 'info'}">${ap ? ap.role : 'info'}</span></td>
+      <td style="color:#94a3b8;">${asp.items} items</td>
+    </tr>`;
+  }
+  html += `</tbody></table></div>`;
+
+  document.getElementById('center-param-view').innerHTML = html;
+}
+
+function renderRightParam(idx) {
+  const p = paramDefs[idx];
+  if (!p) return;
+
+  document.getElementById('detailEmpty').style.display = 'none';
+  const dc = document.getElementById('detailContent');
+  dc.style.display = 'block';
+
+  let html = '';
+  html += `<div class="detail-name">${esc(p.name)}</div>`;
+
+  // Properties
+  html += `<div class="detail-section"><div class="detail-section-header"><span class="section-title">Properties</span></div>`;
+  html += `<div class="prop-row"><span class="prop-label">Type</span><span class="prop-value"><span class="badge type-${p.type}">${p.type}</span></span></div>`;
+  html += `<div class="prop-row"><span class="prop-label">Unit</span><span class="prop-value ${p.unit ? '' : 'muted'}">${p.unit || '\u2014'}</span></div>`;
+  html += `<div class="prop-row"><span class="prop-label">Default</span><span class="prop-value muted">\u2014</span></div>`;
+  html += `</div>`;
+
+  // Constraints
+  html += `<div class="detail-section"><div class="detail-section-header"><span class="section-title">Constraints</span></div>`;
+  if (p.type === 'numeric') {
+    html += `<div class="constraint-row">
+      <span class="constraint-label">Min</span>
+      <input type="number" class="constraint-input" placeholder="\u2014">
+      <span class="constraint-label">Max</span>
+      <input type="number" class="constraint-input" placeholder="\u2014">
+    </div>`;
+  } else if (p.type === 'enum' && p.enumValues) {
+    html += `<div class="enum-tags">`;
+    for (const v of p.enumValues) {
+      html += `<span class="enum-tag">${esc(v)} <span class="etag-x">&times;</span></span>`;
+    }
+    html += `</div>`;
+    html += `<input type="text" class="constraint-input" placeholder="Add value..." style="width:100%;margin-top:6px;">`;
+  } else if (p.type === 'boolean') {
+    html += `<div style="font-size:12px;color:#475569;">No constraints for boolean type.</div>`;
+  } else {
+    html += `<div style="font-size:12px;color:#475569;">No constraints for text type.</div>`;
+  }
+  html += `</div>`;
+
+  // Used by aspects
+  html += `<div class="detail-section"><div class="detail-section-header"><span class="section-title">Used By</span></div>`;
+  html += `<div class="tag-list">`;
+  for (const aspName of p.aspects) {
+    const asp = aspects.find(a => a.name === aspName);
+    if (asp) {
+      html += `<span class="tag" onclick="selectAspect('${asp.id}')">${esc(asp.name)}</span>`;
+    }
+  }
+  html += `</div></div>`;
+
+  // Danger zone
+  const totalUsage = p.aspects.length;
+  html += `<div class="danger-zone">`;
+  if (totalUsage > 0) {
+    html += `<button class="btn-hide" onclick="showToast('Parameter hidden')">Hide Parameter</button>`;
+    html += `<div style="font-size:11px;color:#475569;margin-top:4px;">Used by ${totalUsage} aspect${totalUsage !== 1 ? 's' : ''}. Cannot delete.</div>`;
+  } else {
+    html += `<button class="btn-danger">Delete Parameter</button>`;
+  }
+  html += `</div>`;
+
+  dc.innerHTML = html;
+}
+
+// ─── Select Standard (drill into designations) ───
+function selectStandard(fromAspectId, standardId) {
+  const std = standards.find(s => s.id === standardId);
+  if (!std) return;
+  const fromAsp = aspects.find(a => a.id === fromAspectId);
+
+  selectedType = 'standard';
+  selectedId = standardId;
+  selectedStandardAspect = fromAspectId;
+  expandedAspect = fromAspectId;
+
+  hideCenterViews();
+  document.getElementById('center-standard-view').style.display = '';
+
+  const breadcrumbAsp = fromAsp
+    ? `<a onclick="selectAspect('${fromAsp.id}')">${esc(fromAsp.name)}</a><span class="sep">/</span>`
+    : '';
+  document.getElementById('breadcrumb').innerHTML =
+    `<a onclick="clearSelection()">Taxonomy</a><span class="sep">/</span>${breadcrumbAsp}<span>${esc(std.name)}</span>`;
+
+  // Build designation table — filter to fromAspect's params if arrived via aspect
+  const desigs = designations[standardId] || [];
+  document.getElementById('center-count').textContent = `${desigs.length} designations`;
+
+  let paramKeys = desigs.length > 0 ? Object.keys(desigs[0].values) : [];
+
+  // If we have an aspect context, reorder/filter columns: aspect params first, then others
+  let otherKeys = [];
+  if (fromAsp) {
+    const coveredForAsp = (standardCoverage[std.id] || {})[fromAsp.id] || [];
+    const aspKeys = paramKeys.filter(k => coveredForAsp.includes(k));
+    otherKeys = paramKeys.filter(k => !coveredForAsp.includes(k));
+    paramKeys = aspKeys; // show only aspect-relevant columns (others shown via note)
+  }
+
+  let theadHtml = '<th>Designation</th>';
+  for (const key of paramKeys) {
+    const pd = paramDefs.find(p => p.name === key);
+    theadHtml += `<th>${pd ? esc(pd.name) : esc(key)}${pd && pd.unit ? ' <span style="color:#475569;font-weight:400;text-transform:none;">(' + pd.unit + ')</span>' : ''}</th>`;
+  }
+  document.getElementById('standard-desig-thead').innerHTML = theadHtml;
+
+  let tbodyHtml = '';
+  for (const d of desigs) {
+    tbodyHtml += '<tr>';
+    tbodyHtml += `<td style="font-weight:600;color:#ff6600;">${esc(d.label)}</td>`;
+    for (const key of paramKeys) {
+      const val = d.values[key];
+      let display = val != null ? String(val) : '\u2014';
+      if (d.source && key === 'pitch' && d.source.pitch_unit === 'TPI') {
+        display += ` <span style="color:#475569;font-size:11px;">(${d.source.pitch_val} TPI)</span>`;
+      }
+      tbodyHtml += `<td style="color:#94a3b8;">${display}</td>`;
+    }
+    tbodyHtml += '</tr>';
+  }
+  document.getElementById('standard-desig-tbody').innerHTML = tbodyHtml;
+
+  // Context note below table if columns were filtered
+  const noteEl = document.getElementById('standard-context-note');
+  if (noteEl) noteEl.remove();
+  if (fromAsp && otherKeys.length > 0) {
+    const otherAspects = std.aspectIds.filter(id => id !== fromAspectId)
+      .map(id => aspects.find(a => a.id === id)?.name).filter(Boolean).join(', ');
+    const note = document.createElement('div');
+    note.id = 'standard-context-note';
+    note.style.cssText = 'padding:6px 16px;font-size:11px;color:#475569;border-top:1px solid #1e293b;';
+    note.innerHTML = `Showing ${paramKeys.length} of ${paramKeys.length + otherKeys.length} parameters relevant to ${esc(fromAsp.name)}. ` +
+      `<span style="color:#64748b;">▸ +${otherKeys.length} params from ${esc(otherAspects)}</span>`;
+    document.getElementById('center-standard-view').appendChild(note);
+  }
+
+  renderRightStandard(std, fromAspectId);
+  renderLeftPanel();
+}
+
+function renderRightStandard(std, fromAspectId) {
+  document.getElementById('detailEmpty').style.display = 'none';
+  const dc = document.getElementById('detailContent');
+  dc.style.display = 'block';
+
+  let html = '';
+  html += `<div class="detail-name">${esc(std.name)}</div>`;
+  if (std.domainTag) {
+    html += `<div class="detail-desc">${esc(std.domainTag)}</div>`;
+  } else {
+    html += `<div class="detail-desc empty-val">No domain tag</div>`;
+  }
+
+  // Aspects section — all linked aspects with coverage fractions
+  html += `<div class="detail-section"><div class="detail-section-header"><span class="section-title">Aspects (${std.aspectIds.length})</span></div>`;
+  for (const aspId of std.aspectIds) {
+    const asp = aspects.find(a => a.id === aspId);
+    if (!asp) continue;
+    const covered = (standardCoverage[std.id] || {})[aspId] || [];
+    const isCurrent = aspId === fromAspectId;
+    html += `<div class="prop-row" style="cursor:pointer;" onclick="selectAspect('${asp.id}')">
+      <span class="prop-label" style="width:auto;flex:1;${isCurrent ? 'color:#ff6600;' : ''}">${esc(asp.name)}</span>
+      <span style="font-size:11px;${isCurrent ? 'color:#ff6600;' : 'color:#64748b;'}">${covered.length}/${asp.params.length}</span>
+    </div>`;
+  }
+  html += `<button class="add-btn" style="margin-top:4px;font-size:11px;" onclick="showToast('Link Aspect — coming soon')">+ Link Aspect</button>`;
+  html += `</div>`;
+
+  // Designations count
+  html += `<div class="detail-section"><div class="detail-section-header"><span class="section-title">Designations</span></div>`;
+  html += `<div style="font-size:13px;color:#94a3b8;">${std.designationCount} entries</div>`;
+  html += `</div>`;
+
+  // Parameters covered (all params across all aspects)
+  const allCoveredParams = new Set();
+  for (const aspId of std.aspectIds) {
+    const covered = (standardCoverage[std.id] || {})[aspId] || [];
+    covered.forEach(p => allCoveredParams.add(p));
+  }
+  html += `<div class="detail-section"><div class="detail-section-header"><span class="section-title">Parameters Covered</span></div>`;
+  for (const paramName of allCoveredParams) {
+    const pd = paramDefs.find(p => p.name === paramName);
+    // Find role from a linked aspect's params
+    let role = 'info';
+    for (const aspId of std.aspectIds) {
+      const asp = aspects.find(a => a.id === aspId);
+      const ap = asp?.params.find(p => p.name === paramName);
+      if (ap) { role = ap.role; break; }
+    }
+    html += `<div class="prop-row">
+      <span class="prop-label" style="width:auto;flex:1;">${pd ? esc(pd.name) : esc(paramName)}</span>
+      <span class="badge role-${role}" style="flex-shrink:0;">${role}</span>
+    </div>`;
+  }
+  html += `</div>`;
+
+  // Danger zone
+  html += `<div class="danger-zone">`;
+  html += `<button class="btn-hide" onclick="showToast('Standard hidden')">Hide Standard</button>`;
+  html += `</div>`;
+
+  dc.innerHTML = html;
+}
+
+// ─── Clear Selection ───
+function clearSelection() {
+  selectedType = null;
+  selectedId = null;
+  selectedStandardAspect = null;
+  expandedAspect = null;
+
+  hideCenterViews();
+  document.getElementById('center-empty').style.display = 'flex';
+  document.getElementById('breadcrumb').innerHTML = '<span>Taxonomy</span>';
+  document.getElementById('center-count').textContent = '';
+  document.getElementById('detailEmpty').style.display = 'flex';
+  document.getElementById('detailContent').style.display = 'none';
+
+  renderLeftPanel();
+}
+
+// ─── Toggle Hidden ───
+function toggleHidden() {
+  showHidden = !showHidden;
+  renderLeftPanel();
+}
+
+// ─── Search ───
+document.getElementById('searchInput').addEventListener('input', e => {
+  searchText = e.target.value;
+  renderLeftPanel();
+});
+
+// ─── Toast ───
+function showToast(message) {
+  document.querySelectorAll('.undo-toast').forEach(t => t.remove());
+  const toast = document.createElement('div');
+  toast.className = 'undo-toast';
+  toast.innerHTML = `<span>${esc(message)}</span><button class="undo-btn" onclick="this.parentElement.remove()">Undo</button>`;
+  document.body.appendChild(toast);
+  setTimeout(() => toast.remove(), 5000);
+}
+
+// ─── Helpers ───
+function esc(str) {
+  const div = document.createElement('div');
+  div.textContent = str;
+  return div.innerHTML;
+}
+
+// ─── Init ───
+renderLeftPanel();
+</script>
+</body>
+</html>

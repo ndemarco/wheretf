@@ -1,0 +1,913 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>WhereTF — Taxonomy Admin v2</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  background: #0f172a;
+  color: #e2e8f0;
+  display: flex;
+  height: 100vh;
+  overflow: hidden;
+  font-size: 14px;
+}
+
+/* ─── Sidebar ─── */
+.sidebar {
+  width: 56px;
+  background: #1e293b;
+  border-right: 1px solid #334155;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 12px 0;
+  gap: 16px;
+  flex-shrink: 0;
+}
+.sidebar-icon {
+  width: 32px; height: 32px; border-radius: 6px;
+  display: flex; align-items: center; justify-content: center;
+  cursor: pointer; color: #94a3b8; transition: all 0.15s;
+}
+.sidebar-icon:hover, .sidebar-icon.active { background: #334155; color: #ff6600; }
+.sidebar-icon svg { width: 20px; height: 20px; }
+
+/* ─── Main Area ─── */
+.main {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+/* ─── Top Bar ─── */
+.top-bar {
+  padding: 12px 24px;
+  border-bottom: 1px solid #334155;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex-shrink: 0;
+}
+.top-bar h1 { font-size: 15px; font-weight: 600; color: #f1f5f9; }
+.view-tabs {
+  display: flex;
+  gap: 2px;
+  background: #1e293b;
+  border-radius: 6px;
+  padding: 2px;
+}
+.view-tab {
+  padding: 5px 14px;
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  color: #94a3b8;
+  border: none;
+  background: none;
+  font-family: inherit;
+  transition: all 0.15s;
+}
+.view-tab:hover { color: #e2e8f0; }
+.view-tab.active { background: #334155; color: #f1f5f9; }
+.spacer { flex: 1; }
+.btn-new-top {
+  padding: 6px 14px;
+  background: #ff6600;
+  color: white;
+  border: none;
+  border-radius: 5px;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  font-family: inherit;
+}
+.btn-new-top:hover { filter: brightness(1.1); }
+
+/* ─── Search/Filter Bar ─── */
+.filter-bar {
+  padding: 10px 24px;
+  border-bottom: 1px solid #334155;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-shrink: 0;
+}
+.search-input {
+  flex: 1;
+  max-width: 320px;
+  padding: 7px 12px 7px 32px;
+  background: #1e293b;
+  border: 1px solid #334155;
+  border-radius: 5px;
+  color: #e2e8f0;
+  font-size: 12px;
+  font-family: inherit;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%2364748b' stroke-width='2'%3E%3Ccircle cx='11' cy='11' r='8'/%3E%3Cline x1='21' y1='21' x2='16.65' y2='16.65'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: 10px center;
+}
+.search-input:focus { outline: none; border-color: #ff6600; }
+.search-input::placeholder { color: #475569; }
+.filter-chip {
+  padding: 5px 10px;
+  background: #1e293b;
+  border: 1px solid #334155;
+  border-radius: 4px;
+  font-size: 11px;
+  color: #94a3b8;
+  cursor: pointer;
+  font-family: inherit;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.filter-chip:hover { border-color: #475569; }
+.filter-chip.active { border-color: #ff6600; color: #ff6600; }
+.filter-chip svg { width: 12px; height: 12px; }
+.result-count { font-size: 11px; color: #64748b; margin-left: auto; }
+
+/* ─── Content Split ─── */
+.content-split {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+/* ─── Grid ─── */
+.grid-area {
+  flex: 1;
+  overflow-y: auto;
+  padding: 16px 24px;
+}
+.card-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: 10px;
+}
+.card {
+  padding: 14px 16px;
+  background: #1e293b;
+  border: 1px solid #334155;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.12s;
+}
+.card:hover { border-color: #475569; }
+.card.selected { border-color: #ff6600; background: rgba(255,102,0,0.05); }
+.card-name {
+  font-size: 13px;
+  font-weight: 600;
+  color: #f1f5f9;
+  margin-bottom: 6px;
+}
+.card-meta {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.card-badge {
+  font-size: 10px;
+  padding: 2px 7px;
+  border-radius: 3px;
+  background: rgba(51,65,85,0.6);
+  color: #94a3b8;
+}
+.card-badge.type-numeric { color: #60a5fa; }
+.card-badge.type-enum { color: #a78bfa; }
+.card-badge.type-boolean { color: #34d399; }
+.card-badge.type-text { color: #94a3b8; }
+.card-desc {
+  font-size: 11px;
+  color: #64748b;
+  margin-top: 4px;
+  line-height: 1.3;
+}
+.card.hidden-card { opacity: 0.45; }
+.badge-hidden {
+  font-size: 9px;
+  padding: 1px 5px;
+  border-radius: 2px;
+  background: #78350f;
+  color: #fbbf24;
+  margin-left: 6px;
+}
+
+/* ─── Detail Drawer (bottom panel) ─── */
+.detail-drawer {
+  border-top: 1px solid #334155;
+  background: #1e293b;
+  flex-shrink: 0;
+  overflow-y: auto;
+  transition: height 0.2s;
+}
+.detail-drawer.collapsed { height: 0; border-top: none; }
+.detail-drawer.open { height: 320px; }
+
+.drawer-header {
+  padding: 10px 24px;
+  border-bottom: 1px solid #334155;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  position: sticky;
+  top: 0;
+  background: #1e293b;
+  z-index: 1;
+}
+.drawer-header h3 {
+  font-size: 13px;
+  font-weight: 600;
+  color: #f1f5f9;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.drawer-close {
+  width: 24px; height: 24px;
+  border-radius: 4px;
+  display: flex; align-items: center; justify-content: center;
+  cursor: pointer; color: #64748b; border: none; background: none;
+  font-size: 16px; font-family: inherit;
+}
+.drawer-close:hover { color: #94a3b8; background: #334155; }
+.drawer-body {
+  padding: 12px 24px 16px;
+}
+
+/* ─── Detail Table (inside drawer) ─── */
+.detail-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+.detail-table th {
+  text-align: left;
+  padding: 6px 12px;
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: #64748b;
+  border-bottom: 1px solid #334155;
+}
+.detail-table td {
+  padding: 8px 12px;
+  border-bottom: 1px solid rgba(51,65,85,0.4);
+}
+.detail-table tr:hover { background: rgba(255,255,255,0.02); }
+.detail-table .name-cell { color: #e2e8f0; font-weight: 500; }
+.detail-table .type-cell .badge {
+  font-size: 10px;
+  padding: 2px 7px;
+  border-radius: 3px;
+  background: rgba(51,65,85,0.6);
+}
+.detail-table .unit-cell { color: #64748b; }
+.detail-table .action-cell {
+  text-align: right;
+}
+.btn-remove-sm {
+  font-size: 11px;
+  color: #ef4444;
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-family: inherit;
+  opacity: 0;
+  transition: opacity 0.1s;
+}
+tr:hover .btn-remove-sm { opacity: 1; }
+
+/* ─── Add row ─── */
+.add-row-area {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 8px;
+  padding: 0 12px;
+}
+.add-row-search {
+  flex: 1;
+  padding: 6px 10px;
+  background: #0f172a;
+  border: 1px dashed #475569;
+  border-radius: 4px;
+  color: #e2e8f0;
+  font-size: 12px;
+  font-family: inherit;
+}
+.add-row-search:focus { outline: none; border-color: #ff6600; border-style: solid; }
+.add-row-search::placeholder { color: #475569; }
+.btn-create-inline {
+  padding: 5px 10px;
+  background: none;
+  border: 1px dashed #475569;
+  border-radius: 4px;
+  color: #ff6600;
+  font-size: 11px;
+  cursor: pointer;
+  font-family: inherit;
+  white-space: nowrap;
+}
+.btn-create-inline:hover { border-color: #ff6600; }
+
+/* ─── Aspect Links (in param drawer) ─── */
+.aspect-link-list {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.aspect-link {
+  padding: 5px 12px;
+  background: rgba(15,23,42,0.5);
+  border: 1px solid #334155;
+  border-radius: 4px;
+  color: #e2e8f0;
+  font-size: 12px;
+  cursor: pointer;
+  transition: border-color 0.1s;
+  text-decoration: none;
+}
+.aspect-link:hover { border-color: #ff6600; color: #ff6600; }
+
+/* ─── Inline Create Modal (lightweight) ─── */
+.create-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 100;
+}
+.create-modal {
+  background: #1e293b;
+  border: 1px solid #475569;
+  border-radius: 8px;
+  width: 100%;
+  max-width: 400px;
+  padding: 20px;
+}
+.create-modal h3 {
+  font-size: 14px;
+  font-weight: 600;
+  color: #f1f5f9;
+  margin-bottom: 14px;
+}
+.create-modal input,
+.create-modal select {
+  width: 100%;
+  padding: 8px 12px;
+  background: #0f172a;
+  border: 1px solid #475569;
+  border-radius: 5px;
+  color: #e2e8f0;
+  font-size: 13px;
+  font-family: inherit;
+  margin-bottom: 10px;
+}
+.create-modal input:focus, .create-modal select:focus {
+  outline: none;
+  border-color: #ff6600;
+}
+.create-modal input::placeholder { color: #475569; }
+.create-modal .form-row {
+  display: flex;
+  gap: 8px;
+}
+.create-modal .form-row > * { flex: 1; }
+.modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 6px;
+}
+.btn-cancel {
+  padding: 7px 16px;
+  background: none;
+  color: #94a3b8;
+  border: none;
+  font-size: 12px;
+  cursor: pointer;
+  font-family: inherit;
+}
+.btn-cancel:hover { color: #e2e8f0; }
+
+/* ─── Drawer actions row ─── */
+.drawer-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 24px;
+  border-top: 1px solid rgba(51,65,85,0.4);
+}
+.btn-hide {
+  padding: 5px 12px;
+  background: none;
+  color: #fbbf24;
+  border: 1px solid #78350f;
+  border-radius: 4px;
+  font-size: 11px;
+  cursor: pointer;
+  font-family: inherit;
+}
+.btn-hide:hover { background: #78350f; color: #fde68a; }
+.btn-danger-sm {
+  padding: 5px 12px;
+  background: none;
+  color: #ef4444;
+  border: 1px solid #7f1d1d;
+  border-radius: 4px;
+  font-size: 11px;
+  cursor: pointer;
+  font-family: inherit;
+}
+.btn-danger-sm:hover { background: #7f1d1d; color: #fca5a5; }
+.usage-stat { font-size: 11px; color: #64748b; margin-left: auto; }
+</style>
+</head>
+<body>
+
+<!-- Sidebar -->
+<div class="sidebar">
+  <div class="sidebar-icon" title="Storage"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg></div>
+  <div class="sidebar-icon" title="Items"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"/></svg></div>
+  <div class="sidebar-icon" title="Templates"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="9" y1="9" x2="9" y2="21"/></svg></div>
+  <div class="sidebar-icon active" title="Taxonomy"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="5" r="3"/><circle cx="5" cy="19" r="3"/><circle cx="19" cy="19" r="3"/><line x1="12" y1="8" x2="5" y2="16"/><line x1="12" y1="8" x2="19" y2="16"/></svg></div>
+  <div class="sidebar-icon" title="Activity"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg></div>
+</div>
+
+<div class="main">
+  <!-- Top Bar -->
+  <div class="top-bar">
+    <h1>Taxonomy</h1>
+    <div class="view-tabs">
+      <button class="view-tab active" onclick="switchView('aspects')">Aspects</button>
+      <button class="view-tab" onclick="switchView('params')">Parameters</button>
+    </div>
+    <div class="spacer"></div>
+    <button class="btn-new-top" id="btn-create" onclick="showCreateModal()">+ New Aspect</button>
+  </div>
+
+  <!-- ═══════════════ ASPECTS VIEW ═══════════════ -->
+  <div id="aspects-view">
+    <!-- Filter Bar -->
+    <div class="filter-bar">
+      <input type="text" class="search-input" placeholder="Search aspects..." oninput="filterAspects(this.value)">
+      <button class="filter-chip" onclick="this.classList.toggle('active')">
+        Has standards
+      </button>
+      <button class="filter-chip" onclick="toggleHiddenFilter(this)">
+        Show hidden
+      </button>
+      <span class="result-count" id="aspect-count">5 aspects</span>
+    </div>
+
+    <div class="content-split">
+      <!-- Grid -->
+      <div class="grid-area">
+        <div class="card-grid" id="aspect-grid">
+          <div class="card" onclick="selectAspect(this, 'mst')" data-name="Machine Screw Threading" data-search="machine screw threading">
+            <div class="card-name">Machine Screw Threading</div>
+            <div class="card-meta">
+              <span class="card-badge">5 params</span>
+              <span class="card-badge">3 standards</span>
+              <span class="card-badge">24 items</span>
+            </div>
+          </div>
+          <div class="card" onclick="selectAspect(this, 'pt')" data-name="Pipe Threading" data-search="pipe threading">
+            <div class="card-name">Pipe Threading</div>
+            <div class="card-meta">
+              <span class="card-badge">5 params</span>
+              <span class="card-badge">2 standards</span>
+              <span class="card-badge">8 items</span>
+            </div>
+          </div>
+          <div class="card" onclick="selectAspect(this, 'smd')" data-name="SMD Package" data-search="smd package">
+            <div class="card-name">SMD Package</div>
+            <div class="card-meta">
+              <span class="card-badge">4 params</span>
+              <span class="card-badge">2 standards</span>
+              <span class="card-badge">31 items</span>
+            </div>
+          </div>
+          <div class="card" onclick="selectAspect(this, 'fd')" data-name="Fastener Drive" data-search="fastener drive">
+            <div class="card-name">Fastener Drive</div>
+            <div class="card-meta">
+              <span class="card-badge">3 params</span>
+              <span class="card-badge">3 standards</span>
+              <span class="card-badge">16 items</span>
+            </div>
+          </div>
+          <div class="card" onclick="selectAspect(this, 'wg')" data-name="Wire Gauge" data-search="wire gauge">
+            <div class="card-name">Wire Gauge</div>
+            <div class="card-meta">
+              <span class="card-badge">3 params</span>
+              <span class="card-badge">1 standard</span>
+              <span class="card-badge">5 items</span>
+            </div>
+          </div>
+          <div class="card hidden-card" data-name="Electrical Rating" data-search="electrical rating" data-hidden="true" style="display:none;">
+            <div class="card-name">Electrical Rating <span class="badge-hidden">Hidden</span></div>
+            <div class="card-meta">
+              <span class="card-badge">3 params</span>
+              <span class="card-badge">2 items</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Detail Drawer -->
+      <div class="detail-drawer collapsed" id="aspect-drawer">
+        <div class="drawer-header">
+          <h3 id="drawer-aspect-name">Machine Screw Threading</h3>
+          <button class="drawer-close" onclick="closeAspectDrawer()">&times;</button>
+        </div>
+        <div class="drawer-body">
+          <table class="detail-table">
+            <thead>
+              <tr>
+                <th>Parameter</th>
+                <th>Type</th>
+                <th>Unit</th>
+                <th>Required</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody id="drawer-aspect-params">
+              <!-- filled by JS -->
+            </tbody>
+          </table>
+          <div class="add-row-area">
+            <input type="text" class="add-row-search" placeholder="Add parameter..." id="add-param-input" onfocus="showParamSuggestions()" oninput="filterParamSuggestions(this.value)">
+            <button class="btn-create-inline" onclick="showCreateParamInline()">+ Create new</button>
+          </div>
+          <!-- param suggestions dropdown -->
+          <div id="param-suggestions" style="display:none; padding:0 12px; max-height:120px; overflow-y:auto; margin-top:4px;">
+          </div>
+        </div>
+        <div class="drawer-actions">
+          <button class="btn-hide" id="drawer-hide-btn">Hide aspect</button>
+          <span class="usage-stat" id="drawer-usage">Applied to 24 items</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══════════════ PARAMETERS VIEW ═══════════════ -->
+  <div id="params-view" style="display:none;">
+    <!-- Filter Bar -->
+    <div class="filter-bar">
+      <input type="text" class="search-input" placeholder="Search parameters..." oninput="filterParams(this.value)">
+      <button class="filter-chip" onclick="this.classList.toggle('active')">numeric</button>
+      <button class="filter-chip" onclick="this.classList.toggle('active')">enum</button>
+      <button class="filter-chip" onclick="this.classList.toggle('active')">boolean</button>
+      <button class="filter-chip" onclick="this.classList.toggle('active')">text</button>
+      <span class="result-count" id="param-count">12 parameters</span>
+    </div>
+
+    <div class="content-split">
+      <!-- Grid -->
+      <div class="grid-area">
+        <div class="card-grid" id="param-grid">
+        </div>
+      </div>
+
+      <!-- Detail Drawer -->
+      <div class="detail-drawer collapsed" id="param-drawer">
+        <div class="drawer-header">
+          <h3 id="drawer-param-name">pitch</h3>
+          <button class="drawer-close" onclick="closeParamDrawer()">&times;</button>
+        </div>
+        <div class="drawer-body" id="drawer-param-body">
+          <!-- filled by JS -->
+        </div>
+        <div class="drawer-actions">
+          <button class="btn-hide">Hide parameter</button>
+          <span class="usage-stat" id="drawer-param-usage">Used by 2 aspects</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Create Modal -->
+<div class="create-overlay" id="create-modal" style="display:none;" onclick="if(event.target===this)hideCreateModal()">
+  <div class="create-modal">
+    <h3 id="create-modal-title">New Aspect</h3>
+    <input type="text" placeholder="Name" autofocus id="create-name">
+    <input type="text" placeholder="Description (optional)" id="create-desc">
+    <div id="create-param-fields" style="display:none;">
+      <div class="form-row">
+        <select id="create-type">
+          <option value="numeric">Numeric</option>
+          <option value="text">Text</option>
+          <option value="boolean">Boolean</option>
+          <option value="enum">Enum</option>
+        </select>
+        <input type="text" placeholder="Unit (optional)" id="create-unit">
+      </div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn-cancel" onclick="hideCreateModal()">Cancel</button>
+      <button class="btn-new-top" onclick="hideCreateModal()">Create</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ─── Data ───
+const aspectData = {
+  mst: {
+    name: 'Machine Screw Threading',
+    items: 24,
+    params: [
+      { name: 'pitch', type: 'numeric', unit: 'mm', required: true },
+      { name: 'major_dia', type: 'numeric', unit: 'mm', required: true },
+      { name: 'minor_dia', type: 'numeric', unit: 'mm', required: false },
+      { name: 'thread_angle', type: 'numeric', unit: 'deg', required: false },
+      { name: 'class_of_fit', type: 'enum', unit: null, required: false },
+    ]
+  },
+  pt: {
+    name: 'Pipe Threading',
+    items: 8,
+    params: [
+      { name: 'pitch', type: 'numeric', unit: 'mm', required: true },
+      { name: 'major_dia', type: 'numeric', unit: 'mm', required: true },
+      { name: 'minor_dia', type: 'numeric', unit: 'mm', required: false },
+      { name: 'thread_angle', type: 'numeric', unit: 'deg', required: false },
+      { name: 'tapered', type: 'boolean', unit: null, required: false },
+    ]
+  },
+  smd: {
+    name: 'SMD Package',
+    items: 31,
+    params: [
+      { name: 'length', type: 'numeric', unit: 'mm', required: true },
+      { name: 'width', type: 'numeric', unit: 'mm', required: true },
+      { name: 'height', type: 'numeric', unit: 'mm', required: false },
+      { name: 'lead_count', type: 'numeric', unit: null, required: true },
+    ]
+  },
+  fd: {
+    name: 'Fastener Drive',
+    items: 16,
+    params: [
+      { name: 'drive_type', type: 'enum', unit: null, required: true },
+      { name: 'drive_system', type: 'enum', unit: null, required: true },
+      { name: 'drive_size', type: 'numeric', unit: 'mm', required: false },
+    ]
+  },
+  wg: {
+    name: 'Wire Gauge',
+    items: 5,
+    params: [
+      { name: 'diameter', type: 'numeric', unit: 'mm', required: true },
+      { name: 'cross_section', type: 'numeric', unit: 'mm²', required: false },
+      { name: 'resistance', type: 'numeric', unit: 'Ω/km', required: false },
+    ]
+  }
+};
+
+const allParams = [
+  { name: 'pitch', type: 'numeric', unit: 'mm', aspects: ['Machine Screw Threading', 'Pipe Threading'] },
+  { name: 'major_dia', type: 'numeric', unit: 'mm', aspects: ['Machine Screw Threading', 'Pipe Threading'] },
+  { name: 'minor_dia', type: 'numeric', unit: 'mm', aspects: ['Machine Screw Threading', 'Pipe Threading'] },
+  { name: 'thread_angle', type: 'numeric', unit: 'deg', aspects: ['Machine Screw Threading', 'Pipe Threading'] },
+  { name: 'class_of_fit', type: 'enum', unit: null, aspects: ['Machine Screw Threading'] },
+  { name: 'tapered', type: 'boolean', unit: null, aspects: ['Pipe Threading'] },
+  { name: 'length', type: 'numeric', unit: 'mm', aspects: ['SMD Package'] },
+  { name: 'width', type: 'numeric', unit: 'mm', aspects: ['SMD Package'] },
+  { name: 'height', type: 'numeric', unit: 'mm', aspects: ['SMD Package'] },
+  { name: 'lead_count', type: 'numeric', unit: null, aspects: ['SMD Package'] },
+  { name: 'drive_type', type: 'enum', unit: null, aspects: ['Fastener Drive'] },
+  { name: 'drive_system', type: 'enum', unit: null, aspects: ['Fastener Drive'] },
+  { name: 'drive_size', type: 'numeric', unit: 'mm', aspects: ['Fastener Drive'] },
+  { name: 'diameter', type: 'numeric', unit: 'mm', aspects: ['Wire Gauge'] },
+  { name: 'cross_section', type: 'numeric', unit: 'mm²', aspects: ['Wire Gauge'] },
+  { name: 'resistance', type: 'numeric', unit: 'Ω/km', aspects: ['Wire Gauge'] },
+];
+
+// ─── View Switching ───
+let currentView = 'aspects';
+
+function switchView(view) {
+  currentView = view;
+  document.querySelectorAll('.view-tab').forEach(t => t.classList.remove('active'));
+  event.target.classList.add('active');
+
+  document.getElementById('aspects-view').style.display = view === 'aspects' ? '' : 'none';
+  document.getElementById('params-view').style.display = view === 'params' ? '' : 'none';
+
+  const btn = document.getElementById('btn-create');
+  btn.textContent = view === 'aspects' ? '+ New Aspect' : '+ New Parameter';
+
+  if (view === 'params') buildParamGrid();
+}
+
+// ─── Aspect Grid ───
+let selectedAspectKey = null;
+
+function selectAspect(card, key) {
+  document.querySelectorAll('#aspect-grid .card').forEach(c => c.classList.remove('selected'));
+  card.classList.add('selected');
+  selectedAspectKey = key;
+
+  const data = aspectData[key];
+  document.getElementById('drawer-aspect-name').textContent = data.name;
+  document.getElementById('drawer-usage').textContent = `Applied to ${data.items} items`;
+
+  const tbody = document.getElementById('drawer-aspect-params');
+  tbody.innerHTML = data.params.map(p => `
+    <tr>
+      <td class="name-cell">${p.name}</td>
+      <td class="type-cell"><span class="badge type-${p.type}">${p.type}</span></td>
+      <td class="unit-cell">${p.unit || '—'}</td>
+      <td style="color:${p.required ? '#fbbf24' : '#64748b'}">${p.required ? 'Yes' : '—'}</td>
+      <td class="action-cell"><button class="btn-remove-sm">Remove</button></td>
+    </tr>
+  `).join('');
+
+  const drawer = document.getElementById('aspect-drawer');
+  drawer.classList.remove('collapsed');
+  drawer.classList.add('open');
+}
+
+function closeAspectDrawer() {
+  const drawer = document.getElementById('aspect-drawer');
+  drawer.classList.remove('open');
+  drawer.classList.add('collapsed');
+  document.querySelectorAll('#aspect-grid .card').forEach(c => c.classList.remove('selected'));
+  selectedAspectKey = null;
+}
+
+function filterAspects(q) {
+  const lower = q.toLowerCase();
+  let count = 0;
+  document.querySelectorAll('#aspect-grid .card').forEach(card => {
+    if (card.dataset.hidden === 'true' && !document.querySelector('.filter-chip.active')) return;
+    const match = card.dataset.search.includes(lower);
+    card.style.display = match ? '' : 'none';
+    if (match) count++;
+  });
+  document.getElementById('aspect-count').textContent = `${count} aspects`;
+}
+
+function toggleHiddenFilter(chip) {
+  chip.classList.toggle('active');
+  const show = chip.classList.contains('active');
+  document.querySelectorAll('#aspect-grid .card[data-hidden="true"]').forEach(c => {
+    c.style.display = show ? '' : 'none';
+  });
+  // recount
+  let count = 0;
+  document.querySelectorAll('#aspect-grid .card').forEach(c => {
+    if (c.style.display !== 'none') count++;
+  });
+  document.getElementById('aspect-count').textContent = `${count} aspects`;
+}
+
+// ─── Add param suggestions ───
+function showParamSuggestions() {
+  if (!selectedAspectKey) return;
+  filterParamSuggestions('');
+  document.getElementById('param-suggestions').style.display = 'block';
+}
+
+function filterParamSuggestions(q) {
+  if (!selectedAspectKey) return;
+  const current = aspectData[selectedAspectKey].params.map(p => p.name);
+  const available = allParams.filter(p => !current.includes(p.name));
+  const lower = q.toLowerCase();
+  const filtered = available.filter(p => p.name.includes(lower));
+
+  const container = document.getElementById('param-suggestions');
+  container.innerHTML = filtered.map(p => `
+    <div style="display:flex;align-items:center;justify-content:space-between;padding:5px 8px;border:1px dashed #334155;border-radius:4px;margin-bottom:3px;cursor:pointer;" onmousedown="event.preventDefault()" onclick="this.style.display='none'">
+      <span style="font-size:12px;color:#e2e8f0;">${p.name} <span class="card-badge type-${p.type}" style="font-size:10px;margin-left:4px;">${p.type}</span> ${p.unit ? '<span style="color:#64748b;font-size:10px;margin-left:4px;">'+p.unit+'</span>' : ''}</span>
+      <span style="font-size:11px;color:#ff6600;">+ Add</span>
+    </div>
+  `).join('');
+}
+
+document.getElementById('add-param-input').addEventListener('blur', () => {
+  setTimeout(() => {
+    document.getElementById('param-suggestions').style.display = 'none';
+  }, 200);
+});
+
+// ─── Parameter Grid ───
+function buildParamGrid() {
+  const grid = document.getElementById('param-grid');
+  grid.innerHTML = allParams.map((p, i) => `
+    <div class="card" onclick="selectParam(this, ${i})" data-search="${p.name} ${p.type}">
+      <div class="card-name">${p.name}</div>
+      <div class="card-meta">
+        <span class="card-badge type-${p.type}">${p.type}</span>
+        ${p.unit ? `<span class="card-badge">${p.unit}</span>` : ''}
+        <span class="card-badge">${p.aspects.length} aspect${p.aspects.length !== 1 ? 's' : ''}</span>
+      </div>
+    </div>
+  `).join('');
+  document.getElementById('param-count').textContent = `${allParams.length} parameters`;
+}
+
+function selectParam(card, idx) {
+  document.querySelectorAll('#param-grid .card').forEach(c => c.classList.remove('selected'));
+  card.classList.add('selected');
+
+  const p = allParams[idx];
+  document.getElementById('drawer-param-name').textContent = p.name;
+  document.getElementById('drawer-param-usage').textContent = `Used by ${p.aspects.length} aspect${p.aspects.length !== 1 ? 's' : ''}`;
+
+  const body = document.getElementById('drawer-param-body');
+  body.innerHTML = `
+    <div style="display:grid;grid-template-columns:80px 1fr;gap:6px 12px;font-size:12px;margin-bottom:16px;">
+      <span style="color:#64748b;">Type</span>
+      <span><span class="card-badge type-${p.type}">${p.type}</span></span>
+      <span style="color:#64748b;">Unit</span>
+      <span style="color:#94a3b8;">${p.unit || '—'}</span>
+      <span style="color:#64748b;">Default</span>
+      <span style="color:#94a3b8;">—</span>
+    </div>
+    <div style="font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:0.05em;color:#64748b;margin-bottom:8px;">Used by Aspects</div>
+    <div class="aspect-link-list">
+      ${p.aspects.map(a => `<a class="aspect-link" onclick="goToAspect('${a}')">${a}</a>`).join('')}
+    </div>
+  `;
+
+  const drawer = document.getElementById('param-drawer');
+  drawer.classList.remove('collapsed');
+  drawer.classList.add('open');
+}
+
+function closeParamDrawer() {
+  const drawer = document.getElementById('param-drawer');
+  drawer.classList.remove('open');
+  drawer.classList.add('collapsed');
+  document.querySelectorAll('#param-grid .card').forEach(c => c.classList.remove('selected'));
+}
+
+function filterParams(q) {
+  const lower = q.toLowerCase();
+  let count = 0;
+  document.querySelectorAll('#param-grid .card').forEach(card => {
+    const match = card.dataset.search.includes(lower);
+    card.style.display = match ? '' : 'none';
+    if (match) count++;
+  });
+  document.getElementById('param-count').textContent = `${count} parameters`;
+}
+
+function goToAspect(name) {
+  // Switch to aspects view and select the matching aspect
+  switchView('aspects');
+  document.querySelectorAll('.view-tab').forEach(t => {
+    t.classList.toggle('active', t.textContent === 'Aspects');
+  });
+  // find and click the matching card
+  document.querySelectorAll('#aspect-grid .card').forEach(card => {
+    if (card.dataset.name === name) {
+      const key = Object.keys(aspectData).find(k => aspectData[k].name === name);
+      if (key) selectAspect(card, key);
+    }
+  });
+}
+
+// ─── Create Modal ───
+function showCreateModal() {
+  const isParam = currentView === 'params';
+  document.getElementById('create-modal-title').textContent = isParam ? 'New Parameter' : 'New Aspect';
+  document.getElementById('create-param-fields').style.display = isParam ? '' : 'none';
+  document.getElementById('create-desc').placeholder = isParam ? 'Unit (optional)' : 'Description (optional)';
+  document.getElementById('create-modal').style.display = 'flex';
+  document.getElementById('create-name').focus();
+}
+
+function hideCreateModal() {
+  document.getElementById('create-modal').style.display = 'none';
+  document.getElementById('create-name').value = '';
+  document.getElementById('create-desc').value = '';
+}
+
+function showCreateParamInline() {
+  // For creating a param from within the aspect drawer
+  currentView = 'params'; // temporarily, so modal shows param fields
+  showCreateModal();
+  document.getElementById('create-modal-title').textContent = 'New Parameter (attach to aspect)';
+  currentView = 'aspects'; // restore
+}
+
+// Init
+buildParamGrid();
+</script>
+</body>
+</html>

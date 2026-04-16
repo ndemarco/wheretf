@@ -1,0 +1,1082 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>WhereTF — Grid Prototype v1</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    background: #0f172a;
+    color: #e2e8f0;
+    display: flex;
+    height: 100vh;
+  }
+
+  /* Sidebar — icon rail */
+  .sidebar {
+    width: 56px;
+    background: #1e293b;
+    border-right: 1px solid #334155;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 12px 0;
+    gap: 16px;
+    flex-shrink: 0;
+  }
+  .sidebar-icon {
+    width: 32px;
+    height: 32px;
+    border-radius: 6px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    color: #94a3b8;
+    transition: all 0.15s;
+  }
+  .sidebar-icon:hover, .sidebar-icon.active {
+    background: #334155;
+    color: #ff6600;
+  }
+  .sidebar-icon svg { width: 20px; height: 20px; }
+
+  /* Main area — everything right of sidebar */
+  .main-area {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+  }
+
+  /* Module selector bar — horizontal, across the top */
+  .module-bar {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 16px;
+    background: #1e293b;
+    border-bottom: 1px solid #334155;
+    flex-shrink: 0;
+    overflow-x: auto;
+  }
+  .module-bar-label {
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: #64748b;
+    margin-right: 4px;
+    flex-shrink: 0;
+    cursor: pointer;
+    padding: 4px 6px;
+    border-radius: 4px;
+    transition: color 0.15s;
+  }
+  .module-bar-label:hover { color: #ff6600; }
+  .module-bar-label.all-selected { color: #ff6600; }
+  .module-pills {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+  }
+  .module-tab {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 14px;
+    border-radius: 6px;
+    border: 1px solid #334155;
+    background: transparent;
+    color: #94a3b8;
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.15s;
+    flex-shrink: 0;
+    font-family: inherit;
+  }
+  .module-tab:hover {
+    border-color: #ff6600;
+    color: #e2e8f0;
+  }
+  .module-tab.selected {
+    border-color: #ff6600;
+    background: #1a0f00;
+    color: #ff6600;
+  }
+  .module-tab .tab-name { font-weight: 600; }
+
+  /* Content row — level list + grid + detail */
+  .content-row {
+    flex: 1;
+    display: flex;
+    min-height: 0;
+  }
+
+  /* Level list panel */
+  .level-panel {
+    width: 200px;
+    background: #1e293b;
+    border-right: 1px solid #334155;
+    overflow-y: auto;
+    padding: 12px;
+    flex-shrink: 0;
+  }
+  .level-panel-header {
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: #64748b;
+    font-weight: 600;
+    margin-bottom: 12px;
+    padding: 0 4px;
+  }
+  .module-section {
+    margin-bottom: 16px;
+  }
+  .module-section:last-child { margin-bottom: 0; }
+  .module-section-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    font-size: 12px;
+    font-weight: 600;
+    color: #ff6600;
+    padding: 4px 6px;
+    margin-bottom: 4px;
+    border-radius: 4px;
+    cursor: pointer;
+  }
+  .module-section-header:hover { background: #1a0f00; }
+  .module-section-header .info-icon {
+    width: 16px;
+    height: 16px;
+    color: #64748b;
+    transition: color 0.15s;
+  }
+  .module-section-header:hover .info-icon { color: #ff6600; }
+  .module-section-header .remove-icon {
+    width: 14px;
+    height: 14px;
+    color: #475569;
+    transition: color 0.15s;
+    margin-left: 4px;
+  }
+  .module-section-header:hover .remove-icon { color: #ef4444; }
+  .module-section-header .header-actions {
+    display: flex;
+    align-items: center;
+    gap: 2px;
+  }
+  .level-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 8px 10px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 13px;
+    transition: background 0.1s;
+  }
+  .level-row:hover { background: #334155; }
+  .level-row.selected { background: #334155; color: #ff6600; }
+  .level-row .badge {
+    font-size: 10px;
+    padding: 2px 6px;
+    border-radius: 4px;
+    background: #334155;
+    color: #94a3b8;
+  }
+  .level-row .badge.receptacle { background: #1e3a5f; color: #60a5fa; }
+  .level-row .badge.provisional { background: #422006; color: #fb923c; }
+
+  /* Grid pane */
+  .grid-pane {
+    flex: 1;
+    padding: 24px;
+    overflow: auto;
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+  }
+  .grid-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 16px;
+  }
+  .grid-header h1 { font-size: 18px; font-weight: 600; }
+  .grid-toolbar {
+    display: flex;
+    gap: 8px;
+  }
+  .grid-toolbar button {
+    background: #334155;
+    border: 1px solid #475569;
+    color: #e2e8f0;
+    padding: 6px 12px;
+    border-radius: 6px;
+    font-size: 12px;
+    cursor: pointer;
+    transition: all 0.15s;
+    font-family: inherit;
+  }
+  .grid-toolbar button:hover { border-color: #ff6600; color: #ff6600; }
+
+  .grid-container {
+    flex: 1;
+    display: flex;
+    align-items: flex-start;
+    justify-content: center;
+  }
+
+  /* Tooltip */
+  .tooltip {
+    position: fixed;
+    background: #1e293b;
+    border: 1px solid #475569;
+    border-radius: 8px;
+    padding: 10px 14px;
+    font-size: 12px;
+    pointer-events: none;
+    z-index: 100;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.4);
+    max-width: 240px;
+    display: none;
+  }
+  .tooltip .tt-label { font-weight: 600; color: #ff6600; margin-bottom: 4px; }
+  .tooltip .tt-item { color: #e2e8f0; margin-bottom: 2px; }
+  .tooltip .tt-type { color: #94a3b8; font-size: 11px; }
+  .tooltip .tt-params { color: #64748b; font-size: 11px; margin-top: 4px; }
+  .tooltip .tt-costored {
+    margin-top: 4px;
+    padding-top: 4px;
+    border-top: 1px solid #334155;
+    color: #fbbf24;
+    font-size: 11px;
+  }
+
+  /* Detail panel — flex member, compresses grid */
+  .detail-panel {
+    width: 0;
+    min-width: 0;
+    background: #1e293b;
+    border-left: 1px solid transparent;
+    padding: 0;
+    overflow: hidden;
+    transition: width 0.2s ease, padding 0.2s ease, border-color 0.2s ease;
+    overflow-y: auto;
+    flex-shrink: 0;
+    position: relative;
+  }
+  .detail-panel.open {
+    width: 320px;
+    min-width: 320px;
+    padding: 20px;
+    border-left-color: #334155;
+  }
+  .detail-panel h3 { font-size: 15px; font-weight: 600; margin-bottom: 12px; white-space: nowrap; }
+  .detail-panel .close-btn {
+    position: absolute;
+    top: 16px;
+    right: 16px;
+    background: none;
+    border: none;
+    color: #64748b;
+    cursor: pointer;
+    font-size: 18px;
+  }
+  .detail-field { margin-bottom: 10px; }
+  .detail-field .label { font-size: 11px; color: #64748b; text-transform: uppercase; letter-spacing: 0.05em; white-space: nowrap; }
+  .detail-field .value { font-size: 13px; color: #e2e8f0; margin-top: 2px; }
+
+  /* Provisional banner */
+  .provisional-banner {
+    background: #422006;
+    border: 1px solid #92400e;
+    border-radius: 8px;
+    padding: 10px 14px;
+    margin-bottom: 16px;
+    font-size: 12px;
+  }
+  .provisional-banner .title { font-weight: 600; color: #fb923c; margin-bottom: 4px; }
+  .provisional-banner .prov-item {
+    color: #fde68a;
+    padding: 2px 0;
+  }
+
+  /* Legend */
+  .legend {
+    display: flex;
+    gap: 16px;
+    margin-top: 16px;
+    font-size: 11px;
+    color: #64748b;
+  }
+  .legend-item {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .legend-swatch {
+    width: 16px;
+    height: 16px;
+    border-radius: 3px;
+    border: 1px solid #475569;
+  }
+</style>
+</head>
+<body>
+
+<!-- Sidebar -->
+<div class="sidebar">
+  <div class="sidebar-icon active" title="Modules">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
+  </div>
+  <div class="sidebar-icon" title="Items">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"/></svg>
+  </div>
+  <div class="sidebar-icon" title="Search">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+  </div>
+  <div class="sidebar-icon" title="Templates">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9"/></svg>
+  </div>
+  <div class="sidebar-icon" title="Activity">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 8v4l3 3"/><circle cx="12" cy="12" r="9"/></svg>
+  </div>
+</div>
+
+<!-- Main area -->
+<div class="main-area">
+
+  <!-- Module selector bar -->
+  <div class="module-bar">
+    <span class="module-bar-label" onclick="toggleAllModules()" title="Select all / deselect all">Modules</span>
+    <div class="module-pills">
+      <button class="module-tab selected" onclick="toggleModule(this, 'muse')">MUSE</button>
+      <button class="module-tab" onclick="toggleModule(this, 'alex')">ALEX</button>
+      <button class="module-tab" onclick="toggleModule(this, 'neon')">NEON</button>
+      <button class="module-tab" onclick="toggleModule(this, 'akro')">AKRO</button>
+    </div>
+  </div>
+
+  <!-- Content row -->
+  <div class="content-row">
+
+    <!-- Level list -->
+    <div class="level-panel">
+      <div class="level-panel-header">Levels</div>
+      <div id="levelList"></div>
+    </div>
+
+    <!-- Grid Pane -->
+    <div class="grid-pane">
+      <div class="grid-header">
+        <h1>MUSE / Level 3</h1>
+        <div class="grid-toolbar">
+          <button>Zoom Fit</button>
+          <button>Filter</button>
+          <button>Add Insert</button>
+        </div>
+      </div>
+
+      <!-- Provisional banner -->
+      <div class="provisional-banner" style="display: none;" id="provisionalBanner">
+        <div class="title">Unplaced items at this level</div>
+        <div class="prov-item">· 100Ω 0805 Resistors</div>
+        <div class="prov-item">· Assorted heat shrink</div>
+      </div>
+
+      <div class="grid-container">
+        <svg id="grid" width="780" height="520" viewBox="0 0 780 520"></svg>
+      </div>
+
+      <div class="legend">
+        <div class="legend-item"><div class="legend-swatch" style="background: transparent; border-color: #475569;"></div> Empty</div>
+        <div class="legend-item"><div class="legend-swatch" style="background: #1e3a5f;"></div> Occupied</div>
+        <div class="legend-item"><div class="legend-swatch" style="background: repeating-linear-gradient(45deg, #422006, #422006 2px, transparent 2px, transparent 6px);"></div> Provisional</div>
+        <div class="legend-item"><div class="legend-swatch" style="background: repeating-linear-gradient(45deg, #7f1d1d, #7f1d1d 2px, #1e293b 2px, #1e293b 6px);"></div> Disabled</div>
+        <div class="legend-item"><div class="legend-swatch" style="background: #1e3a5f; border-color: #fbbf24; border-width: 2px;"></div> Co-stored</div>
+        <div class="legend-item"><div class="legend-swatch" style="background: #1e3a5f; border-color: #ff6600; border-width: 2px;"></div> Search result</div>
+      </div>
+    </div>
+
+    <!-- Detail Panel -->
+    <div class="detail-panel" id="detailPanel">
+      <button class="close-btn" onclick="closeDetail()">×</button>
+      <h3 id="detailTitle"></h3>
+      <div id="detailContent"></div>
+    </div>
+
+  </div><!-- /content-row -->
+</div><!-- /main-area -->
+
+<!-- Tooltip -->
+<div class="tooltip" id="tooltip">
+  <div class="tt-label" id="ttLabel"></div>
+  <div class="tt-item" id="ttItem"></div>
+  <div class="tt-type" id="ttType"></div>
+  <div class="tt-params" id="ttParams"></div>
+  <div class="tt-costored" id="ttCostored"></div>
+</div>
+
+<script>
+// Grid data — Plano 3600: 4 rows × 6 columns
+const ROWS = 4;
+const COLS = 6;
+const CELL_W = 110;
+const CELL_H = 100;
+const MARGIN_LEFT = 40;
+const MARGIN_TOP = 40;
+const GAP = 4;
+const RADIUS = 4;
+
+const rowLabels = ['A', 'B', 'C', 'D'];
+const colLabels = ['1', '2', '3', '4', '5', '6'];
+
+// Cell data: each cell has a state and optional item info
+const cells = {
+  'A1': { state: 'occupied', item: '10kΩ 0805 Resistor', category: 'passive', params: 'R=10kΩ, Size=0805, Tol=±5%' },
+  'A2': { state: 'occupied', item: '4.7kΩ 0805 Resistor', category: 'passive', params: 'R=4.7kΩ, Size=0805, Tol=±1%' },
+  'A3': { state: 'occupied', item: '100nF 0805 Capacitor', category: 'passive', params: 'C=100nF, Size=0805, V=50V' },
+  'A4': { state: 'empty' },
+  'A5': { state: 'disabled', reason: 'Cracked divider wall' },
+  'A6': { state: 'empty' },
+  'B1': { state: 'occupied', item: '0805 Red LED', category: 'active', params: 'Color=Red, Vf=2.0V, If=20mA' },
+  'B2': { state: 'occupied', item: '0805 Green LED', category: 'active', params: 'Color=Green, Vf=3.2V, If=20mA' },
+  'B3': { state: 'empty' },
+  'B4': { state: 'costored', items: ['M3x10 SHCS Black Oxide', 'M3x10 SHCS Bright Zinc'], category: 'fastener', params: 'Thread=M3, L=10mm, Drive=Hex', reason: 'Finish obvious at a glance' },
+  'B5': { state: 'occupied', item: 'M3x16 SHCS', category: 'fastener', params: 'Thread=M3, L=16mm, Drive=Hex' },
+  'B6': { state: 'empty' },
+  'C1': { state: 'search', item: 'M4x12 BHCS', category: 'fastener', params: 'Thread=M4, L=12mm, Drive=Hex', resultNum: 1 },
+  'C2': { state: 'empty' },
+  'C3': { state: 'merged_origin', item: 'Arduino Nano clones (bulk)', category: 'dev-board', params: 'MCU=ATmega328P', mergedWith: ['C4'] },
+  // C4 is alias for C3
+  'C5': { state: 'occupied', item: 'USB-C Breakout Board', category: 'dev-board', params: 'Connector=USB-C, Pins=24' },
+  'C6': { state: 'search', item: 'M4x20 BHCS', category: 'fastener', params: 'Thread=M4, L=20mm, Drive=Hex', resultNum: 2 },
+  'D1': { state: 'empty' },
+  'D2': { state: 'empty' },
+  'D3': { state: 'occupied', item: 'Dupont Jumper Wires', category: 'wire', params: 'Type=M-F, L=200mm' },
+  'D4': { state: 'empty' },
+  'D5': { state: 'occupied', item: 'Heat Shrink Assortment', category: 'consumable', params: 'Sizes=1.5-10mm, Colors=Mixed' },
+  'D6': { state: 'empty' },
+};
+
+// Category colors
+const categoryColors = {
+  'passive': '#3b82f6',    // blue
+  'active': '#22c55e',     // green
+  'fastener': '#a855f7',   // purple
+  'dev-board': '#06b6d4',  // cyan
+  'wire': '#f59e0b',       // amber
+  'consumable': '#ec4899', // pink
+};
+
+const svg = document.getElementById('grid');
+const tooltip = document.getElementById('tooltip');
+
+function createDefs() {
+  const defs = document.createElementNS('http://www.w3.org/2000/svg', 'defs');
+
+  // Disabled hatch pattern
+  const disabledPattern = document.createElementNS('http://www.w3.org/2000/svg', 'pattern');
+  disabledPattern.setAttribute('id', 'disabled-hatch');
+  disabledPattern.setAttribute('patternUnits', 'userSpaceOnUse');
+  disabledPattern.setAttribute('width', '8');
+  disabledPattern.setAttribute('height', '8');
+  disabledPattern.setAttribute('patternTransform', 'rotate(45)');
+  const line1 = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+  line1.setAttribute('x1', '0'); line1.setAttribute('y1', '0');
+  line1.setAttribute('x2', '0'); line1.setAttribute('y2', '8');
+  line1.setAttribute('stroke', '#7f1d1d'); line1.setAttribute('stroke-width', '3');
+  disabledPattern.appendChild(line1);
+  defs.appendChild(disabledPattern);
+
+  // Provisional dot pattern
+  const provPattern = document.createElementNS('http://www.w3.org/2000/svg', 'pattern');
+  provPattern.setAttribute('id', 'provisional-dots');
+  provPattern.setAttribute('patternUnits', 'userSpaceOnUse');
+  provPattern.setAttribute('width', '10');
+  provPattern.setAttribute('height', '10');
+  const dot = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+  dot.setAttribute('cx', '5'); dot.setAttribute('cy', '5'); dot.setAttribute('r', '1.5');
+  dot.setAttribute('fill', '#92400e');
+  provPattern.appendChild(dot);
+  defs.appendChild(provPattern);
+
+  svg.appendChild(defs);
+}
+
+function drawGrid() {
+  svg.innerHTML = '';
+  createDefs();
+
+  // Column labels
+  for (let c = 0; c < COLS; c++) {
+    const x = MARGIN_LEFT + c * (CELL_W + GAP) + CELL_W / 2;
+    const text = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+    text.setAttribute('x', x);
+    text.setAttribute('y', 24);
+    text.setAttribute('text-anchor', 'middle');
+    text.setAttribute('fill', '#64748b');
+    text.setAttribute('font-size', '13');
+    text.setAttribute('font-family', 'inherit');
+    text.textContent = colLabels[c];
+    svg.appendChild(text);
+  }
+
+  // Row labels
+  for (let r = 0; r < ROWS; r++) {
+    const y = MARGIN_TOP + r * (CELL_H + GAP) + CELL_H / 2 + 5;
+    const text = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+    text.setAttribute('x', 16);
+    text.setAttribute('y', y);
+    text.setAttribute('text-anchor', 'middle');
+    text.setAttribute('fill', '#64748b');
+    text.setAttribute('font-size', '13');
+    text.setAttribute('font-family', 'inherit');
+    text.textContent = rowLabels[r];
+    svg.appendChild(text);
+  }
+
+  // Cells
+  for (let r = 0; r < ROWS; r++) {
+    for (let c = 0; c < COLS; c++) {
+      const key = rowLabels[r] + colLabels[c];
+      const cell = cells[key];
+      if (!cell) continue;
+
+      // Skip C4 (merged into C3)
+      if (key === 'C4') continue;
+
+      const x = MARGIN_LEFT + c * (CELL_W + GAP);
+      const y = MARGIN_TOP + r * (CELL_H + GAP);
+
+      // Determine cell width (merged cells span)
+      let cellW = CELL_W;
+      if (cell.state === 'merged_origin') {
+        cellW = CELL_W * 2 + GAP;
+      }
+
+      const g = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+      g.setAttribute('data-key', key);
+      g.style.cursor = 'pointer';
+
+      // Background rect
+      const bg = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+      bg.setAttribute('x', x);
+      bg.setAttribute('y', y);
+      bg.setAttribute('width', cellW);
+      bg.setAttribute('height', CELL_H);
+      bg.setAttribute('rx', RADIUS);
+
+      // Fill based on state
+      switch (cell.state) {
+        case 'empty':
+          bg.setAttribute('fill', 'transparent');
+          bg.setAttribute('stroke', '#334155');
+          bg.setAttribute('stroke-width', '1');
+          break;
+        case 'occupied':
+        case 'merged_origin':
+          bg.setAttribute('fill', '#0f2847');
+          bg.setAttribute('stroke', categoryColors[cell.category] || '#475569');
+          bg.setAttribute('stroke-width', '2');
+          break;
+        case 'costored':
+          bg.setAttribute('fill', '#0f2847');
+          bg.setAttribute('stroke', '#fbbf24');
+          bg.setAttribute('stroke-width', '2');
+          break;
+        case 'search':
+          bg.setAttribute('fill', '#1a0f00');
+          bg.setAttribute('stroke', '#ff6600');
+          bg.setAttribute('stroke-width', '2.5');
+          break;
+        case 'disabled':
+          bg.setAttribute('fill', 'url(#disabled-hatch)');
+          bg.setAttribute('stroke', '#7f1d1d');
+          bg.setAttribute('stroke-width', '1.5');
+          break;
+      }
+      g.appendChild(bg);
+
+      // Category color strip (left inner border)
+      if (cell.state === 'occupied' || cell.state === 'merged_origin' || cell.state === 'search' || cell.state === 'costored') {
+        const strip = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+        strip.setAttribute('x', x + 3);
+        strip.setAttribute('y', y + 3);
+        strip.setAttribute('width', 4);
+        strip.setAttribute('height', CELL_H - 6);
+        strip.setAttribute('rx', 2);
+        strip.setAttribute('fill', categoryColors[cell.category] || '#475569');
+        g.appendChild(strip);
+      }
+
+      // Position label (top-left)
+      const posLabel = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+      posLabel.setAttribute('x', x + 14);
+      posLabel.setAttribute('y', y + 16);
+      posLabel.setAttribute('fill', '#475569');
+      posLabel.setAttribute('font-size', '10');
+      posLabel.setAttribute('font-family', 'inherit');
+      posLabel.textContent = key;
+      g.appendChild(posLabel);
+
+      // Item name
+      if (cell.item) {
+        const itemText = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+        itemText.setAttribute('x', x + 14);
+        itemText.setAttribute('y', y + 38);
+        itemText.setAttribute('fill', '#e2e8f0');
+        itemText.setAttribute('font-size', '11');
+        itemText.setAttribute('font-weight', '500');
+        itemText.setAttribute('font-family', 'inherit');
+        // Truncate
+        const maxChars = cell.state === 'merged_origin' ? 28 : 12;
+        itemText.textContent = cell.item.length > maxChars ? cell.item.slice(0, maxChars) + '…' : cell.item;
+        g.appendChild(itemText);
+      }
+
+      // Co-stored indicator: split diagonal line + second item
+      if (cell.state === 'costored' && cell.items) {
+        const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+        line.setAttribute('x1', x + 14);
+        line.setAttribute('y1', y + 55);
+        line.setAttribute('x2', x + cellW - 10);
+        line.setAttribute('y2', y + 55);
+        line.setAttribute('stroke', '#fbbf24');
+        line.setAttribute('stroke-width', '0.5');
+        line.setAttribute('stroke-dasharray', '3,2');
+        g.appendChild(line);
+
+        const item2 = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+        item2.setAttribute('x', x + 14);
+        item2.setAttribute('y', y + 70);
+        item2.setAttribute('fill', '#fbbf24');
+        item2.setAttribute('font-size', '10');
+        item2.setAttribute('font-family', 'inherit');
+        const name2 = cell.items[1];
+        item2.textContent = name2.length > 14 ? name2.slice(0, 14) + '…' : name2;
+        g.appendChild(item2);
+
+        // Count badge
+        const badge = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+        badge.setAttribute('x', x + cellW - 24);
+        badge.setAttribute('y', y + 6);
+        badge.setAttribute('width', 18);
+        badge.setAttribute('height', 16);
+        badge.setAttribute('rx', 4);
+        badge.setAttribute('fill', '#422006');
+        g.appendChild(badge);
+        const badgeText = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+        badgeText.setAttribute('x', x + cellW - 15);
+        badgeText.setAttribute('y', y + 18);
+        badgeText.setAttribute('text-anchor', 'middle');
+        badgeText.setAttribute('fill', '#fbbf24');
+        badgeText.setAttribute('font-size', '10');
+        badgeText.setAttribute('font-weight', '600');
+        badgeText.setAttribute('font-family', 'inherit');
+        badgeText.textContent = '2';
+        g.appendChild(badgeText);
+      }
+
+      // Search result badge
+      if (cell.state === 'search') {
+        const badgeSize = 22;
+        const bx = x + cellW - badgeSize - 6;
+        const by = y + 6;
+        const badge = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+        badge.setAttribute('x', bx);
+        badge.setAttribute('y', by);
+        badge.setAttribute('width', badgeSize);
+        badge.setAttribute('height', badgeSize);
+        badge.setAttribute('rx', badgeSize / 2);
+        badge.setAttribute('fill', '#ff6600');
+        g.appendChild(badge);
+        const badgeText = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+        badgeText.setAttribute('x', bx + badgeSize / 2);
+        badgeText.setAttribute('y', by + badgeSize / 2 + 4);
+        badgeText.setAttribute('text-anchor', 'middle');
+        badgeText.setAttribute('fill', '#fff');
+        badgeText.setAttribute('font-size', '12');
+        badgeText.setAttribute('font-weight', '700');
+        badgeText.setAttribute('font-family', 'inherit');
+        badgeText.textContent = cell.resultNum;
+        g.appendChild(badgeText);
+      }
+
+      // Disabled X or reason
+      if (cell.state === 'disabled') {
+        const disText = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+        disText.setAttribute('x', x + cellW / 2);
+        disText.setAttribute('y', y + CELL_H / 2 + 4);
+        disText.setAttribute('text-anchor', 'middle');
+        disText.setAttribute('fill', '#991b1b');
+        disText.setAttribute('font-size', '11');
+        disText.setAttribute('font-family', 'inherit');
+        disText.textContent = 'DISABLED';
+        g.appendChild(disText);
+      }
+
+      // Merged indicator
+      if (cell.state === 'merged_origin') {
+        const mergeLabel = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+        mergeLabel.setAttribute('x', x + cellW - 10);
+        mergeLabel.setAttribute('y', y + 16);
+        mergeLabel.setAttribute('text-anchor', 'end');
+        mergeLabel.setAttribute('fill', '#475569');
+        mergeLabel.setAttribute('font-size', '9');
+        mergeLabel.setAttribute('font-family', 'inherit');
+        mergeLabel.textContent = key + '+' + cell.mergedWith[0];
+        g.appendChild(mergeLabel);
+      }
+
+      // Category dot (bottom right)
+      if (cell.category && cell.state !== 'disabled') {
+        const dotR = 4;
+        const dot = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+        dot.setAttribute('cx', x + cellW - 12);
+        dot.setAttribute('cy', y + CELL_H - 12);
+        dot.setAttribute('r', dotR);
+        dot.setAttribute('fill', categoryColors[cell.category]);
+        dot.setAttribute('opacity', '0.7');
+        g.appendChild(dot);
+      }
+
+      // Hover events
+      g.addEventListener('mouseenter', (e) => showTooltip(e, key, cell));
+      g.addEventListener('mousemove', (e) => moveTooltip(e));
+      g.addEventListener('mouseleave', hideTooltip);
+      g.addEventListener('click', () => showDetail(key, cell));
+
+      svg.appendChild(g);
+    }
+  }
+}
+
+function showTooltip(e, key, cell) {
+  const tt = document.getElementById('tooltip');
+  document.getElementById('ttLabel').textContent = 'MUSE 3 / ' + key;
+
+  if (cell.state === 'empty') {
+    document.getElementById('ttItem').textContent = 'Empty';
+    document.getElementById('ttType').textContent = '';
+    document.getElementById('ttParams').textContent = '';
+    document.getElementById('ttCostored').textContent = '';
+  } else if (cell.state === 'disabled') {
+    document.getElementById('ttItem').textContent = 'Disabled';
+    document.getElementById('ttType').textContent = cell.reason || '';
+    document.getElementById('ttParams').textContent = '';
+    document.getElementById('ttCostored').textContent = '';
+  } else if (cell.state === 'costored') {
+    document.getElementById('ttItem').textContent = cell.items[0];
+    document.getElementById('ttType').textContent = 'Placed · Co-stored';
+    document.getElementById('ttParams').textContent = cell.params;
+    document.getElementById('ttCostored').textContent = '+ ' + cell.items[1] + '\n' + cell.reason;
+  } else {
+    document.getElementById('ttItem').textContent = cell.item;
+    document.getElementById('ttType').textContent = cell.state === 'search' ? 'Placed · Search result #' + cell.resultNum : 'Placed';
+    document.getElementById('ttParams').textContent = cell.params || '';
+    document.getElementById('ttCostored').textContent = '';
+  }
+
+  tt.style.display = 'block';
+  moveTooltip(e);
+}
+
+function moveTooltip(e) {
+  const tt = document.getElementById('tooltip');
+  const pad = 12;
+  let x = e.clientX + pad;
+  let y = e.clientY + pad;
+  // Keep on screen
+  const rect = tt.getBoundingClientRect();
+  if (x + rect.width > window.innerWidth) x = e.clientX - rect.width - pad;
+  if (y + rect.height > window.innerHeight) y = e.clientY - rect.height - pad;
+  tt.style.left = x + 'px';
+  tt.style.top = y + 'px';
+}
+
+function hideTooltip() {
+  document.getElementById('tooltip').style.display = 'none';
+}
+
+function showDetail(key, cell) {
+  const panel = document.getElementById('detailPanel');
+  document.getElementById('detailTitle').textContent = 'MUSE 3 / ' + key;
+
+  let html = '';
+  if (cell.state === 'empty') {
+    html = `
+      <div class="detail-field"><div class="label">Status</div><div class="value">Empty — available for assignment</div></div>
+      <div class="detail-field"><div class="label">Actions</div><div class="value" style="margin-top:8px"><button style="background:#ff6600;color:#fff;border:none;padding:8px 16px;border-radius:6px;cursor:pointer">Assign Item</button></div></div>
+    `;
+  } else if (cell.state === 'disabled') {
+    html = `
+      <div class="detail-field"><div class="label">Status</div><div class="value" style="color:#ef4444">Disabled</div></div>
+      <div class="detail-field"><div class="label">Reason</div><div class="value">${cell.reason}</div></div>
+      <div class="detail-field"><div class="label">Actions</div><div class="value" style="margin-top:8px"><button style="background:#334155;color:#e2e8f0;border:1px solid #475569;padding:8px 16px;border-radius:6px;cursor:pointer">Enable</button></div></div>
+    `;
+  } else if (cell.state === 'costored') {
+    html = `
+      <div class="detail-field"><div class="label">Status</div><div class="value" style="color:#fbbf24">Co-stored (${cell.items.length} items)</div></div>
+      ${cell.items.map((item, i) => `
+        <div class="detail-field"><div class="label">Item ${i+1}</div><div class="value">${item}</div></div>
+      `).join('')}
+      <div class="detail-field"><div class="label">Parameters</div><div class="value">${cell.params}</div></div>
+      <div class="detail-field"><div class="label">Co-storability Reason</div><div class="value">${cell.reason}</div></div>
+    `;
+  } else {
+    html = `
+      <div class="detail-field"><div class="label">Item</div><div class="value">${cell.item}</div></div>
+      <div class="detail-field"><div class="label">Category</div><div class="value" style="color:${categoryColors[cell.category]}">${cell.category}</div></div>
+      <div class="detail-field"><div class="label">Parameters</div><div class="value">${cell.params}</div></div>
+      <div class="detail-field"><div class="label">Assignment</div><div class="value">Placed</div></div>
+      ${cell.state === 'merged_origin' ? `<div class="detail-field"><div class="label">Merged</div><div class="value">${key} + ${cell.mergedWith.join(', ')}</div></div>` : ''}
+      <div class="detail-field"><div class="label">Actions</div><div class="value" style="margin-top:8px;display:flex;gap:8px;flex-wrap:wrap">
+        <button style="background:#334155;color:#e2e8f0;border:1px solid #475569;padding:6px 12px;border-radius:6px;cursor:pointer;font-size:12px">Move</button>
+        <button style="background:#334155;color:#e2e8f0;border:1px solid #475569;padding:6px 12px;border-radius:6px;cursor:pointer;font-size:12px">Unassign</button>
+      </div></div>
+    `;
+  }
+
+  document.getElementById('detailContent').innerHTML = html;
+  panel.classList.add('open');
+}
+
+function closeDetail() {
+  document.getElementById('detailPanel').classList.remove('open');
+}
+
+// Module data
+const moduleData = {
+  muse: {
+    name: 'MUSE',
+    dimLabel: 'Level',
+    levels: [
+      { n: 1, badge: 'plano-3600', badgeClass: 'receptacle' },
+      { n: 2, badge: 'plano-3600', badgeClass: 'receptacle' },
+      { n: 3, badge: 'plano-3600', badgeClass: 'receptacle' },
+      { n: 4, badge: 'plano-3600', badgeClass: 'receptacle' },
+      { n: 5, badge: 'plano-3600', badgeClass: 'receptacle' },
+      { n: 6, badge: 'empty', badgeClass: '' },
+      { n: 7, badge: 'plano-3600', badgeClass: 'receptacle' },
+      { n: 8, badge: '2 unplaced', badgeClass: 'provisional' },
+      { n: 9, badge: 'plano-3600', badgeClass: 'receptacle' },
+      { n: 10, badge: 'plano-3600', badgeClass: 'receptacle' },
+      { n: 11, badge: 'empty', badgeClass: '' },
+    ]
+  },
+  alex: {
+    name: 'ALEX',
+    dimLabel: 'Drawer',
+    levels: [
+      { n: 1, badge: 'plano-3600', badgeClass: 'receptacle' },
+      { n: 2, badge: 'plano-3600', badgeClass: 'receptacle' },
+      { n: 3, badge: 'empty', badgeClass: '' },
+      { n: 4, badge: 'plano-3600', badgeClass: 'receptacle' },
+      { n: 5, badge: 'plano-3600', badgeClass: 'receptacle' },
+      { n: 6, badge: '1 unplaced', badgeClass: 'provisional' },
+      { n: 7, badge: 'plano-3600', badgeClass: 'receptacle' },
+      { n: 8, badge: 'plano-3600', badgeClass: 'receptacle' },
+      { n: 9, badge: 'plano-3600', badgeClass: 'receptacle' },
+    ]
+  },
+  neon: {
+    name: 'NEON',
+    dimLabel: 'Drawer',
+    levels: [
+      { n: 1, badge: 'small-parts', badgeClass: 'receptacle' },
+      { n: 2, badge: 'small-parts', badgeClass: 'receptacle' },
+      { n: 3, badge: 'small-parts', badgeClass: 'receptacle' },
+      { n: 4, badge: 'empty', badgeClass: '' },
+      { n: 5, badge: 'small-parts', badgeClass: 'receptacle' },
+      { n: 6, badge: 'small-parts', badgeClass: 'receptacle' },
+      { n: 7, badge: 'empty', badgeClass: '' },
+      { n: 8, badge: 'small-parts', badgeClass: 'receptacle' },
+      { n: 9, badge: 'small-parts', badgeClass: 'receptacle' },
+      { n: 10, badge: 'small-parts', badgeClass: 'receptacle' },
+    ]
+  },
+  akro: {
+    name: 'AKRO',
+    dimLabel: 'Drawer',
+    levels: [
+      { n: 1, badge: 'akro-bin', badgeClass: 'receptacle' },
+      { n: 2, badge: 'akro-bin', badgeClass: 'receptacle' },
+      { n: 3, badge: 'akro-bin', badgeClass: 'receptacle' },
+      { n: 4, badge: 'akro-bin', badgeClass: 'receptacle' },
+      { n: 5, badge: 'akro-bin', badgeClass: 'receptacle' },
+      { n: 6, badge: 'akro-bin', badgeClass: 'receptacle' },
+      { n: 7, badge: 'akro-bin', badgeClass: 'receptacle' },
+      { n: 8, badge: 'akro-bin', badgeClass: 'receptacle' },
+      { n: 9, badge: 'empty', badgeClass: '' },
+      { n: 10, badge: 'akro-bin', badgeClass: 'receptacle' },
+      { n: 11, badge: 'akro-bin', badgeClass: 'receptacle' },
+      { n: 12, badge: 'akro-bin', badgeClass: 'receptacle' },
+      { n: 13, badge: 'akro-bin', badgeClass: 'receptacle' },
+      { n: 14, badge: 'akro-bin', badgeClass: 'receptacle' },
+      { n: 15, badge: 'akro-bin', badgeClass: 'receptacle' },
+      { n: 16, badge: 'akro-bin', badgeClass: 'receptacle' },
+    ]
+  }
+};
+
+let selectedModules = new Set(['muse']);
+let selectedLevel = { module: 'muse', level: 3 };
+
+function toggleModule(el, name) {
+  if (selectedModules.has(name)) {
+    if (selectedModules.size > 1) {
+      selectedModules.delete(name);
+      el.classList.remove('selected');
+    }
+  } else {
+    selectedModules.add(name);
+    el.classList.add('selected');
+  }
+  updateModulesLabel();
+  renderLevelList();
+}
+
+function renderLevelList() {
+  const container = document.getElementById('levelList');
+  container.innerHTML = '';
+
+  for (const modKey of selectedModules) {
+    const mod = moduleData[modKey];
+    if (!mod) continue;
+
+    const section = document.createElement('div');
+    section.className = 'module-section';
+
+    // Section header with info + remove icons
+    const header = document.createElement('div');
+    header.className = 'module-section-header';
+    header.innerHTML = `
+      <span>${mod.name} — ${mod.dimLabel}s</span>
+      <span class="header-actions">
+        <svg class="info-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/>
+        </svg>
+        <svg class="remove-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M18 6L6 18"/><path d="M6 6l12 12"/>
+        </svg>
+      </span>
+    `;
+    header.querySelector('.info-icon').addEventListener('click', (e) => {
+      e.stopPropagation();
+      showModuleDetail(modKey);
+    });
+    header.querySelector('.remove-icon').addEventListener('click', (e) => {
+      e.stopPropagation();
+      removeModuleFromList(modKey);
+    });
+    section.appendChild(header);
+
+    // Level rows
+    for (const level of mod.levels) {
+      const row = document.createElement('div');
+      row.className = 'level-row';
+      if (selectedLevel.module === modKey && selectedLevel.level === level.n) {
+        row.classList.add('selected');
+      }
+      row.innerHTML = `
+        <span>${mod.dimLabel} ${level.n}</span>
+        <span class="badge ${level.badgeClass}">${level.badge}</span>
+      `;
+      row.addEventListener('click', () => {
+        selectedLevel = { module: modKey, level: level.n };
+        document.querySelectorAll('.level-row').forEach(r => r.classList.remove('selected'));
+        row.classList.add('selected');
+        document.querySelector('.grid-header h1').textContent = `${mod.name} / ${mod.dimLabel} ${level.n}`;
+      });
+      section.appendChild(row);
+    }
+
+    container.appendChild(section);
+  }
+}
+
+function removeModuleFromList(modKey) {
+  if (selectedModules.size <= 1) return;
+  selectedModules.delete(modKey);
+  // Update pill state
+  document.querySelectorAll('.module-tab').forEach(tab => {
+    if (tab.textContent === moduleData[modKey].name) {
+      tab.classList.remove('selected');
+    }
+  });
+  updateModulesLabel();
+  renderLevelList();
+}
+
+function toggleAllModules() {
+  const allKeys = Object.keys(moduleData);
+  const allSelected = allKeys.every(k => selectedModules.has(k));
+
+  if (allSelected) {
+    // Deselect all except first
+    selectedModules.clear();
+    selectedModules.add(allKeys[0]);
+  } else {
+    // Select all
+    allKeys.forEach(k => selectedModules.add(k));
+  }
+
+  // Sync pill states
+  document.querySelectorAll('.module-tab').forEach(tab => {
+    const name = tab.textContent;
+    const key = Object.keys(moduleData).find(k => moduleData[k].name === name);
+    tab.classList.toggle('selected', selectedModules.has(key));
+  });
+  updateModulesLabel();
+  renderLevelList();
+}
+
+function updateModulesLabel() {
+  const label = document.querySelector('.module-bar-label');
+  const allSelected = Object.keys(moduleData).every(k => selectedModules.has(k));
+  label.classList.toggle('all-selected', allSelected);
+}
+
+function showModuleDetail(modKey) {
+  const mod = moduleData[modKey];
+  const panel = document.getElementById('detailPanel');
+  document.getElementById('detailTitle').textContent = mod.name;
+
+  const totalLevels = mod.levels.length;
+  const emptyLevels = mod.levels.filter(l => l.badgeClass === '').length;
+  const provisionalLevels = mod.levels.filter(l => l.badgeClass === 'provisional').length;
+
+  document.getElementById('detailContent').innerHTML = `
+    <div class="detail-field"><div class="label">Module</div><div class="value">${mod.name}</div></div>
+    <div class="detail-field"><div class="label">Dimension</div><div class="value">${totalLevels} ${mod.dimLabel.toLowerCase()}s</div></div>
+    <div class="detail-field"><div class="label">Empty</div><div class="value">${emptyLevels} ${mod.dimLabel.toLowerCase()}s</div></div>
+    ${provisionalLevels ? `<div class="detail-field"><div class="label">Unplaced</div><div class="value" style="color:#fb923c">${provisionalLevels} ${mod.dimLabel.toLowerCase()}s with unplaced items</div></div>` : ''}
+    <div class="detail-field"><div class="label">Actions</div><div class="value" style="margin-top:8px;display:flex;gap:8px;flex-wrap:wrap">
+      <button style="background:#334155;color:#e2e8f0;border:1px solid #475569;padding:6px 12px;border-radius:6px;cursor:pointer;font-size:12px">Rename</button>
+      <button style="background:#334155;color:#e2e8f0;border:1px solid #475569;padding:6px 12px;border-radius:6px;cursor:pointer;font-size:12px">Add ${mod.dimLabel}</button>
+      <button style="background:#334155;color:#e2e8f0;border:1px solid #475569;padding:6px 12px;border-radius:6px;cursor:pointer;font-size:12px">Edit</button>
+      <button style="background:#7f1d1d;color:#fca5a5;border:1px solid #991b1b;padding:6px 12px;border-radius:6px;cursor:pointer;font-size:12px">Delete</button>
+    </div></div>
+  `;
+  panel.classList.add('open');
+}
+
+function closeDetail() {
+  document.getElementById('detailPanel').classList.remove('open');
+}
+
+// Init
+drawGrid();
+renderLevelList();
+</script>
+</body>
+</html>
