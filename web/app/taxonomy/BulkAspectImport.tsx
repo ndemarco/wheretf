@@ -1,12 +1,14 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 
 interface ParsedParam {
   name: string;
   slug: string;
   dataType: string;
   unit: string | null;
+  min: number | null;
+  max: number | null;
   enumValues: string[];
   keep: boolean;
 }
@@ -17,109 +19,190 @@ interface ParsedAspect {
   keep: boolean;
 }
 
-const UNIT_PATTERNS: [RegExp, string][] = [
-  [/\bohms?\b/i, "ohm"],
-  [/\bΩ\b/, "ohm"],
-  [/\bppm\/°C\b/i, "ppm/°C"],
-  [/\bppm\/V\b/i, "ppm/V"],
-  [/\bµV\/V\b/i, "µV/V"],
-  [/\bmm\b/, "mm"],
-  [/\bin\b/, "in"],
-  [/\b°C\b/, "°C"],
-  [/\bW\b/, "W"],
-  [/\bV\b/, "V"],
-  [/\bA\b/, "A"],
-  [/\bHz\b/, "Hz"],
-  [/\bF\b/, "F"],
-  [/\b%\b/, "%"],
-];
+const PROMPT_PREAMBLE = `You are generating an aspect schema for WhereTF, a workshop item
+tracker. Aspects are reusable groups of parameters that describe one
+facet of a physical item (e.g. "Electrical Ratings", "Physical Package").
+Parameters are atomic typed properties — name, dataType, optional unit
+or enum values. Users apply aspects to items; the aspect decides which
+parameters get prompted for.
 
-function slugify(s: string): string {
-  return s
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "_")
-    .replace(/^_|_$/g, "");
-}
+Emit ONLY valid JSON matching this exact shape — no prose, no markdown
+fences, no trailing commentary:
 
-function inferParam(line: string): ParsedParam {
-  const parenMatch = line.match(/^(.+?)\s*\((.+)\)\s*$/);
-  const rawName = parenMatch ? parenMatch[1].trim() : line.trim();
-  const hint = parenMatch ? parenMatch[2].trim() : "";
-
-  const slug = slugify(rawName);
-  let dataType = "text";
-  let unit: string | null = null;
-  let enumValues: string[] = [];
-
-  if (hint) {
-    // Check for comma-separated list (3+ items or 2 items that don't look like units)
-    const parts = hint.split(",").map((s) => s.trim());
-    const looksEnum =
-      parts.length >= 3 ||
-      (parts.length === 2 &&
-        !parts.some((p) =>
-          UNIT_PATTERNS.some(([re]) => re.test(p))
-        ));
-
-    if (looksEnum) {
-      dataType = "enum";
-      enumValues = parts;
-    } else {
-      // Try to find a unit
-      for (const [re, u] of UNIT_PATTERNS) {
-        if (re.test(hint)) {
-          dataType = "numeric";
-          unit = u;
-          break;
+{
+  "aspects": [
+    {
+      "name": "<section name, e.g. Physical / Package>",
+      "params": [
+        {
+          "slug": "<lowercase_snake_case>",
+          "name": "<human readable>",
+          "dataType": "text" | "numeric" | "boolean" | "enum",
+          "unit": "<unit e.g. ohm, mm, W>" | null,
+          "min": <number> | null,
+          "max": <number> | null,
+          "enumValues": ["a", "b"]
         }
-      }
+      ]
     }
-  }
-
-  // Heuristic overrides from the name itself
-  if (
-    /\brating\b|\bvoltage\b|\bpower\b|\btemperature\b|\bresistance\b|\bcapacitance\b|\bwidth\b|\bheight\b|\blength\b|\bsize\b/i.test(
-      rawName
-    ) &&
-    dataType === "text"
-  ) {
-    dataType = "numeric";
-  }
-  if (/\bstatus\b|\blevel\b|\btype\b|\bstyle\b|\bgrade\b|\bcode\b/i.test(rawName) && dataType === "numeric") {
-    dataType = "text";
-  }
-
-  return { name: rawName, slug, dataType, unit, enumValues, keep: true };
+  ]
 }
 
-function parseText(text: string): ParsedAspect[] {
-  const lines = text.split("\n");
-  const aspects: ParsedAspect[] = [];
-  let current: ParsedAspect | null = null;
+Rules:
+- slug is lowercase snake_case derived from name; unique within the
+  whole document.
+- dataType = numeric when the property has a unit, range, or scalar
+  measurement; enum when a finite list of values is typical; boolean
+  when yes/no; else text.
+- unit is null unless dataType is numeric.
+- min / max: emit a number only when dataType is numeric AND a
+  meaningful physical bound exists (e.g. tolerance % is 0..100; duty
+  cycle is 0..100; resistance has no useful upper bound so both stay
+  null). Otherwise null. Never emit negative values for strictly-
+  positive quantities.
+- enumValues is [] unless dataType is enum.
+- Group parameters into aspects the way a domain expert would — one
+  aspect per coherent facet (physical, electrical-core, reliability,
+  marking, etc.). Expect roughly 4–10 aspects for a well-specified
+  component.
+- Include only parameters a typical user would want to record. Skip
+  obscure or manufacturer-specific fields unless the item type
+  inherently demands them.
 
-  for (const raw of lines) {
-    const trimmed = raw.trim();
-    if (!trimmed) continue;
+Item type to generate aspects for:`;
 
-    // Detect section header: no leading bullet/dash, typically short, often has "/" or "—"
-    const isBullet = /^[-•*]\s|^\d+[\.\)]\s/.test(trimmed);
-    const stripped = trimmed.replace(/^[-•*]\s+/, "").replace(/^\d+[\.\)]\s+/, "");
-
-    if (!isBullet && stripped.length < 80 && !stripped.includes("(")) {
-      // Likely a section header
-      current = { name: stripped, params: [], keep: true };
-      aspects.push(current);
-    } else {
-      // Parameter line
-      if (!current) {
-        current = { name: "General", params: [], keep: true };
-        aspects.push(current);
-      }
-      current.params.push(inferParam(stripped));
+const JSON_PLACEHOLDER = `{
+  "aspects": [
+    {
+      "name": "Physical / Package",
+      "params": [
+        { "slug": "case_size", "name": "Case size", "dataType": "text", "unit": null, "min": null, "max": null, "enumValues": [] }
+      ]
     }
-  }
+  ]
+}`;
 
-  return aspects;
+type RawParam = {
+  slug?: unknown;
+  name?: unknown;
+  dataType?: unknown;
+  unit?: unknown;
+  min?: unknown;
+  max?: unknown;
+  enumValues?: unknown;
+};
+type RawAspect = { name?: unknown; params?: unknown };
+
+function validateAndNormalize(raw: unknown): ParsedAspect[] {
+  if (!raw || typeof raw !== "object") {
+    throw new Error("Root must be an object");
+  }
+  const top = raw as { aspects?: unknown };
+  if (!Array.isArray(top.aspects)) {
+    throw new Error("aspects: expected an array");
+  }
+  const VALID_TYPES = new Set(["text", "numeric", "boolean", "enum"]);
+  const seenSlugs = new Set<string>();
+  const out: ParsedAspect[] = [];
+
+  top.aspects.forEach((a: unknown, ai) => {
+    const ar = a as RawAspect;
+    if (!ar || typeof ar !== "object") {
+      throw new Error(`aspects[${ai}]: expected an object`);
+    }
+    if (typeof ar.name !== "string" || !ar.name.trim()) {
+      throw new Error(`aspects[${ai}].name: expected non-empty string`);
+    }
+    if (!Array.isArray(ar.params)) {
+      throw new Error(`aspects[${ai}].params: expected an array`);
+    }
+    const params: ParsedParam[] = [];
+    ar.params.forEach((p: unknown, pi) => {
+      const pr = p as RawParam;
+      if (!pr || typeof pr !== "object") {
+        throw new Error(
+          `aspects[${ai}].params[${pi}]: expected an object`
+        );
+      }
+      if (typeof pr.slug !== "string" || !pr.slug.trim()) {
+        throw new Error(
+          `aspects[${ai}].params[${pi}].slug: expected non-empty string`
+        );
+      }
+      if (typeof pr.name !== "string" || !pr.name.trim()) {
+        throw new Error(
+          `aspects[${ai}].params[${pi}].name: expected non-empty string`
+        );
+      }
+      if (
+        typeof pr.dataType !== "string" ||
+        !VALID_TYPES.has(pr.dataType)
+      ) {
+        throw new Error(
+          `aspects[${ai}].params[${pi}].dataType: expected one of text|numeric|boolean|enum, got ${JSON.stringify(pr.dataType)}`
+        );
+      }
+      const unit =
+        pr.unit === undefined || pr.unit === null
+          ? null
+          : typeof pr.unit === "string"
+            ? pr.unit.trim() || null
+            : (() => {
+                throw new Error(
+                  `aspects[${ai}].params[${pi}].unit: expected string or null`
+                );
+              })();
+      const coerceNum = (v: unknown, field: string): number | null => {
+        if (v === undefined || v === null) return null;
+        if (typeof v !== "number" || !Number.isFinite(v)) {
+          throw new Error(
+            `aspects[${ai}].params[${pi}].${field}: expected a finite number or null`
+          );
+        }
+        return v;
+      };
+      let min = coerceNum(pr.min, "min");
+      let max = coerceNum(pr.max, "max");
+      if (pr.dataType !== "numeric") {
+        // Coerce away — only numeric carries bounds.
+        min = null;
+        max = null;
+      }
+      let enumValues: string[] = [];
+      if (pr.enumValues !== undefined && pr.enumValues !== null) {
+        if (!Array.isArray(pr.enumValues)) {
+          throw new Error(
+            `aspects[${ai}].params[${pi}].enumValues: expected array`
+          );
+        }
+        enumValues = pr.enumValues.map((v: unknown, ei: number) => {
+          if (typeof v !== "string") {
+            throw new Error(
+              `aspects[${ai}].params[${pi}].enumValues[${ei}]: expected string`
+            );
+          }
+          return v;
+        });
+      }
+      if (seenSlugs.has(pr.slug)) {
+        // duplicate is allowed (save-path dedup); no hard error.
+      }
+      seenSlugs.add(pr.slug);
+      params.push({
+        slug: pr.slug,
+        name: pr.name,
+        dataType: pr.dataType,
+        unit,
+        min,
+        max,
+        enumValues,
+        keep: true,
+      });
+    });
+    out.push({ name: ar.name, params, keep: true });
+  });
+
+  return out;
 }
 
 export default function BulkAspectImport({
@@ -129,18 +212,47 @@ export default function BulkAspectImport({
   onComplete: () => void;
   onClose: () => void;
 }) {
-  const [step, setStep] = useState<"paste" | "review" | "saving" | "done">(
-    "paste"
-  );
-  const [rawText, setRawText] = useState("");
+  const [step, setStep] = useState<
+    "extract" | "ingest" | "review" | "saving" | "done"
+  >("extract");
+  const [itemTypeInput, setItemTypeInput] = useState("");
+  const [jsonText, setJsonText] = useState("");
+  const [validationError, setValidationError] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
   const [parsed, setParsed] = useState<ParsedAspect[]>([]);
   const [saveLog, setSaveLog] = useState<string[]>([]);
   const [error, setError] = useState<string | null>(null);
 
-  function doParse() {
-    const result = parseText(rawText);
-    setParsed(result);
-    setStep("review");
+  const fullPrompt = useMemo(
+    () =>
+      itemTypeInput.trim()
+        ? `${PROMPT_PREAMBLE} ${itemTypeInput.trim()}`
+        : PROMPT_PREAMBLE,
+    [itemTypeInput]
+  );
+
+  async function copyPrompt() {
+    try {
+      await navigator.clipboard.writeText(fullPrompt);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    } catch {
+      // Clipboard may be unavailable in some browsers/contexts.
+    }
+  }
+
+  function parseJson() {
+    setValidationError(null);
+    try {
+      const data = JSON.parse(jsonText);
+      const normalized = validateAndNormalize(data);
+      setParsed(normalized);
+      setStep("review");
+    } catch (err) {
+      setValidationError(
+        err instanceof Error ? err.message : "Invalid JSON"
+      );
+    }
   }
 
   function updateParam(
@@ -180,7 +292,6 @@ export default function BulkAspectImport({
     const log: string[] = [];
 
     try {
-      // 1. Create all unique parameter definitions that don't exist yet.
       const allParams = parsed
         .filter((a) => a.keep)
         .flatMap((a) => a.params.filter((p) => p.keep));
@@ -189,7 +300,6 @@ export default function BulkAspectImport({
         if (!uniqueBySlug.has(p.slug)) uniqueBySlug.set(p.slug, p);
       }
 
-      // Fetch existing param defs to avoid duplicates
       const existingRes = await fetch("/api/parameter-definitions");
       const existingData = await existingRes.json();
       const existing = new Map<string, string>(
@@ -210,8 +320,14 @@ export default function BulkAspectImport({
             dataType: p.dataType,
           };
           if (p.unit) body.unit = p.unit;
-          if (p.enumValues.length > 0) {
-            body.constraints = { enumValues: p.enumValues };
+          const constraints: Record<string, unknown> = {};
+          if (p.enumValues.length > 0) constraints.enumValues = p.enumValues;
+          if (p.dataType === "numeric") {
+            if (typeof p.min === "number") constraints.min = p.min;
+            if (typeof p.max === "number") constraints.max = p.max;
+          }
+          if (Object.keys(constraints).length > 0) {
+            body.constraints = constraints;
           }
           const res = await fetch("/api/parameter-definitions", {
             method: "POST",
@@ -229,7 +345,6 @@ export default function BulkAspectImport({
         }
       }
 
-      // 2. Create aspects and link parameters.
       const existingAspectsRes = await fetch("/api/aspects");
       const existingAspectsData = await existingAspectsRes.json();
       const existingAspects = new Map<string, string>(
@@ -258,7 +373,6 @@ export default function BulkAspectImport({
           log.push(`✓ Aspect "${aspect.name}" created.`);
         }
 
-        // Link parameters
         for (const p of aspect.params) {
           if (!p.keep) continue;
           const pdId = paramIdBySlug.get(p.slug);
@@ -298,20 +412,65 @@ export default function BulkAspectImport({
             Bulk import aspects + parameters
           </div>
           <p className="text-xs text-slate-500 mt-0.5">
-            Paste a structured list. Section headers become aspects; bulleted
-            lines become parameters.
+            {step === "extract" &&
+              "Generate a prompt, paste it into an AI, return with JSON."}
+            {step === "ingest" && "Paste the JSON the AI returned."}
+            {step === "review" &&
+              "Review the aspects and parameters before saving."}
           </p>
         </div>
 
         <div className="flex-1 overflow-y-auto p-4">
-          {step === "paste" && (
+          {step === "extract" && (
             <div className="space-y-3">
+              <label className="block">
+                <span className="text-[11px] uppercase tracking-wider text-slate-500">
+                  Item type
+                </span>
+                <input
+                  autoFocus
+                  value={itemTypeInput}
+                  onChange={(e) => setItemTypeInput(e.target.value)}
+                  placeholder="e.g. MLCC capacitors, hex socket cap screws, SMD tactile switches"
+                  className="mt-1 w-full px-3 py-1.5 bg-slate-900 border border-slate-600 rounded text-sm text-slate-100 focus:border-accent focus:outline-none"
+                />
+              </label>
+
+              <div>
+                <div className="flex items-center justify-between mb-1">
+                  <span className="text-[11px] uppercase tracking-wider text-slate-500">
+                    Prompt preview
+                  </span>
+                  <button
+                    onClick={copyPrompt}
+                    className="text-[11px] px-2 py-0.5 bg-accent text-white rounded hover:brightness-110"
+                  >
+                    {copied ? "Copied ✓" : "Copy prompt"}
+                  </button>
+                </div>
+                <textarea
+                  readOnly
+                  value={fullPrompt}
+                  rows={16}
+                  className="w-full px-3 py-2 bg-slate-950 border border-slate-700 rounded text-[11px] text-slate-400 font-mono focus:outline-none"
+                />
+              </div>
+            </div>
+          )}
+
+          {step === "ingest" && (
+            <div className="space-y-3">
+              {validationError && (
+                <div className="px-3 py-2 bg-red-900/30 border border-red-700/50 rounded text-red-300 text-xs font-mono">
+                  {validationError}
+                </div>
+              )}
               <textarea
                 autoFocus
-                value={rawText}
-                onChange={(e) => setRawText(e.target.value)}
+                value={jsonText}
+                onChange={(e) => setJsonText(e.target.value)}
                 rows={18}
-                placeholder={`Physical / Package\n- Case size (imperial + metric, e.g., 0603 / 1608)\n- Length, width, height (mm)\n- Termination style (standard, wrap-around, wettable flank)\n\nElectrical — Core\n- Resistance value (ohms)\n- Resistance tolerance (±%, e.g., 0.1%, 1%, 5%)\n- Power rating (W)\n...`}
+                placeholder={JSON_PLACEHOLDER}
                 className="w-full px-3 py-2 bg-slate-900 border border-slate-600 rounded text-xs text-slate-200 font-mono focus:border-accent focus:outline-none"
               />
             </div>
@@ -358,6 +517,7 @@ export default function BulkAspectImport({
                           <th className="text-left px-2 py-1">Name (slug)</th>
                           <th className="text-left px-2 py-1">Type</th>
                           <th className="text-left px-2 py-1">Unit</th>
+                          <th className="text-left px-2 py-1">Min / Max</th>
                           <th className="text-left px-2 py-1">Enum values</th>
                         </tr>
                       </thead>
@@ -394,11 +554,18 @@ export default function BulkAspectImport({
                             <td className="px-2 py-1">
                               <select
                                 value={p.dataType}
-                                onChange={(e) =>
-                                  updateParam(ai, pi, {
-                                    dataType: e.target.value,
-                                  })
-                                }
+                                onChange={(e) => {
+                                  const nextType = e.target.value;
+                                  const patch: Partial<ParsedParam> = {
+                                    dataType: nextType,
+                                  };
+                                  // Strip bounds when leaving numeric.
+                                  if (nextType !== "numeric") {
+                                    patch.min = null;
+                                    patch.max = null;
+                                  }
+                                  updateParam(ai, pi, patch);
+                                }}
                                 className="px-1 py-0.5 bg-slate-800 border border-slate-700 rounded text-[11px] text-slate-300 focus:border-accent focus:outline-none"
                               >
                                 <option value="text">text</option>
@@ -418,6 +585,45 @@ export default function BulkAspectImport({
                                 placeholder="—"
                                 className="w-16 px-1 py-0.5 bg-transparent border-b border-dashed border-transparent hover:border-slate-600 focus:border-accent text-[11px] text-slate-400 outline-none"
                               />
+                            </td>
+                            <td className="px-2 py-1">
+                              {p.dataType === "numeric" ? (
+                                <div className="flex items-center gap-1">
+                                  <input
+                                    value={p.min ?? ""}
+                                    onChange={(e) => {
+                                      const raw = e.target.value.trim();
+                                      if (raw === "") {
+                                        updateParam(ai, pi, { min: null });
+                                      } else {
+                                        const n = Number(raw);
+                                        if (Number.isFinite(n))
+                                          updateParam(ai, pi, { min: n });
+                                      }
+                                    }}
+                                    placeholder="min"
+                                    className="w-14 px-1 py-0.5 bg-transparent border-b border-dashed border-transparent hover:border-slate-600 focus:border-accent text-[11px] text-slate-400 outline-none tabular-nums"
+                                  />
+                                  <span className="text-slate-700">…</span>
+                                  <input
+                                    value={p.max ?? ""}
+                                    onChange={(e) => {
+                                      const raw = e.target.value.trim();
+                                      if (raw === "") {
+                                        updateParam(ai, pi, { max: null });
+                                      } else {
+                                        const n = Number(raw);
+                                        if (Number.isFinite(n))
+                                          updateParam(ai, pi, { max: n });
+                                      }
+                                    }}
+                                    placeholder="max"
+                                    className="w-14 px-1 py-0.5 bg-transparent border-b border-dashed border-transparent hover:border-slate-600 focus:border-accent text-[11px] text-slate-400 outline-none tabular-nums"
+                                  />
+                                </div>
+                              ) : (
+                                <span className="text-slate-700">—</span>
+                              )}
                             </td>
                             <td className="px-2 py-1">
                               {p.dataType === "enum" ? (
@@ -480,7 +686,11 @@ export default function BulkAspectImport({
         {/* Footer */}
         <div className="p-4 border-t border-slate-700 flex items-center justify-between shrink-0">
           <div className="text-[11px] text-slate-500">
-            {step === "paste" && "Paste text, then Parse."}
+            {step === "extract" &&
+              (itemTypeInput.trim()
+                ? "Copy the prompt, run it through an AI, continue with the JSON."
+                : "Enter an item type to build the prompt.")}
+            {step === "ingest" && "Paste JSON, then Parse JSON."}
             {step === "review" &&
               `${parsed.filter((a) => a.keep).length} aspects, ${parsed
                 .filter((a) => a.keep)
@@ -507,19 +717,35 @@ export default function BulkAspectImport({
                 >
                   Cancel
                 </button>
-                {step === "paste" && (
+                {step === "extract" && (
                   <button
-                    onClick={doParse}
-                    disabled={!rawText.trim()}
-                    className="px-4 py-1.5 bg-accent text-white rounded text-xs hover:brightness-110 disabled:opacity-50"
+                    onClick={() => setStep("ingest")}
+                    className="px-4 py-1.5 bg-accent text-white rounded text-xs hover:brightness-110"
                   >
-                    Parse
+                    I have JSON →
                   </button>
+                )}
+                {step === "ingest" && (
+                  <>
+                    <button
+                      onClick={() => setStep("extract")}
+                      className="px-3 py-1.5 text-xs text-slate-400 hover:text-slate-200"
+                    >
+                      ← Back
+                    </button>
+                    <button
+                      onClick={parseJson}
+                      disabled={!jsonText.trim()}
+                      className="px-4 py-1.5 bg-accent text-white rounded text-xs hover:brightness-110 disabled:opacity-50"
+                    >
+                      Parse JSON
+                    </button>
+                  </>
                 )}
                 {step === "review" && (
                   <>
                     <button
-                      onClick={() => setStep("paste")}
+                      onClick={() => setStep("ingest")}
                       className="px-3 py-1.5 text-xs text-slate-400 hover:text-slate-200"
                     >
                       ← Back
