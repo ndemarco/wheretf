@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import CreateFromDesignationDialog from "./CreateFromDesignationDialog";
+import { parseSiValue } from "@/lib/siPrefix";
 
 interface RichItem {
   id: string;
@@ -99,7 +100,13 @@ function ParamRow({
     setEditing(false);
     let parsed: unknown = editValue;
     if (dataType === "numeric") {
-      parsed = editValue === "" ? null : Number(editValue);
+      // parseSiValue handles plain numbers and SI prefixes ("4.7k" → 4700).
+      parsed = editValue === "" ? null : parseSiValue(editValue);
+      // If SI parse failed, fall back to Number so we don't silently drop input.
+      if (parsed === null && editValue !== "") {
+        const n = Number(editValue);
+        parsed = Number.isFinite(n) ? n : null;
+      }
     } else if (dataType === "boolean") {
       parsed = editValue === "true";
     }
@@ -121,7 +128,8 @@ function ParamRow({
       <div className="flex items-center gap-1.5">
         {editing ? (
           <input
-            type={dataType === "numeric" ? "number" : "text"}
+            // text so users can type "4.7k"; numeric parsing happens on save.
+            type="text"
             value={editValue}
             onChange={(e) => setEditValue(e.target.value)}
             onBlur={saveEdit}

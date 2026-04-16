@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import CreateFromDesignationDialog from "@/app/items/CreateFromDesignationDialog";
 import GenerateSetDialog from "@/app/items/GenerateSetDialog";
 import BulkAspectImport from "./BulkAspectImport";
+import { parseSiValue } from "@/lib/siPrefix";
 
 // --- Types ---
 
@@ -1418,10 +1419,14 @@ function ParamDefRow({
         if (vals.length > 0) nextConstraints.enumValues = vals;
       }
       if (dataType === "numeric") {
-        if (minStr.trim() !== "" && !Number.isNaN(Number(minStr)))
-          nextConstraints.min = Number(minStr);
-        if (maxStr.trim() !== "" && !Number.isNaN(Number(maxStr)))
-          nextConstraints.max = Number(maxStr);
+        if (minStr.trim() !== "") {
+          const n = parseSiValue(minStr);
+          if (n !== null) nextConstraints.min = n;
+        }
+        if (maxStr.trim() !== "") {
+          const n = parseSiValue(maxStr);
+          if (n !== null) nextConstraints.max = n;
+        }
       }
       updates.constraints =
         Object.keys(nextConstraints).length > 0 ? nextConstraints : null;
@@ -2179,8 +2184,8 @@ function StandardDetail({
             const raw = r.values[p.parameterDefinitionId];
             if (raw === undefined || raw === "") continue;
             if (p.dataType === "numeric") {
-              const num = Number(raw);
-              if (!Number.isNaN(num)) payload[p.parameterDefinitionId] = num;
+              const num = parseSiValue(raw);
+              if (num !== null) payload[p.parameterDefinitionId] = num;
             } else if (p.dataType === "boolean") {
               payload[p.parameterDefinitionId] = raw === "true";
             } else {

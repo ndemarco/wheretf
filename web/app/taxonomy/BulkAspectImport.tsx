@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { parseSiValue } from "@/lib/siPrefix";
 
 interface ExistingDef {
   id: string;
@@ -895,8 +896,8 @@ export default function BulkAspectImport({
                                       if (raw === "") {
                                         updateParam(ai, pi, { min: null });
                                       } else {
-                                        const n = Number(raw);
-                                        if (Number.isFinite(n))
+                                        const n = parseSiValue(raw);
+                                        if (n !== null)
                                           updateParam(ai, pi, { min: n });
                                       }
                                     }}
@@ -911,8 +912,8 @@ export default function BulkAspectImport({
                                       if (raw === "") {
                                         updateParam(ai, pi, { max: null });
                                       } else {
-                                        const n = Number(raw);
-                                        if (Number.isFinite(n))
+                                        const n = parseSiValue(raw);
+                                        if (n !== null)
                                           updateParam(ai, pi, { max: n });
                                       }
                                     }}
