@@ -452,43 +452,18 @@ function ParamTypeahead({
 
 // --- Main Page ---
 
-export default function TaxonomyPage() {
-  const [tab, setTab] = useState<
-    "aspects" | "standards" | "parameters" | "categories" | "audit"
-  >("aspects");
-
-  return (
-    <div className="flex-1 flex flex-col overflow-hidden">
-      {/* Tab header */}
-      <div className="flex items-center gap-1 px-6 py-3 border-b border-slate-700">
-        <h1 className="text-lg font-semibold text-slate-100 mr-4">Taxonomy</h1>
-        {(["aspects", "standards", "parameters", "categories", "audit"] as const).map((t) => (
-          <button
-            key={t}
-            onClick={() => setTab(t)}
-            className={`px-3 py-1 rounded text-sm transition-colors ${
-              tab === t
-                ? "bg-slate-700 text-slate-100"
-                : "text-slate-400 hover:text-slate-200"
-            }`}
-          >
-            {t.charAt(0).toUpperCase() + t.slice(1)}
-          </button>
-        ))}
-      </div>
-
-      {tab === "aspects" && <AspectsTab />}
-      {tab === "standards" && <StandardsTab />}
-      {tab === "parameters" && <ParametersTab />}
-      {tab === "categories" && <CategoriesTab />}
-      {tab === "audit" && <AuditTab />}
-    </div>
-  );
+// Tabs have moved to sibling routes (/taxonomy/aspects, /parameters, etc.).
+// Visiting /taxonomy on its own redirects to /taxonomy/aspects.
+export default function TaxonomyIndex() {
+  if (typeof window !== "undefined") {
+    window.location.replace("/taxonomy/aspects");
+  }
+  return null;
 }
 
 // --- Aspects Tab ---
 
-function AspectsTab() {
+export function AspectsTab() {
   const [showBulkImport, setShowBulkImport] = useState(false);
   const [filter, setFilter] = useState("");
   const [aspects, setAspects] = useState<Aspect[]>([]);
@@ -1289,7 +1264,7 @@ function DeleteAspectModal({
 
 // --- Parameters Tab ---
 
-function ParametersTab() {
+export function ParametersTab() {
   const [view, setView] = useState<"detail" | "matrix">("detail");
   const [paramDefs, setParamDefs] = useState<ParameterDefinition[]>([]);
   const [aspectsForMatrix, setAspectsForMatrix] = useState<Aspect[]>([]);
@@ -1937,7 +1912,7 @@ const AUDIT_LABELS: Record<string, string> = {
   "aspect.name_similarity": "Aspect: similar name to another",
 };
 
-function AuditTab() {
+export function AuditTab() {
   const [checks, setChecks] = useState<AuditCheckRow[]>([]);
   const [runAt, setRunAt] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -2097,7 +2072,7 @@ function timeAgo(iso: string): string {
   return new Date(iso).toLocaleString();
 }
 
-function CategoriesTab() {
+export function CategoriesTab() {
   const [categories, setCategories] = useState<Category[]>([]);
   const [loading, setLoading] = useState(true);
   const [showCreate, setShowCreate] = useState(false);
@@ -2297,7 +2272,7 @@ interface DesignationUsage {
   itemCount: number;
 }
 
-function StandardsTab() {
+export function StandardsTab() {
   const [standards, setStandards] = useState<StandardSummary[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);

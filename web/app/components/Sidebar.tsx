@@ -8,6 +8,7 @@ type NavItem = {
   href: string;
   title: string;
   icon: React.ReactNode;
+  children?: Array<{ href: string; title: string }>;
 };
 
 type NavSection = {
@@ -88,13 +89,20 @@ const navSections: NavSection[] = [
         ),
       },
       {
-        href: "/taxonomy",
+        href: "/taxonomy/aspects",
         title: "Taxonomy",
         icon: (
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="w-5 h-5">
             <path d="M4 6h16M4 12h10M4 18h6" />
           </svg>
         ),
+        children: [
+          { href: "/taxonomy/aspects", title: "Aspects" },
+          { href: "/taxonomy/parameters", title: "Parameters" },
+          { href: "/taxonomy/standards", title: "Standards" },
+          { href: "/taxonomy/categories", title: "Categories" },
+          { href: "/taxonomy/audit", title: "Audit" },
+        ],
       },
       {
         href: "/tour",
@@ -185,29 +193,60 @@ export default function Sidebar() {
               <div className="h-px bg-slate-700/60 mx-2 mb-1" aria-hidden />
             )}
             {section.items.map((item) => {
+              // Parent link "active" when any of its children are active too.
               const isActive =
                 item.href === "/"
                   ? pathname === "/"
-                  : pathname.startsWith(item.href);
+                  : pathname.startsWith(item.href) ||
+                    (item.children?.some((c) =>
+                      pathname.startsWith(c.href)
+                    ) ?? false);
+              const childrenVisible =
+                expanded &&
+                item.children &&
+                item.children.length > 0 &&
+                (isActive ||
+                  item.children.some((c) => pathname.startsWith(c.href)));
 
               return (
-                <Link
-                  key={item.href}
-                  href={item.href}
-                  title={expanded ? undefined : item.title}
-                  className={`h-9 rounded-md flex items-center gap-3 transition-colors px-2 ${
-                    isActive
-                      ? "bg-slate-700 text-accent"
-                      : "text-slate-400 hover:bg-slate-700 hover:text-accent"
-                  }`}
-                >
-                  <span className="shrink-0 flex items-center justify-center w-6">
-                    {item.icon}
-                  </span>
-                  {expanded && (
-                    <span className="text-sm truncate">{item.title}</span>
+                <div key={item.href} className="flex flex-col">
+                  <Link
+                    href={item.href}
+                    title={expanded ? undefined : item.title}
+                    className={`h-9 rounded-md flex items-center gap-3 transition-colors px-2 ${
+                      isActive
+                        ? "bg-slate-700 text-accent"
+                        : "text-slate-400 hover:bg-slate-700 hover:text-accent"
+                    }`}
+                  >
+                    <span className="shrink-0 flex items-center justify-center w-6">
+                      {item.icon}
+                    </span>
+                    {expanded && (
+                      <span className="text-sm truncate">{item.title}</span>
+                    )}
+                  </Link>
+                  {childrenVisible && item.children && (
+                    <div className="ml-8 mt-0.5 flex flex-col gap-0.5 border-l border-slate-700/60 pl-2">
+                      {item.children.map((c) => {
+                        const childActive = pathname.startsWith(c.href);
+                        return (
+                          <Link
+                            key={c.href}
+                            href={c.href}
+                            className={`h-7 rounded-md flex items-center px-2 text-xs transition-colors ${
+                              childActive
+                                ? "text-accent"
+                                : "text-slate-500 hover:text-slate-200"
+                            }`}
+                          >
+                            {c.title}
+                          </Link>
+                        );
+                      })}
+                    </div>
                   )}
-                </Link>
+                </div>
               );
             })}
           </div>
