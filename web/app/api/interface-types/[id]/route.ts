@@ -14,7 +14,8 @@ export async function GET(
         { status: 404 },
       );
     }
-    return NextResponse.json({ interfaceType });
+    const usage = await interfaceTypeRepository.usageCount({ id });
+    return NextResponse.json({ interfaceType, usage });
   } catch (err) {
     return NextResponse.json(
       { error: err instanceof Error ? err.message : "Unexpected error" },
@@ -40,6 +41,11 @@ export async function PATCH(
     if (message.includes("not found")) {
       return NextResponse.json({ error: message }, { status: 404 });
     }
+    // Demotion stable→draft + other invariants return 409 conflict so
+    // clients can distinguish rule violations from bad input.
+    if (message.includes("terminal") || message.includes("one-way")) {
+      return NextResponse.json({ error: message }, { status: 409 });
+    }
     return NextResponse.json({ error: message }, { status: 400 });
   }
 }
@@ -56,6 +62,10 @@ export async function DELETE(
     const message = err instanceof Error ? err.message : "Unexpected error";
     if (message.includes("not found")) {
       return NextResponse.json({ error: message }, { status: 404 });
+    }
+    // Archive-gate + usage-gate return 409.
+    if (message.includes("not archived") || message.includes("in use")) {
+      return NextResponse.json({ error: message }, { status: 409 });
     }
     return NextResponse.json({ error: message }, { status: 400 });
   }

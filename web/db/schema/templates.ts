@@ -7,6 +7,7 @@ import {
   integer,
   boolean,
   numeric,
+  unique,
 } from "drizzle-orm/pg-core";
 
 export const templates = pgTable("templates", {
@@ -72,8 +73,60 @@ export const templateVersions = pgTable("template_versions", {
 
 export const interfaceTypes = pgTable("interface_types", {
   id: uuid("id").primaryKey().defaultRandom(),
+  // IMPORTANT: identifier is a mutable display slug. All references to
+  // interface types MUST be by `id` (UUID). Never join on `identifier`.
+  // See specification/interface-type-management.md — load-bearing invariant.
   identifier: text("identifier").notNull().unique(), // e.g., "plano-3600", "gridfinity-42mm"
   description: text("description"),
   physicalContract: jsonb("physical_contract"), // dimensions, mounting, clearance
+  maturity: text("maturity").notNull().default("stable"), // 'draft' | 'stable'
+  archivedAt: timestamp("archived_at"), // null = active; non-null = archived
+  unitSystem: jsonb("unit_system"), // per-axis convenience units: { width:{label,mm}, depth:{...}, height:{...} }
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
+
+// Junction tables — keyed by interface_types.id (UUID). Never by identifier.
+// Slice 2 will migrate templates/locations/inserts to read/write these; for
+// now they are created empty and used only by the usage-count query path.
+export const templateVersionInterfacesProvided = pgTable(
+  "template_version_interfaces_provided",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    templateVersionId: uuid("template_version_id")
+      .notNull()
+      .references(() => templateVersions.id, { onDelete: "cascade" }),
+    interfaceTypeId: uuid("interface_type_id")
+      .notNull()
+      .references(() => interfaceTypes.id, { onDelete: "restrict" }),
+  },
+  (t) => [unique().on(t.templateVersionId, t.interfaceTypeId)],
+);
+
+export const templateVersionInterfacesAccepted = pgTable(
+  "template_version_interfaces_accepted",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    templateVersionId: uuid("template_version_id")
+      .notNull()
+      .references(() => templateVersions.id, { onDelete: "cascade" }),
+    interfaceTypeId: uuid("interface_type_id")
+      .notNull()
+      .references(() => interfaceTypes.id, { onDelete: "restrict" }),
+  },
+  (t) => [unique().on(t.templateVersionId, t.interfaceTypeId)],
+);
+
+export const locationInterfacesAccepted = pgTable(
+  "location_interfaces_accepted",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    // FK to locations added in the locations schema to avoid circular import;
+    // logically this is locations.id with ON DELETE CASCADE. Constraint added
+    // manually in the migration.
+    locationId: uuid("location_id").notNull(),
+    interfaceTypeId: uuid("interface_type_id")
+      .notNull()
+      .references(() => interfaceTypes.id, { onDelete: "restrict" }),
+  },
+  (t) => [unique().on(t.locationId, t.interfaceTypeId)],
+);

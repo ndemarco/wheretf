@@ -1,9 +1,16 @@
 import { NextRequest, NextResponse } from "next/server";
 import { interfaceTypeRepository } from "@/repositories/interfaceTypeRepository";
 
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
-    const interfaceTypes = await interfaceTypeRepository.list();
+    const status = request.nextUrl.searchParams.get("status");
+    const validStatuses = new Set(["active", "archived", "all"]);
+    const filterStatus = validStatuses.has(status ?? "")
+      ? (status as "active" | "archived" | "all")
+      : "all";
+    const interfaceTypes = await interfaceTypeRepository.list({
+      status: filterStatus,
+    });
     return NextResponse.json({ interfaceTypes });
   } catch (err) {
     return NextResponse.json(
