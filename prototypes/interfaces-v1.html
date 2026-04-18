@@ -803,7 +803,7 @@ function openCreatePanel() {
   state.editingDraft = {
     id: "ifc-new",
     identifier: "",
-    maturity: "draft",
+    maturity: "stable",
     archivedAt: null,
     description: "",
     physicalContract: "",
@@ -840,8 +840,9 @@ function renderDetail() {
 
   form.innerHTML = `
     <div class="detail-header">
-      <div class="detail-title">
+      <div class="detail-title" style="display:flex; align-items:center; gap:8px;">
         ${state.isCreating ? "New interface type" : `<span class="mono">${d.identifier}</span>`}
+        ${d.maturity === 'draft' && !state.isCreating ? `<span class="badge badge-draft" style="font-size:10px;">draft</span>` : ''}
       </div>
       ${state.isCreating ? "" : `
         <button class="detail-lifecycle-btn" onclick="openLifecyclePopover(event)">
@@ -855,14 +856,6 @@ function renderDetail() {
       <div class="form-section">
         <label class="form-label">Identifier <span class="hint">slug, mutable — FKs are UUID</span></label>
         <input class="form-input mono" value="${d.identifier}" placeholder="e.g. gridfinity-42mm" oninput="updateDraft('identifier', this.value)">
-      </div>
-
-      <div class="form-section">
-        <label class="form-label">Maturity</label>
-        <div class="radio-group">
-          <label class="radio-opt ${d.maturity === 'draft' ? 'selected' : ''}"><input type="radio" name="maturity" ${d.maturity === 'draft' ? 'checked' : ''} onchange="updateDraft('maturity','draft')"> draft</label>
-          <label class="radio-opt ${d.maturity === 'stable' ? 'selected' : ''}"><input type="radio" name="maturity" ${d.maturity === 'stable' ? 'checked' : ''} onchange="updateDraft('maturity','stable')"> stable</label>
-        </div>
       </div>
 
       <div class="form-section">
@@ -928,8 +921,27 @@ function renderDetail() {
         </button>`}
       <div class="btn-footer-spacer"></div>
       <button class="btn btn-ghost" onclick="closeDetail()">Cancel</button>
-      <button class="btn btn-primary" onclick="saveDraft()">${state.isCreating ? 'Create' : 'Save'}</button>
+      ${renderSaveButtons(d)}
     </div>
+  `;
+}
+
+function renderSaveButtons(d) {
+  // create mode: Create (stable) + Save as draft
+  if (state.isCreating) {
+    return `
+      <button class="btn btn-ghost" onclick="saveWithMaturity('draft')">Save as draft</button>
+      <button class="btn btn-primary" onclick="saveWithMaturity('stable')">Create</button>
+    `;
+  }
+  // edit stable: single Save (no demotion)
+  if (d.maturity === 'stable') {
+    return `<button class="btn btn-primary" onclick="saveWithMaturity('stable')">Save</button>`;
+  }
+  // edit draft: Save (promote) + Save as draft
+  return `
+    <button class="btn btn-ghost" onclick="saveWithMaturity('draft')">Save as draft</button>
+    <button class="btn btn-primary" onclick="saveWithMaturity('stable')" title="Publish — promote draft to stable">Save</button>
   `;
 }
 
@@ -967,16 +979,25 @@ function updateUnitAxis(axis, field, value) {
   state.editingDraft.unitSystem[axis][field] = field === "mm" ? (value === "" ? null : Number(value)) : value;
 }
 
-function saveDraft() {
+function saveWithMaturity(targetMaturity) {
   const d = state.editingDraft;
+  const wasDraft = !state.isCreating && d.maturity === 'draft';
+  d.maturity = targetMaturity;
+
   if (state.isCreating) {
     d.id = "ifc-" + (INTERFACES.length + 1).toString().padStart(3, "0");
     INTERFACES.push(JSON.parse(JSON.stringify(d)));
-    showToast(`Interface type created: ${d.identifier}`);
+    showToast(targetMaturity === 'stable'
+      ? `Created: ${d.identifier}`
+      : `Saved as draft: ${d.identifier}`);
   } else {
     const idx = INTERFACES.findIndex(x => x.id === d.id);
     INTERFACES[idx] = JSON.parse(JSON.stringify(d));
-    showToast(`Updated: ${d.identifier}`);
+    if (wasDraft && targetMaturity === 'stable') {
+      showToast(`Published ${d.identifier} (draft → stable)`);
+    } else {
+      showToast(`Updated: ${d.identifier}`);
+    }
   }
   state.isCreating = false;
   state.activeDetailId = d.id;

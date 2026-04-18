@@ -20,7 +20,14 @@ Geometry contracts (footprint, mounting, clearance) → deferred. `physicalContr
 
 **Membership match.** Insert compatible with receptacle if `insert.provides ∩ receptacle.accepts` non-empty.
 
-**Maturity.** Each type carries `maturity: 'draft' | 'stable'`. Draft = admin still shaping the concept, physical contract notes likely incomplete. Stable = canonical, safe to reference. Draft types appear in pickers de-emphasized (muted chip, "(draft)" suffix) and sort below stable. Lets admins ship new types without committing to exact physical semantics while `physicalContract` stays free-form.
+**Maturity.** Each type carries `maturity: 'draft' | 'stable'`. Draft = admin still shaping the concept, physical contract notes likely incomplete. Stable = canonical, safe to reference. Draft types appear in pickers de-emphasized (muted chip, "(draft)" suffix) and sort below stable.
+
+Maturity is set via the save action, not a visible form field:
+- **Create:** primary button "Create" → stable. Secondary deprioritized "Save as draft" → draft. Default is stable.
+- **Edit stable:** single "Save" button. Stable is terminal — no demotion. (If a stable type is wrong, rename/merge/archive it; don't demote.)
+- **Edit draft:** primary "Save" promotes to stable. Secondary "Save as draft" keeps it draft.
+
+The state machine is one-directional: `draft → stable → archived → deleted`. Demoting stable back to draft is intentionally blocked — it creates ambiguous semantics when refs already point at the type (all consumers silently downgrade). Unused stable types go straight to archive instead.
 
 **Unit system (modular interfaces).** Some interfaces have a natural modular ruler. `gridfinity-42mm` = 42×42 cell × 7mm height increment; bins are natural to express as N×M units wide × Kh tall. Fixed form factors (`plano-3600`) and continuous-dim interfaces (`louver-hang`) have no unit.
 
@@ -202,16 +209,22 @@ Sort: identifier (default), usage desc, maturity, recently created.
 
 Single-page form. Fields:
 - **Identifier** — required, unique, slug-style. Regex `^[a-z0-9][a-z0-9-]*$`. Mutable — references are by UUID so rename is safe. On rename, display updates everywhere (chip labels, usage rows); underlying references don't care.
-- **Maturity** — radio: `draft` (default on create) | `stable`. Promote to stable when the concept is stable enough that templates should rely on it. Demotion allowed but warns.
 - **Description** — optional, multiline. What interface represents, common products, gotchas. Surfaces as tooltip on every chip that displays this type (template editor, level editor, usage row). Keep concise — one short paragraph max.
 - **Unit system** — optional. Toggle "This is a modular system" → reveals three per-axis rows (width, depth, height). Each row: label (short string, e.g., "u", "h") + mm value. Leave a row empty to fall back to raw-mm input on that axis. Left entirely off for fixed-form and continuous-dim interfaces. No warning on toggle-off — storage is always mm, nothing to revert.
 - **Physical contract (notes)** — optional, multiline free-form. Placeholder: "Footprint, mounting, clearance notes. Structured fields coming later." Stored `{ notes: "..." }` in `physicalContract` jsonb.
 
 **Derive from existing** — button on detail page: "Derive new interface". Opens create form pre-filled from current type (description + physical contract + unit system copied; new identifier required; maturity resets to draft). Use case: variant / successor interface that starts identical. New row, new UUID — not a version of original. No lineage tracked today. Clone is independent after creation; no linked updates.
 
-Buttons: Save (primary), Cancel. Lifecycle actions (Archive, Merge, Delete) live in a lifecycle menu on the detail page header, not mixed with form buttons.
+Buttons (footer):
+- Create mode: primary "Create" (→ stable) + secondary "Save as draft" (→ draft) + Cancel.
+- Edit stable: primary "Save" + Cancel. No demotion path.
+- Edit draft: primary "Save" (→ promotes to stable) + secondary "Save as draft" (→ stays draft) + Cancel.
 
-Save → redirect to list + toast "Interface type created: plano-3600" / "Updated" with undo where safe.
+Detail header shows a small draft pill when viewing a draft. No form-level maturity control — the save action carries the intent.
+
+Lifecycle actions (Archive, Merge, Delete) live in a lifecycle menu on the detail page header, not mixed with form buttons.
+
+Save → redirect to list + toast "Interface type created: plano-3600" / "Updated" / "Published plano-3600 (draft → stable)" with undo where safe.
 
 ---
 
@@ -281,9 +294,9 @@ Migration: backfill single-text identifiers → interface type UUIDs, drop text 
 ### CRUD
 
 - `GET /api/interface-types` — list. Query param `status=active|archived|all` (default `all` for admin list, `active` for chip pickers).
-- `POST /api/interface-types` — admin only. Defaults maturity to `draft`.
+- `POST /api/interface-types` — admin only. Body `{ ..., maturity }`. Maturity defaulted from the save button (stable if omitted).
 - `GET /api/interface-types/:id` — detail + usage counts.
-- `PATCH /api/interface-types/:id` — admin only. Identifier + maturity + description + physicalContract mutable.
+- `PATCH /api/interface-types/:id` — admin only. Identifier + description + physicalContract + unitSystem mutable. Maturity mutable only in the direction `draft → stable`; stable → draft returns 409.
 - `POST /api/interface-types/:id/archive` — admin only. Sets `archived_at = now()`.
 - `POST /api/interface-types/:id/unarchive` — admin only. Nulls `archived_at`.
 - `POST /api/interface-types/merge` — admin only. Body: `{ sourceIds: [...], targetId }`. Rewrites all junction rows + deletes source rows in a single transaction. Returns count of rewritten references.
