@@ -191,12 +191,84 @@ export const templateRepository = {
       versionMap.set(v.templateId, list);
     }
 
+    // Batch-load interface identifiers for the current versions so callers
+    // can filter / render chips without a second round-trip.
+    const currentVersionIds = allTemplates
+      .map((t) => versionMap.get(t.id)?.find((v) => v.version === t.currentVersion)?.id)
+      .filter((x): x is string => !!x);
+    const providedByVersion = new Map<
+      string,
+      Array<{ id: string; identifier: string }>
+    >();
+    const acceptedByVersion = new Map<
+      string,
+      Array<{ id: string; identifier: string }>
+    >();
+    if (currentVersionIds.length > 0) {
+      const providedRows = await db
+        .select({
+          versionId: templateVersionInterfacesProvided.templateVersionId,
+          id: interfaceTypes.id,
+          identifier: interfaceTypes.identifier,
+        })
+        .from(templateVersionInterfacesProvided)
+        .innerJoin(
+          interfaceTypes,
+          eq(
+            templateVersionInterfacesProvided.interfaceTypeId,
+            interfaceTypes.id,
+          ),
+        )
+        .where(
+          inArray(
+            templateVersionInterfacesProvided.templateVersionId,
+            currentVersionIds,
+          ),
+        );
+      for (const r of providedRows) {
+        const list = providedByVersion.get(r.versionId) ?? [];
+        list.push({ id: r.id, identifier: r.identifier });
+        providedByVersion.set(r.versionId, list);
+      }
+      const acceptedRows = await db
+        .select({
+          versionId: templateVersionInterfacesAccepted.templateVersionId,
+          id: interfaceTypes.id,
+          identifier: interfaceTypes.identifier,
+        })
+        .from(templateVersionInterfacesAccepted)
+        .innerJoin(
+          interfaceTypes,
+          eq(
+            templateVersionInterfacesAccepted.interfaceTypeId,
+            interfaceTypes.id,
+          ),
+        )
+        .where(
+          inArray(
+            templateVersionInterfacesAccepted.templateVersionId,
+            currentVersionIds,
+          ),
+        );
+      for (const r of acceptedRows) {
+        const list = acceptedByVersion.get(r.versionId) ?? [];
+        list.push({ id: r.id, identifier: r.identifier });
+        acceptedByVersion.set(r.versionId, list);
+      }
+    }
+
     return allTemplates.map((t) => {
       const versions = versionMap.get(t.id) ?? [];
       const currentVer = versions.find((v) => v.version === t.currentVersion);
       return {
         ...t,
-        currentVersionData: currentVer ?? null,
+        currentVersionData: currentVer
+          ? {
+              ...currentVer,
+              interfacesProvided: providedByVersion.get(currentVer.id) ?? [],
+              interfacesAccepted: acceptedByVersion.get(currentVer.id) ?? [],
+            }
+          : null,
       };
     });
   },

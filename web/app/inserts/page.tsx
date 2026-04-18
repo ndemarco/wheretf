@@ -16,7 +16,7 @@ interface Insert {
   rows: number | null;
   columns: number | null;
   templateName: string | null;
-  interfaceType: string | null;
+  interfaceTypes: Array<{ id: string; identifier: string }>;
   rowDividersFixed?: boolean;
   columnDividersFixed?: boolean;
   locationPath: string | null;
@@ -34,7 +34,7 @@ function InsertsPageInner() {
   const searchParams = useSearchParams();
 
   const templateId = searchParams.get("templateId") ?? "";
-  const interfaceType = searchParams.get("interfaceType") ?? "";
+  const interfaceTypeId = searchParams.get("interfaceTypeId") ?? "";
   const placement = (searchParams.get("placement") ?? "all") as
     | "all"
     | "placed"
@@ -48,7 +48,7 @@ function InsertsPageInner() {
   const fetchInserts = useCallback(async () => {
     const qs = new URLSearchParams();
     if (templateId) qs.set("templateId", templateId);
-    if (interfaceType) qs.set("interfaceType", interfaceType);
+    if (interfaceTypeId) qs.set("interfaceTypeId", interfaceTypeId);
     qs.set("placement", placement);
     try {
       const res = await fetch(`/api/inserts?${qs.toString()}`);
@@ -59,7 +59,7 @@ function InsertsPageInner() {
     } finally {
       setLoading(false);
     }
-  }, [templateId, interfaceType, placement]);
+  }, [templateId, interfaceTypeId, placement]);
 
   const fetchTemplates = useCallback(async () => {
     try {
@@ -93,9 +93,15 @@ function InsertsPageInner() {
   }
 
   const interfaceOptions = useMemo(() => {
-    const set = new Set<string>();
-    for (const ins of inserts) if (ins.interfaceType) set.add(ins.interfaceType);
-    return [...set].sort();
+    const map = new Map<string, string>(); // id → identifier
+    for (const ins of inserts) {
+      for (const ift of ins.interfaceTypes ?? []) {
+        map.set(ift.id, ift.identifier);
+      }
+    }
+    return Array.from(map.entries())
+      .map(([id, identifier]) => ({ id, identifier }))
+      .sort((a, b) => a.identifier.localeCompare(b.identifier));
   }, [inserts]);
 
   const selected = inserts.find((i) => i.id === selectedId) ?? null;
@@ -139,14 +145,16 @@ function InsertsPageInner() {
           <label className="flex items-center gap-2 text-xs text-slate-400">
             <span className="w-20 shrink-0">Interface</span>
             <select
-              value={interfaceType}
-              onChange={(e) => setParam("interfaceType", e.target.value || null)}
+              value={interfaceTypeId}
+              onChange={(e) =>
+                setParam("interfaceTypeId", e.target.value || null)
+              }
               className="flex-1 px-2 py-1 bg-slate-800 border border-slate-700 rounded text-xs text-slate-200 focus:border-accent focus:outline-none"
             >
               <option value="">All interfaces</option>
               {interfaceOptions.map((i) => (
-                <option key={i} value={i}>
-                  {i}
+                <option key={i.id} value={i.id}>
+                  {i.identifier}
                 </option>
               ))}
             </select>
@@ -205,9 +213,9 @@ function InsertsPageInner() {
                             {ins.templateName}
                           </span>
                         )}
-                        {ins.interfaceType && (
-                          <span className="text-[10px] px-1.5 py-0.5 rounded bg-blue-900/40 text-blue-300 shrink-0">
-                            {ins.interfaceType}
+                        {ins.interfaceTypes && ins.interfaceTypes.length > 0 && (
+                          <span className="text-[10px] px-1.5 py-0.5 rounded bg-blue-900/40 text-blue-300 shrink-0 truncate">
+                            {ins.interfaceTypes.map((i) => i.identifier).join(", ")}
                           </span>
                         )}
                       </div>
@@ -247,7 +255,6 @@ interface Receptacle {
   id: string;
   path: string;
   label: string;
-  interfaceTypeAccepted: string | null;
   moduleId: string;
   moduleName: string | null;
 }
@@ -1569,12 +1576,12 @@ function PlacementSection({
       <div>
         <div className="text-[11px] text-slate-500 mb-1.5">
           {verb} to…
-          {insert.interfaceType && (
+          {insert.interfaceTypes && insert.interfaceTypes.length > 0 && (
             <>
               {" "}
               <span className="text-slate-600">(accepts</span>{" "}
               <span className="font-mono text-slate-400">
-                {insert.interfaceType}
+                {insert.interfaceTypes.map((i) => i.identifier).join(", ")}
               </span>
               <span className="text-slate-600">)</span>
             </>
