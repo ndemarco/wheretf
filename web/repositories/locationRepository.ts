@@ -2,6 +2,8 @@ import { asc, eq, inArray, sql } from "drizzle-orm";
 import { db } from "@/db/connection";
 import {
   locations,
+  locationInterfacesAccepted,
+  interfaceTypes,
   templates,
   templateVersions,
   assignments,
@@ -37,7 +39,7 @@ export const locationRepository = {
     label,
     pathSegments,
     locationType,
-    interfaceTypeAccepted,
+    interfacesAcceptedIds,
     templateVersionId,
     insertId,
     gridRow,
@@ -49,7 +51,8 @@ export const locationRepository = {
     label: string;
     pathSegments: string[];
     locationType: string;
-    interfaceTypeAccepted?: string;
+    /** UUIDs of interface_types this receptacle accepts. */
+    interfacesAcceptedIds?: string[];
     templateVersionId?: string;
     insertId?: string;
     gridRow?: number;
@@ -62,23 +65,35 @@ export const locationRepository = {
       templateVersionId ??
       (await createSingleInstanceTemplateVersion(pathSegments));
 
-    const [location] = await db
-      .insert(locations)
-      .values({
-        moduleId,
-        parentId,
-        label,
-        path,
-        pathSegments,
-        locationType,
-        interfaceTypeAccepted,
-        templateVersionId: resolvedTemplateVersionId,
-        insertId,
-        gridRow,
-        gridColumn,
-        metadata,
-      })
-      .returning();
+    const location = await db.transaction(async (tx) => {
+      const [loc] = await tx
+        .insert(locations)
+        .values({
+          moduleId,
+          parentId,
+          label,
+          path,
+          pathSegments,
+          locationType,
+          templateVersionId: resolvedTemplateVersionId,
+          insertId,
+          gridRow,
+          gridColumn,
+          metadata,
+        })
+        .returning();
+
+      if (interfacesAcceptedIds?.length) {
+        await tx.insert(locationInterfacesAccepted).values(
+          interfacesAcceptedIds.map((interfaceTypeId) => ({
+            locationId: loc.id,
+            interfaceTypeId,
+          })),
+        );
+      }
+
+      return loc;
+    });
 
     await transactionRepository.log({
       actionType: "location.create",
@@ -89,6 +104,102 @@ export const locationRepository = {
     });
 
     return location;
+  },
+
+  /** Interface types this receptacle accepts. */
+  async getAcceptedInterfaces({ locationId }: { locationId: string }) {
+    return db
+      .select({
+        id: interfaceTypes.id,
+        identifier: interfaceTypes.identifier,
+        description: interfaceTypes.description,
+        maturity: interfaceTypes.maturity,
+        archivedAt: interfaceTypes.archivedAt,
+        unitSystem: interfaceTypes.unitSystem,
+      })
+      .from(locationInterfacesAccepted)
+      .innerJoin(
+        interfaceTypes,
+        eq(locationInterfacesAccepted.interfaceTypeId, interfaceTypes.id),
+      )
+      .where(eq(locationInterfacesAccepted.locationId, locationId));
+  },
+
+  /** Batched version of getAcceptedInterfaces — returns a map keyed by locationId. */
+  async getAcceptedInterfacesByLocationIds({
+    locationIds,
+  }: {
+    locationIds: string[];
+  }) {
+    const map = new Map<
+      string,
+      {
+        id: string;
+        identifier: string;
+        description: string | null;
+        maturity: string;
+        archivedAt: Date | null;
+        unitSystem: unknown;
+      }[]
+    >();
+    if (locationIds.length === 0) return map;
+    const rows = await db
+      .select({
+        locationId: locationInterfacesAccepted.locationId,
+        id: interfaceTypes.id,
+        identifier: interfaceTypes.identifier,
+        description: interfaceTypes.description,
+        maturity: interfaceTypes.maturity,
+        archivedAt: interfaceTypes.archivedAt,
+        unitSystem: interfaceTypes.unitSystem,
+      })
+      .from(locationInterfacesAccepted)
+      .innerJoin(
+        interfaceTypes,
+        eq(locationInterfacesAccepted.interfaceTypeId, interfaceTypes.id),
+      )
+      .where(inArray(locationInterfacesAccepted.locationId, locationIds));
+    for (const r of rows) {
+      const { locationId, ...iface } = r;
+      let list = map.get(locationId);
+      if (!list) {
+        list = [];
+        map.set(locationId, list);
+      }
+      list.push(iface);
+    }
+    return map;
+  },
+
+  /** Replace the accepted-interface set on a receptacle. */
+  async setAcceptedInterfaces({
+    locationId,
+    interfaceTypeIds,
+  }: {
+    locationId: string;
+    interfaceTypeIds: string[];
+  }) {
+    await db.transaction(async (tx) => {
+      await tx
+        .delete(locationInterfacesAccepted)
+        .where(eq(locationInterfacesAccepted.locationId, locationId));
+      if (interfaceTypeIds.length > 0) {
+        await tx.insert(locationInterfacesAccepted).values(
+          interfaceTypeIds.map((interfaceTypeId) => ({
+            locationId,
+            interfaceTypeId,
+          })),
+        );
+      }
+    });
+
+    await transactionRepository.log({
+      actionType: "location.setAcceptedInterfaces",
+      entityType: "location",
+      entityId: locationId,
+      beforeState: null,
+      afterState: { interfaceTypeIds },
+    });
   },
 
   async findById({ id }: { id: string }) {
@@ -137,7 +248,6 @@ export const locationRepository = {
     id: string;
     label?: string;
     locationType?: string;
-    interfaceTypeAccepted?: string | null;
     templateVersionId?: string;
     gridRow?: number;
     gridColumn?: number;

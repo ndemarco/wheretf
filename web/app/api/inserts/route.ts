@@ -19,7 +19,7 @@ export async function GET(request: NextRequest) {
 
     const inserts = await insertRepository.listWithDetails({
       templateId: params.get("templateId") ?? undefined,
-      interfaceType: params.get("interfaceType") ?? undefined,
+      interfaceTypeId: params.get("interfaceTypeId") ?? undefined,
       moduleId: params.get("moduleId") ?? undefined,
       placement,
     });

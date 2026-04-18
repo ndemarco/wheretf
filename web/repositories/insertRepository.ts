@@ -1,10 +1,13 @@
-import { and, eq, isNull, isNotNull, sql, type SQL } from "drizzle-orm";
+import { and, eq, inArray, isNull, isNotNull, sql, type SQL } from "drizzle-orm";
 import { db } from "@/db/connection";
 import {
   inserts,
   locations,
+  locationInterfacesAccepted,
   templates,
   templateVersions,
+  templateVersionInterfacesProvided,
+  interfaceTypes,
   modules,
   assignments,
 } from "@/db/schema";
@@ -84,7 +87,6 @@ export const insertRepository = {
     name,
     templateId,
     templateVersionId,
-    interfaceTypeProvided,
     rows,
     columns,
     overrides,
@@ -93,7 +95,6 @@ export const insertRepository = {
     name?: string;
     templateId?: string;
     templateVersionId?: string;
-    interfaceTypeProvided?: string;
     rows?: number;
     columns?: number;
     overrides?: Record<string, unknown>;
@@ -109,7 +110,6 @@ export const insertRepository = {
           name,
           templateId,
           templateVersionId,
-          interfaceTypeProvided,
           rows,
           columns,
           overrides,
@@ -212,15 +212,20 @@ export const insertRepository = {
     const insert = await insertRepository.findById({ id });
     if (!insert) throw new Error(`Insert ${id} not found`);
 
-    // Resolve insert's effective interface type: explicit override first,
-    // else template version's interfaceTypeProvided.
-    let effectiveIface = insert.interfaceTypeProvided ?? null;
-    if (!effectiveIface && insert.templateVersionId) {
-      const [tv] = await db
-        .select({ iface: templateVersions.interfaceTypeProvided })
-        .from(templateVersions)
-        .where(eq(templateVersions.id, insert.templateVersionId));
-      effectiveIface = tv?.iface ?? null;
+    // Inserts inherit provided interfaces from their template version
+    // (no per-insert override — spec).
+    const providedSet = new Set<string>();
+    if (insert.templateVersionId) {
+      const rows = await db
+        .select({ id: templateVersionInterfacesProvided.interfaceTypeId })
+        .from(templateVersionInterfacesProvided)
+        .where(
+          eq(
+            templateVersionInterfacesProvided.templateVersionId,
+            insert.templateVersionId,
+          ),
+        );
+      for (const r of rows) providedSet.add(r.id);
     }
 
     const receptacles = await db
@@ -228,13 +233,33 @@ export const insertRepository = {
         id: locations.id,
         path: locations.path,
         label: locations.label,
-        interfaceTypeAccepted: locations.interfaceTypeAccepted,
         moduleId: locations.moduleId,
         moduleName: modules.name,
       })
       .from(locations)
       .leftJoin(modules, eq(locations.moduleId, modules.id))
       .where(eq(locations.locationType, "receptacle"));
+
+    // Batch-load accepted interface sets for all candidate receptacles.
+    const recIds = receptacles.map((r) => r.id);
+    const acceptedByLoc = new Map<string, Set<string>>();
+    if (recIds.length > 0) {
+      const accRows = await db
+        .select({
+          locationId: locationInterfacesAccepted.locationId,
+          interfaceTypeId: locationInterfacesAccepted.interfaceTypeId,
+        })
+        .from(locationInterfacesAccepted)
+        .where(inArray(locationInterfacesAccepted.locationId, recIds));
+      for (const r of accRows) {
+        let s = acceptedByLoc.get(r.locationId);
+        if (!s) {
+          s = new Set();
+          acceptedByLoc.set(r.locationId, s);
+        }
+        s.add(r.interfaceTypeId);
+      }
+    }
 
     // Find which receptacles are currently occupied.
     const occupants = await db
@@ -249,10 +274,14 @@ export const insertRepository = {
       .filter((r) => r.id !== insert.locationId) // skip current host
       .filter((r) => !occupied.has(r.id))
       .filter((r) => {
-        // compatibility: if either side is null, allow; else must match
-        const accepts = r.interfaceTypeAccepted ?? null;
-        if (!effectiveIface || !accepts) return true;
-        return effectiveIface === accepts;
+        // Compatibility: if either side is empty, allow (user rules the
+        // storage); else require non-empty intersection.
+        const accepts = acceptedByLoc.get(r.id);
+        if (providedSet.size === 0 || !accepts || accepts.size === 0) {
+          return true;
+        }
+        for (const id of providedSet) if (accepts.has(id)) return true;
+        return false;
       });
   },
 
@@ -260,18 +289,18 @@ export const insertRepository = {
    * Rich list of inserts for the /inserts page. Joins template name,
    * current location path, and host module. Filters:
    *   - templateId: restrict to one template
-   *   - interfaceType: match insert.interfaceTypeProvided OR the template's
-   *     current version's interfaceTypeProvided
+   *   - interfaceTypeId: UUID of an interface_type. Matches when the
+   *     insert's template version provides that interface.
    *   - placement: 'placed' | 'unplaced' | 'all' (default 'all')
    */
   async listWithDetails({
     templateId,
-    interfaceType,
+    interfaceTypeId,
     placement = "all",
     moduleId,
   }: {
     templateId?: string;
-    interfaceType?: string;
+    interfaceTypeId?: string;
     placement?: "placed" | "unplaced" | "all";
     moduleId?: string;
   } = {}) {
@@ -282,12 +311,14 @@ export const insertRepository = {
     if (placement === "unplaced") conditions.push(isNull(inserts.locationId));
     if (moduleId) conditions.push(eq(locations.moduleId, moduleId));
 
-    if (interfaceType) {
+    if (interfaceTypeId) {
+      // Match inserts whose template version provides the given interface.
       conditions.push(
-        sql`(
-          ${inserts.interfaceTypeProvided} = ${interfaceType}
-          OR ${templateVersions.interfaceTypeProvided} = ${interfaceType}
-        )`
+        sql`EXISTS (
+          SELECT 1 FROM ${templateVersionInterfacesProvided} tvp
+          WHERE tvp.template_version_id = ${inserts.templateVersionId}
+            AND tvp.interface_type_id = ${interfaceTypeId}
+        )`,
       );
     }
 
@@ -299,7 +330,6 @@ export const insertRepository = {
       .select({
         insert: inserts,
         templateName: templates.name,
-        templateInterfaceProvided: templateVersions.interfaceTypeProvided,
         rowDividersFixed: templateVersions.rowDividersFixed,
         columnDividersFixed: templateVersions.columnDividersFixed,
         locationPath: locations.path,
@@ -330,12 +360,53 @@ export const insertRepository = {
       .leftJoin(modules, eq(locations.moduleId, modules.id))
       .where(where);
 
+    // Batch-load provided interfaces per template version for the rows we
+    // actually returned. Inserts inherit them; we surface the identifiers
+    // so the page can render chips without another round-trip.
+    const versionIds = Array.from(
+      new Set(rows.map((r) => r.insert.templateVersionId).filter(Boolean)),
+    ) as string[];
+    const ifaceByVersion = new Map<
+      string,
+      { id: string; identifier: string }[]
+    >();
+    if (versionIds.length > 0) {
+      const ifaceRows = await db
+        .select({
+          templateVersionId: templateVersionInterfacesProvided.templateVersionId,
+          id: interfaceTypes.id,
+          identifier: interfaceTypes.identifier,
+        })
+        .from(templateVersionInterfacesProvided)
+        .innerJoin(
+          interfaceTypes,
+          eq(
+            templateVersionInterfacesProvided.interfaceTypeId,
+            interfaceTypes.id,
+          ),
+        )
+        .where(
+          inArray(
+            templateVersionInterfacesProvided.templateVersionId,
+            versionIds,
+          ),
+        );
+      for (const r of ifaceRows) {
+        let list = ifaceByVersion.get(r.templateVersionId);
+        if (!list) {
+          list = [];
+          ifaceByVersion.set(r.templateVersionId, list);
+        }
+        list.push({ id: r.id, identifier: r.identifier });
+      }
+    }
+
     return rows.map((r) => ({
       ...r.insert,
       templateName: r.templateName,
-      // effective interface type: insert-override first, else template default
-      interfaceType:
-        r.insert.interfaceTypeProvided ?? r.templateInterfaceProvided ?? null,
+      interfaceTypes: r.insert.templateVersionId
+        ? ifaceByVersion.get(r.insert.templateVersionId) ?? []
+        : [],
       rowDividersFixed: r.rowDividersFixed ?? false,
       columnDividersFixed: r.columnDividersFixed ?? false,
       locationPath: r.locationPath,
@@ -361,14 +432,37 @@ export const insertRepository = {
       );
     }
 
-    if (
-      insert.interfaceTypeProvided &&
-      location.interfaceTypeAccepted &&
-      insert.interfaceTypeProvided !== location.interfaceTypeAccepted
-    ) {
-      throw new Error(
-        `Interface type mismatch: insert provides "${insert.interfaceTypeProvided}" but location accepts "${location.interfaceTypeAccepted}"`
-      );
+    // Interface compatibility — set intersection. Inserts inherit provided
+    // interfaces from their template version. If either side has no
+    // interfaces declared, allow (user rules the storage).
+    const providedIds = insert.templateVersionId
+      ? (
+          await db
+            .select({ id: templateVersionInterfacesProvided.interfaceTypeId })
+            .from(templateVersionInterfacesProvided)
+            .where(
+              eq(
+                templateVersionInterfacesProvided.templateVersionId,
+                insert.templateVersionId,
+              ),
+            )
+        ).map((r) => r.id)
+      : [];
+    const acceptedIds = (
+      await db
+        .select({ id: locationInterfacesAccepted.interfaceTypeId })
+        .from(locationInterfacesAccepted)
+        .where(eq(locationInterfacesAccepted.locationId, location.id))
+    ).map((r) => r.id);
+
+    if (providedIds.length > 0 && acceptedIds.length > 0) {
+      const acceptsSet = new Set(acceptedIds);
+      const overlap = providedIds.some((id) => acceptsSet.has(id));
+      if (!overlap) {
+        throw new Error(
+          `No compatible interface: insert provides [${providedIds.length}] interfaces; receptacle accepts [${acceptedIds.length}]; none match`,
+        );
+      }
     }
 
     // Refuse if the receptacle already holds another insert.
@@ -459,7 +553,6 @@ export const insertRepository = {
     name?: string;
     templateId?: string;
     templateVersionId?: string;
-    interfaceTypeProvided?: string;
     rows?: number;
     columns?: number;
     overrides?: Record<string, unknown>;

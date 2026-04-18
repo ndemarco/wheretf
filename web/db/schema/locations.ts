@@ -26,7 +26,8 @@ export const locations = pgTable("locations", {
 
   // Location type
   locationType: text("location_type").notNull(), // "receptacle" | "fixed" | "leaf"
-  interfaceTypeAccepted: text("interface_type_accepted"), // for receptacles
+  // interfaceTypeAccepted — read via location_interfaces_accepted junction.
+  // Column removed in migration 0014.
 
   // Structure source — every location resolves dimensions through a template version
   templateVersionId: uuid("template_version_id")
@@ -72,7 +73,8 @@ export const inserts = pgTable("inserts", {
     () => templateVersions.id
   ),
   locationId: uuid("location_id").references(() => locations.id), // receptacle it's placed in (null if unplaced)
-  interfaceTypeProvided: text("interface_type_provided"), // what interface this insert provides
+  // Inserts inherit provided interfaces from their template version — no
+  // per-insert override. Column removed in migration 0014.
 
   // Parametric instantiation
   rows: integer("rows"), // actual dimensions if parametric

@@ -5,18 +5,28 @@ export async function GET(request: NextRequest) {
   try {
     const moduleId = request.nextUrl.searchParams.get("moduleId");
     const insertId = request.nextUrl.searchParams.get("insertId");
+    let locations;
     if (insertId) {
-      const locations = await locationRepository.findByInsertId({ insertId });
-      return NextResponse.json({ locations });
-    }
-    if (!moduleId) {
+      locations = await locationRepository.findByInsertId({ insertId });
+    } else if (moduleId) {
+      locations = await locationRepository.findByModuleId({ moduleId });
+    } else {
       return NextResponse.json(
         { error: "moduleId or insertId query parameter is required" },
         { status: 400 },
       );
     }
-    const locations = await locationRepository.findByModuleId({ moduleId });
-    return NextResponse.json({ locations });
+    // Attach accepted interfaces per location (batched).
+    const ids = locations.map((l) => l.id);
+    const ifaceMap = await locationRepository.getAcceptedInterfacesByLocationIds(
+      { locationIds: ids },
+    );
+    return NextResponse.json({
+      locations: locations.map((l) => ({
+        ...l,
+        interfacesAccepted: ifaceMap.get(l.id) ?? [],
+      })),
+    });
   } catch (err) {
     return NextResponse.json(
       { error: err instanceof Error ? err.message : "Unexpected error" },

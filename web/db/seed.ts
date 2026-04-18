@@ -10,6 +10,7 @@ import { itemRepository } from "../repositories/itemRepository";
 import { templateRepository } from "../repositories/templateRepository";
 import { moduleRepository } from "../repositories/moduleRepository";
 import { locationRepository } from "../repositories/locationRepository";
+import { interfaceTypeRepository } from "../repositories/interfaceTypeRepository";
 import { categories, parameterDefinitions, aspects, templates, modules } from "./schema";
 
 async function seed() {
@@ -412,18 +413,32 @@ async function seed() {
   } else {
 
   // Interface types — what physical contracts exist for this seed set.
-  // Templates declare which one they fit; receptacles declare which they
-  // accept. Compatibility is a string match.
-  const { interfaceTypes: ifaceTbl } = await import("./schema");
+  // Templates declare which they provide; receptacles declare which they
+  // accept. Compatibility is set intersection over interface_types.id.
   const ifaceSeeds = [
     { identifier: "plano-3600", description: "Plano 3600 tackle-box footprint" },
     { identifier: "plano-3700", description: "Plano 3700 tackle-box footprint" },
-    { identifier: "gridfinity-42mm", description: "Gridfinity 42mm baseplate cell" },
+    {
+      identifier: "gridfinity-42mm",
+      description: "Gridfinity 42mm baseplate cell",
+      unitSystem: {
+        width: { label: "u", mm: 42 },
+        depth: { label: "u", mm: 42 },
+        height: { label: "h", mm: 7 },
+      },
+    },
     { identifier: "alex-drawer", description: "IKEA ALEX drawer interior" },
     { identifier: "small-parts-bin", description: "Generic small-parts drawer cell" },
   ];
+  const ifaceIds: Record<string, string> = {};
   for (const s of ifaceSeeds) {
-    await db.insert(ifaceTbl).values(s).onConflictDoNothing();
+    let existing = await interfaceTypeRepository.findByIdentifier({
+      identifier: s.identifier,
+    });
+    if (!existing) {
+      existing = await interfaceTypeRepository.create(s);
+    }
+    ifaceIds[s.identifier] = existing.id;
   }
 
   // Plano 3600 Stowaway — classic tackle box tray
@@ -437,7 +452,7 @@ async function seed() {
     originPosition: "top-left",
     rowDividersFixed: true,
     columnDividersFixed: false,
-    interfaceTypeProvided: "plano-3600",
+    interfacesProvidedIds: [ifaceIds["plano-3600"]],
     metadata: { unitSystem: "imperial", manufacturer: "Plano", productNumber: "2-3600" },
   });
 
@@ -451,6 +466,7 @@ async function seed() {
     originPosition: "top-left",
     rowDividersFixed: true,
     columnDividersFixed: false,
+    interfacesProvidedIds: [ifaceIds["plano-3600"]],
   });
 
   // Plano 3700 Stowaway — deeper, fewer rows
@@ -464,7 +480,7 @@ async function seed() {
     originPosition: "top-left",
     rowDividersFixed: true,
     columnDividersFixed: false,
-    interfaceTypeProvided: "plano-3700",
+    interfacesProvidedIds: [ifaceIds["plano-3700"]],
     metadata: { unitSystem: "imperial", manufacturer: "Plano", productNumber: "2-3700" },
   });
 
@@ -484,8 +500,7 @@ async function seed() {
     originPosition: "bottom-left",
     rowDividersFixed: false,
     columnDividersFixed: false,
-    unitSize: "42mm",
-    interfaceTypeProvided: "gridfinity-42mm",
+    interfacesProvidedIds: [ifaceIds["gridfinity-42mm"]],
     metadata: { unitSystem: "metric" },
   });
 
@@ -500,7 +515,7 @@ async function seed() {
     originPosition: "top-left",
     rowDividersFixed: true,
     columnDividersFixed: true,
-    interfaceTypeProvided: "small-parts-bin",
+    interfacesProvidedIds: [ifaceIds["small-parts-bin"]],
     metadata: { unitSystem: "metric" },
   });
 
@@ -515,7 +530,7 @@ async function seed() {
     originPosition: "top-left",
     rowDividersFixed: false,
     columnDividersFixed: false,
-    interfaceTypeProvided: "alex-drawer",
+    interfacesProvidedIds: [ifaceIds["alex-drawer"]],
     metadata: { unitSystem: "metric", manufacturer: "IKEA", productNumber: "ALEX" },
   });
 
@@ -534,13 +549,22 @@ async function seed() {
       primaryDimensionLabel: "level",
       primaryDimensionCount: 11,
     });
+    const ifaceByIdentifier = async (identifier: string) => {
+      const row = await interfaceTypeRepository.findByIdentifier({ identifier });
+      if (!row) throw new Error(`Interface type ${identifier} not seeded`);
+      return row.id;
+    };
+    const planoAcceptedId = await ifaceByIdentifier("plano-3600");
+    const alexAcceptedId = await ifaceByIdentifier("alex-drawer");
+    const plano3700AcceptedId = await ifaceByIdentifier("plano-3700");
+
     for (let i = 1; i <= 11; i++) {
       await locationRepository.create({
         moduleId: muse.id,
         label: String(i),
         pathSegments: ["MUSE", String(i)],
         locationType: "receptacle",
-        interfaceTypeAccepted: "plano-3600",
+        interfacesAcceptedIds: [planoAcceptedId],
       });
     }
 
@@ -557,7 +581,7 @@ async function seed() {
         label: String(i),
         pathSegments: ["ALEX", String(i)],
         locationType: "receptacle",
-        interfaceTypeAccepted: "alex-drawer",
+        interfacesAcceptedIds: [alexAcceptedId],
       });
     }
 
@@ -574,7 +598,7 @@ async function seed() {
         label: String(i),
         pathSegments: ["BENCH", String(i)],
         locationType: i <= 2 ? "receptacle" : "fixed",
-        interfaceTypeAccepted: i <= 2 ? "plano-3700" : undefined,
+        interfacesAcceptedIds: i <= 2 ? [plano3700AcceptedId] : undefined,
       });
     }
 

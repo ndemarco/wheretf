@@ -389,13 +389,11 @@ describe("templateRepository", () => {
         maxRows: 10,
         minColumns: 1,
         maxColumns: 10,
-        unitSize: "42mm",
       });
 
       expect(v2.isParametric).toBe(true);
       expect(v2.minRows).toBe(1);
       expect(v2.maxRows).toBe(10);
-      expect(v2.unitSize).toBe("42mm");
     });
 
     it("logs a transaction", async () => {

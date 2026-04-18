@@ -38,7 +38,6 @@ export const templateVersions = pgTable("template_versions", {
   maxRows: integer("max_rows"),
   minColumns: integer("min_columns"),
   maxColumns: integer("max_columns"),
-  unitSize: text("unit_size"), // e.g., "42mm" for Gridfinity
 
   // Labeling
   rowLabelScheme: text("row_label_scheme").notNull().default("alpha"), // alpha, numeric, custom
@@ -46,9 +45,8 @@ export const templateVersions = pgTable("template_versions", {
   originPosition: text("origin_position").notNull().default("top-left"),
   primaryAxis: text("primary_axis").notNull().default("row"),
 
-  // Interface types
-  interfaceTypeProvided: text("interface_type_provided"), // what this fits into (insert side)
-  interfaceTypeAccepted: text("interface_type_accepted"), // what this accepts (receptacle side)
+  // Interface types — read via template_version_interfaces_{provided,accepted}
+  // junctions. Column removed in migration 0014.
 
   // Dividers
   rowDividersFixed: boolean("row_dividers_fixed").notNull().default(false),

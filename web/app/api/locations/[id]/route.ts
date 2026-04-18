@@ -14,7 +14,12 @@ export async function GET(
         { status: 404 },
       );
     }
-    return NextResponse.json({ location });
+    const interfacesAccepted = await locationRepository.getAcceptedInterfaces({
+      locationId: id,
+    });
+    return NextResponse.json({
+      location: { ...location, interfacesAccepted },
+    });
   } catch (err) {
     return NextResponse.json(
       { error: err instanceof Error ? err.message : "Unexpected error" },
@@ -30,8 +35,29 @@ export async function PATCH(
   try {
     const { id } = await params;
     const body = await request.json();
-    const location = await locationRepository.update({ id, ...body });
-    return NextResponse.json({ location });
+    const { interfacesAcceptedIds, ...rest } = body ?? {};
+    const hasCoreUpdates = Object.keys(rest).length > 0;
+    const location = hasCoreUpdates
+      ? await locationRepository.update({ id, ...rest })
+      : await locationRepository.findById({ id });
+    if (!location) {
+      return NextResponse.json(
+        { error: "Location not found" },
+        { status: 404 },
+      );
+    }
+    if (Array.isArray(interfacesAcceptedIds)) {
+      await locationRepository.setAcceptedInterfaces({
+        locationId: id,
+        interfaceTypeIds: interfacesAcceptedIds,
+      });
+    }
+    const interfacesAccepted = await locationRepository.getAcceptedInterfaces({
+      locationId: id,
+    });
+    return NextResponse.json({
+      location: { ...location, interfacesAccepted },
+    });
   } catch (err) {
     const message = err instanceof Error ? err.message : "Unexpected error";
     if (message.includes("not found")) {
