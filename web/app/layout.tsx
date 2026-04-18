@@ -5,6 +5,7 @@ import Sidebar from "./components/Sidebar";
 export const metadata: Metadata = {
   title: "WhereTF",
   description: "R&D workshop item tracker",
+  icons: { icon: "/icon.svg" },
 };
 
 export default function RootLayout({

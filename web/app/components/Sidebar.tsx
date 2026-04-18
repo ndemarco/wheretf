@@ -156,13 +156,32 @@ export default function Sidebar() {
     <nav
       className={`${width} bg-slate-800 border-r border-slate-700 flex flex-col shrink-0 transition-[width] duration-150 group/sidebar`}
     >
-      {/* Header row: brand space + collapse chevron (appears on hover) */}
-      <div className="h-10 flex items-center justify-end px-2 border-b border-slate-700/50 shrink-0">
+      {/* Header row: logo + collapse chevron */}
+      <div className="h-10 flex items-center px-2 border-b border-slate-700/50 shrink-0 gap-2">
+        <Link href="/" className="flex items-center gap-2 min-w-0 flex-1">
+          <svg
+            viewBox="0 0 32 32"
+            fill="none"
+            xmlns="http://www.w3.org/2000/svg"
+            className="w-5 h-5 shrink-0 text-accent"
+          >
+            <path
+              d="M16 2C10.477 2 6 6.477 6 12c0 5.523 10 18 10 18s10-12.477 10-18c0-5.523-4.477-10-10-10zm0 14a4 4 0 110-8 4 4 0 010 8z"
+              fill="currentColor"
+              fillRule="evenodd"
+            />
+          </svg>
+          {expanded && (
+            <span className="text-sm font-bold text-slate-200 truncate">
+              WhereTF
+            </span>
+          )}
+        </Link>
         <button
           onClick={() => setExpanded((v) => !v)}
           title={`${expanded ? "Collapse" : "Expand"} sidebar (Ctrl/Cmd + \\)`}
           aria-label={expanded ? "Collapse sidebar" : "Expand sidebar"}
-          className="w-6 h-6 rounded flex items-center justify-center text-slate-500 hover:text-slate-200 hover:bg-slate-700/70 transition-all opacity-0 group-hover/sidebar:opacity-100 focus:opacity-100"
+          className="w-6 h-6 rounded flex items-center justify-center text-slate-500 hover:text-slate-200 hover:bg-slate-700/70 transition-all opacity-0 group-hover/sidebar:opacity-100 focus:opacity-100 shrink-0"
         >
           <svg
             viewBox="0 0 24 24"

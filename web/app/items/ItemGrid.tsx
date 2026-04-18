@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo } from "react";
+import Spinner from "../components/Spinner";
 
 interface RichItem {
   id: string;
@@ -188,9 +189,9 @@ export default function ItemGrid({
               <tr>
                 <td
                   colSpan={columns.length}
-                  className="px-3 py-8 text-center text-slate-500"
+                  className="px-3 py-8 text-center text-accent"
                 >
-                  Loading...
+                  <Spinner size={24} />
                 </td>
               </tr>
             ) : items.length === 0 ? (

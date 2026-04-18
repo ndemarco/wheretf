@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
+import Spinner from "../components/Spinner";
 
 interface Module {
   id: string;
@@ -121,8 +122,8 @@ export default function ModulesPage() {
 
   if (loading) {
     return (
-      <div className="flex-1 flex items-center justify-center text-slate-500">
-        Loading…
+      <div className="flex-1 flex items-center justify-center text-accent">
+        <Spinner size={32} />
       </div>
     );
   }

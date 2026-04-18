@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { getGridLabel } from "@/lib/gridLabels";
+import Spinner from "../../components/Spinner";
 
 type Origin = "top-left" | "top-right" | "bottom-left" | "bottom-right";
 
@@ -442,8 +443,8 @@ export default function TemplateEditor({
 
   if (loading) {
     return (
-      <div className="flex-1 flex items-center justify-center text-slate-500">
-        Loading…
+      <div className="flex-1 flex items-center justify-center text-accent">
+        <Spinner size={32} />
       </div>
     );
   }

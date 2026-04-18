@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import Spinner from "../components/Spinner";
 
 interface Transaction {
   id: string;
@@ -139,8 +140,8 @@ export default function ActivityPage() {
       {/* Transaction list */}
       <div className="flex-1 overflow-y-auto">
         {loading ? (
-          <div className="flex items-center justify-center py-12 text-slate-500">
-            Loading...
+          <div className="flex items-center justify-center py-12 text-accent">
+            <Spinner size={32} />
           </div>
         ) : filtered.length === 0 ? (
           <div className="flex items-center justify-center py-12 text-slate-500 text-sm">

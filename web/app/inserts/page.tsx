@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
+import Spinner from "../components/Spinner";
 import { CellGrid, type CellRow } from "@/app/_components/CellGrid";
 
 interface Insert {
@@ -170,8 +171,8 @@ function InsertsPageInner() {
 
         <div className="flex-1 overflow-y-auto">
           {loading ? (
-            <div className="p-6 text-center text-slate-500 text-sm">
-              Loading…
+            <div className="flex items-center justify-center p-6 text-accent">
+              <Spinner size={24} />
             </div>
           ) : inserts.length === 0 ? (
             <div className="p-6 text-center text-slate-500 text-sm">

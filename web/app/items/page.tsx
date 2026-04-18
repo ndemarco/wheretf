@@ -3,6 +3,7 @@
 import { useSearchParams, useRouter } from "next/navigation";
 import { Suspense, useCallback, useEffect, useState } from "react";
 import FilterPanel from "./FilterPanel";
+import Spinner from "../components/Spinner";
 import ItemGrid from "./ItemGrid";
 import ItemDetail from "./ItemDetail";
 import CreateItemModal from "./CreateItemModal";
@@ -292,8 +293,8 @@ export default function ItemsPage() {
   return (
     <Suspense
       fallback={
-        <div className="flex-1 flex items-center justify-center text-slate-500">
-          Loading...
+        <div className="flex-1 flex items-center justify-center text-accent">
+          <Spinner size={32} />
         </div>
       }
     >

@@ -1,0 +1,26 @@
+export default function Spinner({
+  size = 24,
+  className = "",
+}: {
+  size?: number;
+  className?: string;
+}) {
+  return (
+    <svg
+      viewBox="0 0 32 32"
+      fill="none"
+      xmlns="http://www.w3.org/2000/svg"
+      width={size}
+      height={size}
+      className={`animate-pulse-pin ${className}`}
+      role="status"
+      aria-label="Loading"
+    >
+      <path
+        d="M16 2C10.477 2 6 6.477 6 12c0 5.523 10 18 10 18s10-12.477 10-18c0-5.523-4.477-10-10-10zm0 14a4 4 0 110-8 4 4 0 010 8z"
+        fill="currentColor"
+        fillRule="evenodd"
+      />
+    </svg>
+  );
+}
