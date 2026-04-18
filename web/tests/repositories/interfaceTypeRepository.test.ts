@@ -1,6 +1,7 @@
 import { interfaceTypeRepository } from "@/repositories/interfaceTypeRepository";
 import { transactionRepository } from "@/repositories/transactionRepository";
 import { db } from "@/db/connection";
+import { eq } from "drizzle-orm";
 import {
   templates,
   templateVersions,
@@ -449,6 +450,235 @@ describe("interfaceTypeRepository", () => {
         width: { label: "u", mm: 42 },
         height: { label: "h", mm: 7 },
       });
+    });
+  });
+
+  // ───────────── merge ─────────────
+  describe("merge", () => {
+    it("rewrites template-version provided junctions from source to target", async () => {
+      const source = await interfaceTypeRepository.create({
+        identifier: "src-iface",
+      });
+      const target = await interfaceTypeRepository.create({
+        identifier: "tgt-iface",
+      });
+      const { templateVersionId } = await seedTemplateWithProvidedInterface(
+        source.id
+      );
+
+      const result = await interfaceTypeRepository.merge({
+        sourceIds: [source.id],
+        targetId: target.id,
+      });
+
+      expect(result.referencesUpdated).toBe(1);
+      expect(result.templateVersionsMinted).toBeGreaterThanOrEqual(1);
+
+      const rows = await db
+        .select()
+        .from(templateVersionInterfacesProvided)
+        .where(
+          eq(templateVersionInterfacesProvided.interfaceTypeId, target.id)
+        );
+      expect(rows.length).toBeGreaterThan(0);
+      // Original row on the old version should be gone
+      const srcRows = await db
+        .select()
+        .from(templateVersionInterfacesProvided)
+        .where(
+          eq(templateVersionInterfacesProvided.templateVersionId, templateVersionId)
+        );
+      expect(
+        srcRows.every((r) => r.interfaceTypeId !== source.id)
+      ).toBe(true);
+    });
+
+    it("rewrites template-version accepted junctions from source to target", async () => {
+      const source = await interfaceTypeRepository.create({
+        identifier: "src-iface",
+      });
+      const target = await interfaceTypeRepository.create({
+        identifier: "tgt-iface",
+      });
+      await seedTemplateWithAcceptedInterface(source.id);
+
+      await interfaceTypeRepository.merge({
+        sourceIds: [source.id],
+        targetId: target.id,
+      });
+
+      const rows = await db
+        .select()
+        .from(templateVersionInterfacesAccepted)
+        .where(
+          eq(templateVersionInterfacesAccepted.interfaceTypeId, target.id)
+        );
+      expect(rows.length).toBeGreaterThan(0);
+    });
+
+    it("rewrites location junctions from source to target", async () => {
+      const source = await interfaceTypeRepository.create({
+        identifier: "src-iface",
+      });
+      const target = await interfaceTypeRepository.create({
+        identifier: "tgt-iface",
+      });
+      await seedLocationAcceptingInterface(source.id);
+      await seedLocationAcceptingInterface(source.id);
+
+      await interfaceTypeRepository.merge({
+        sourceIds: [source.id],
+        targetId: target.id,
+      });
+
+      const tgtRows = await db
+        .select()
+        .from(locationInterfacesAccepted)
+        .where(eq(locationInterfacesAccepted.interfaceTypeId, target.id));
+      expect(tgtRows).toHaveLength(2);
+
+      const srcRows = await db
+        .select()
+        .from(locationInterfacesAccepted)
+        .where(eq(locationInterfacesAccepted.interfaceTypeId, source.id));
+      expect(srcRows).toHaveLength(0);
+    });
+
+    it("deletes source interface types after merge", async () => {
+      const source = await interfaceTypeRepository.create({
+        identifier: "src-iface",
+      });
+      const target = await interfaceTypeRepository.create({
+        identifier: "tgt-iface",
+      });
+      await seedTemplateWithProvidedInterface(source.id);
+
+      await interfaceTypeRepository.merge({
+        sourceIds: [source.id],
+        targetId: target.id,
+      });
+
+      const gone = await interfaceTypeRepository.findById({ id: source.id });
+      expect(gone).toBeNull();
+    });
+
+    it("mints a new template version for every affected template", async () => {
+      const source = await interfaceTypeRepository.create({
+        identifier: "src-iface",
+      });
+      const target = await interfaceTypeRepository.create({
+        identifier: "tgt-iface",
+      });
+      const seedA = await seedTemplateWithProvidedInterface(source.id);
+      const seedB = await seedTemplateWithProvidedInterface(source.id);
+
+      const before = await db.select().from(templateVersions);
+      await interfaceTypeRepository.merge({
+        sourceIds: [source.id],
+        targetId: target.id,
+      });
+      const after = await db.select().from(templateVersions);
+      // Two affected templates → two new versions
+      expect(after.length - before.length).toBe(2);
+
+      // New versions should provide target, not source
+      const newVersionIds = after
+        .filter((v) => !before.find((b) => b.id === v.id))
+        .map((v) => v.id);
+      for (const vid of newVersionIds) {
+        const rows = await db
+          .select()
+          .from(templateVersionInterfacesProvided)
+          .where(eq(templateVersionInterfacesProvided.templateVersionId, vid));
+        expect(rows.map((r) => r.interfaceTypeId)).toContain(target.id);
+        expect(rows.map((r) => r.interfaceTypeId)).not.toContain(source.id);
+      }
+
+      // Touch seedA, seedB to satisfy TS unused warnings
+      expect(seedA.templateId).toBeDefined();
+      expect(seedB.templateId).toBeDefined();
+    });
+
+    it("dedups when a template version already provides both source and target", async () => {
+      const source = await interfaceTypeRepository.create({
+        identifier: "src-iface",
+      });
+      const target = await interfaceTypeRepository.create({
+        identifier: "tgt-iface",
+      });
+      const { templateVersionId } = await seedTemplateWithProvidedInterface(
+        source.id
+      );
+      // Add target to the same version
+      await db.insert(templateVersionInterfacesProvided).values({
+        templateVersionId,
+        interfaceTypeId: target.id,
+      });
+
+      await interfaceTypeRepository.merge({
+        sourceIds: [source.id],
+        targetId: target.id,
+      });
+
+      const rows = await db
+        .select()
+        .from(templateVersionInterfacesProvided)
+        .where(
+          eq(templateVersionInterfacesProvided.templateVersionId, templateVersionId)
+        );
+      // Should be just target, no source
+      expect(rows).toHaveLength(1);
+      expect(rows[0].interfaceTypeId).toBe(target.id);
+    });
+
+    it("rejects when target is in sources", async () => {
+      const a = await interfaceTypeRepository.create({ identifier: "a" });
+      await expect(
+        interfaceTypeRepository.merge({
+          sourceIds: [a.id],
+          targetId: a.id,
+        })
+      ).rejects.toThrow(/target.*source/i);
+    });
+
+    it("rejects when target does not exist", async () => {
+      const a = await interfaceTypeRepository.create({ identifier: "a" });
+      await expect(
+        interfaceTypeRepository.merge({
+          sourceIds: [a.id],
+          targetId: "00000000-0000-0000-0000-000000000000",
+        })
+      ).rejects.toThrow(/target.*not found/i);
+    });
+
+    it("rejects empty sources", async () => {
+      const a = await interfaceTypeRepository.create({ identifier: "a" });
+      await expect(
+        interfaceTypeRepository.merge({
+          sourceIds: [],
+          targetId: a.id,
+        })
+      ).rejects.toThrow(/source/i);
+    });
+
+    it("logs a merge transaction", async () => {
+      const source = await interfaceTypeRepository.create({
+        identifier: "src-iface",
+      });
+      const target = await interfaceTypeRepository.create({
+        identifier: "tgt-iface",
+      });
+      await seedTemplateWithProvidedInterface(source.id);
+
+      await interfaceTypeRepository.merge({
+        sourceIds: [source.id],
+        targetId: target.id,
+      });
+
+      const txns = await transactionRepository.listRecent();
+      const tx = txns.find((t) => t.actionType === "interfaceType.merge");
+      expect(tx).toBeDefined();
+      expect(tx!.entityId).toBe(target.id);
     });
   });
 

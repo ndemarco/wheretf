@@ -137,6 +137,9 @@ export default function InterfacesAdminPage() {
   const [draft, setDraft] = useState<FormDraft | null>(null);
   const [saving, setSaving] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
+  const [mergeModalOpen, setMergeModalOpen] = useState(false);
+  const [mergeSurvivorId, setMergeSurvivorId] = useState<string | null>(null);
+  const [mergeExecuting, setMergeExecuting] = useState(false);
 
   // ── Load ──
   const loadList = useCallback(async () => {
@@ -318,6 +321,48 @@ export default function InterfacesAdminPage() {
     await loadList();
   };
 
+  const openMergeModal = () => {
+    // Default survivor: first active non-selected candidate.
+    const candidate = items.find(
+      (i) => !selectedIds.has(i.id) && !i.archivedAt,
+    );
+    setMergeSurvivorId(candidate?.id ?? null);
+    setMergeModalOpen(true);
+  };
+
+  const executeMerge = async () => {
+    if (!mergeSurvivorId || selectedIds.size === 0) return;
+    setMergeExecuting(true);
+    try {
+      const res = await fetch("/api/interface-types/merge", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          sourceIds: Array.from(selectedIds),
+          targetId: mergeSurvivorId,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        showToast(data.error ?? "Merge failed");
+        return;
+      }
+      const survivor = items.find((i) => i.id === mergeSurvivorId);
+      showToast(
+        `Merged ${selectedIds.size} into ${survivor?.identifier ?? "target"}. ${
+          data.referencesUpdated
+        } refs updated, ${data.templateVersionsMinted} template versions minted.`,
+      );
+      setSelectedIds(new Set());
+      setMergeModalOpen(false);
+      // If the active detail was one of the sources, close it.
+      if (activeId && selectedIds.has(activeId)) closeDetail();
+      await loadList();
+    } finally {
+      setMergeExecuting(false);
+    }
+  };
+
   const derive = () => {
     if (!activeItem) return;
     // Clone description + contract + unit system; require new identifier.
@@ -401,11 +446,14 @@ export default function InterfacesAdminPage() {
             </span>
             <div className="flex-1" />
             <button
-              disabled
-              title="Merge lands in the final slice"
-              className="px-2.5 py-1 border border-slate-700 rounded text-slate-500 cursor-not-allowed opacity-60"
+              onClick={openMergeModal}
+              disabled={items.filter(
+                (i) => !selectedIds.has(i.id) && !i.archivedAt,
+              ).length === 0}
+              title="Rewrite references from selected types onto one survivor"
+              className="px-2.5 py-1 border border-slate-700 rounded text-slate-200 hover:bg-slate-700 disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              Merge into… (coming soon)
+              Merge into…
             </button>
             <button
               onClick={async () => {
@@ -589,6 +637,22 @@ export default function InterfacesAdminPage() {
           />
         )}
       </div>
+
+      {/* Merge modal */}
+      {mergeModalOpen && (
+        <MergeModal
+          sources={items.filter((i) => selectedIds.has(i.id))}
+          candidates={items.filter(
+            (i) => !selectedIds.has(i.id) && !i.archivedAt,
+          )}
+          usageById={usageById}
+          survivorId={mergeSurvivorId}
+          setSurvivorId={setMergeSurvivorId}
+          executing={mergeExecuting}
+          onClose={() => setMergeModalOpen(false)}
+          onExecute={executeMerge}
+        />
+      )}
 
       {/* Toast */}
       {toast && (
@@ -1127,6 +1191,140 @@ function Toggle({ on, onClick }: { on: boolean; onClick: () => void }) {
         }`}
       />
     </button>
+  );
+}
+
+function MergeModal({
+  sources,
+  candidates,
+  usageById,
+  survivorId,
+  setSurvivorId,
+  executing,
+  onClose,
+  onExecute,
+}: {
+  sources: InterfaceType[];
+  candidates: InterfaceType[];
+  usageById: Record<string, UsageCounts>;
+  survivorId: string | null;
+  setSurvivorId: (id: string) => void;
+  executing: boolean;
+  onClose: () => void;
+  onExecute: () => void;
+}) {
+  const totalRefs = sources.reduce((n, s) => {
+    const u = usageById[s.id];
+    return n + (u ? u.providers + u.accepters + u.receptacles : 0);
+  }, 0);
+  return (
+    <div
+      className="fixed inset-0 bg-black/60 flex items-center justify-center z-50"
+      onClick={onClose}
+    >
+      <div
+        className="bg-slate-800 border border-slate-700 rounded-lg w-[520px] max-w-[90vw] max-h-[85vh] flex flex-col shadow-2xl"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="px-5 py-4 border-b border-slate-700 flex items-center justify-between">
+          <div className="text-base font-semibold text-slate-100">
+            Merge interface types
+          </div>
+          <button
+            onClick={onClose}
+            className="w-7 h-7 text-slate-500 hover:text-slate-200 rounded hover:bg-slate-900 flex items-center justify-center"
+          >
+            ✕
+          </button>
+        </div>
+        <div className="px-5 py-4 overflow-auto text-sm">
+          <div className="bg-slate-900 border border-slate-700 rounded p-3 mb-4 text-xs space-y-1">
+            <div className="flex gap-2">
+              <span className="text-slate-500 w-20">Sources</span>
+              <span className="text-slate-100 flex flex-wrap gap-1">
+                {sources.map((s) => (
+                  <span
+                    key={s.id}
+                    className="font-mono text-[12px] text-slate-100"
+                  >
+                    {s.identifier}
+                  </span>
+                ))}
+              </span>
+            </div>
+            <div className="flex gap-2">
+              <span className="text-slate-500 w-20">References</span>
+              <span className="text-slate-100">
+                <strong className="text-accent">{totalRefs}</strong> to rewrite
+              </span>
+            </div>
+          </div>
+          <div className="text-[11px] text-slate-400 uppercase tracking-wide font-semibold mb-2">
+            Merge into…
+          </div>
+          <div className="border border-slate-700 rounded max-h-[200px] overflow-y-auto">
+            {candidates.length === 0 ? (
+              <div className="p-4 text-center text-xs text-slate-500">
+                No survivor candidates available. All active types are
+                selected.
+              </div>
+            ) : (
+              candidates.map((c) => {
+                const u = usageById[c.id];
+                const refs = u ? u.providers + u.accepters + u.receptacles : 0;
+                const selected = survivorId === c.id;
+                return (
+                  <label
+                    key={c.id}
+                    className={`flex items-center gap-3 px-3 py-2 text-sm border-b border-slate-800 cursor-pointer ${
+                      selected ? "bg-accent/10" : "hover:bg-slate-900"
+                    }`}
+                  >
+                    <input
+                      type="radio"
+                      name="survivor"
+                      checked={selected}
+                      onChange={() => setSurvivorId(c.id)}
+                      className="accent-accent cursor-pointer"
+                    />
+                    <span className="font-mono text-[12px]">{c.identifier}</span>
+                    <MaturityBadge maturity={c.maturity} />
+                    <span className="flex-1" />
+                    <span className="text-[11px] text-slate-500">
+                      {refs} refs
+                    </span>
+                  </label>
+                );
+              })
+            )}
+          </div>
+          <div className="mt-4 p-3 rounded border-l-4 border-red-500 bg-red-500/10 text-xs text-red-300 leading-relaxed">
+            This rewrites{" "}
+            <strong>
+              {totalRefs} reference{totalRefs === 1 ? "" : "s"}
+            </strong>{" "}
+            and mints a new template version per affected template. Selected
+            sources will be hard-deleted. Merge is irreversible.
+          </div>
+        </div>
+        <div className="px-5 py-3 border-t border-slate-700 flex justify-end gap-2">
+          <button
+            onClick={onClose}
+            disabled={executing}
+            className="px-3 py-1.5 text-sm text-slate-400 hover:text-slate-200 disabled:opacity-50"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={onExecute}
+            disabled={executing || !survivorId || candidates.length === 0}
+            className="px-3 py-1.5 bg-accent text-slate-900 text-sm font-semibold rounded hover:bg-accent/90 disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {executing ? "Merging…" : "Merge"}
+          </button>
+        </div>
+      </div>
+    </div>
   );
 }
 
