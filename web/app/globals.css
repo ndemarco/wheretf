@@ -2,4 +2,16 @@
 
 @theme {
   --color-accent: #ff6600;
+  --animate-pulse-pin: pulse-pin 1.4s ease-in-out infinite;
+}
+
+@keyframes pulse-pin {
+  0%, 100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+  50% {
+    opacity: 0.5;
+    transform: translateY(-12%);
+  }
 }

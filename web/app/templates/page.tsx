@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useCallback, useEffect, useState } from "react";
+import Spinner from "../components/Spinner";
 import TemplateEditor from "./_components/TemplateEditor";
 
 interface Template {
@@ -92,8 +93,8 @@ function TemplatesPageInner() {
 
         <div className="flex-1 overflow-y-auto">
           {loading ? (
-            <div className="p-6 text-center text-slate-500 text-sm">
-              Loading…
+            <div className="flex items-center justify-center p-6 text-accent">
+              <Spinner size={24} />
             </div>
           ) : templates.length === 0 ? (
             <div className="p-6 text-center text-slate-500 text-sm">
@@ -193,8 +194,8 @@ export default function TemplatesPage() {
   return (
     <Suspense
       fallback={
-        <div className="flex-1 flex items-center justify-center text-slate-500">
-          Loading…
+        <div className="flex-1 flex items-center justify-center text-accent">
+          <Spinner size={32} />
         </div>
       }
     >

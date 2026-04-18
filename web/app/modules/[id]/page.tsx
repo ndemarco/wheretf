@@ -3,6 +3,7 @@
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { useCallback, useEffect, useState, useMemo } from "react";
+import Spinner from "../../components/Spinner";
 import { CellGrid } from "@/app/_components/CellGrid";
 
 // --- Types ---
@@ -898,8 +899,8 @@ export default function ModuleDetailPage() {
 
   if (loading) {
     return (
-      <div className="flex-1 flex items-center justify-center text-slate-500">
-        Loading...
+      <div className="flex-1 flex items-center justify-center text-accent">
+        <Spinner size={32} />
       </div>
     );
   }

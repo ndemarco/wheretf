@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import CreateFromDesignationDialog from "@/app/items/CreateFromDesignationDialog";
 import GenerateSetDialog from "@/app/items/GenerateSetDialog";
+import Spinner from "../components/Spinner";
 import BulkAspectImport from "./BulkAspectImport";
 import { parseSiValue } from "@/lib/siPrefix";
 
@@ -698,7 +699,7 @@ export function AspectsTab() {
         </div>
         <div className="flex-1 overflow-y-auto">
           {loading ? (
-            <div className="p-4 text-center text-slate-500 text-sm">Loading...</div>
+            <div className="flex items-center justify-center p-4 text-accent"><Spinner size={20} /></div>
           ) : aspects.length === 0 ? (
             <div className="p-4 text-center text-slate-500 text-sm">
               No aspects defined yet.
@@ -1045,8 +1046,8 @@ function AspectParameterMatrix({
 
   if (loading) {
     return (
-      <div className="flex-1 flex items-center justify-center text-slate-500 text-sm">
-        Loading matrix…
+      <div className="flex-1 flex items-center justify-center text-accent">
+        <Spinner size={32} />
       </div>
     );
   }
@@ -1686,9 +1687,7 @@ export function ParametersTab() {
         </div>
         <div className="flex-1 overflow-y-auto">
           {loading ? (
-            <div className="p-4 text-center text-slate-500 text-sm">
-              Loading…
-            </div>
+            <div className="flex items-center justify-center p-4 text-accent"><Spinner size={20} /></div>
           ) : filteredParamDefs.length === 0 ? (
             <div className="p-4 text-center text-slate-500 text-sm">
               {paramDefs.length === 0 ? "No parameters yet." : "No matches."}
@@ -2525,9 +2524,7 @@ export function CategoriesTab() {
         </div>
         <div className="flex-1 overflow-y-auto">
           {loading ? (
-            <div className="p-4 text-center text-slate-500 text-sm">
-              Loading…
-            </div>
+            <div className="flex items-center justify-center p-4 text-accent"><Spinner size={20} /></div>
           ) : filtered.length === 0 ? (
             <div className="p-4 text-center text-slate-500 text-sm">
               {categories.length === 0 ? "No categories yet." : "No matches."}
@@ -3075,7 +3072,7 @@ export function StandardsTab() {
         )}
         <div className="flex-1 overflow-y-auto">
           {loading ? (
-            <div className="p-3 text-xs text-slate-500">Loading…</div>
+            <div className="flex items-center justify-center p-3 text-accent"><Spinner size={16} /></div>
           ) : standards.length === 0 ? (
             <div className="p-3 text-xs text-slate-500 italic">None yet</div>
           ) : (
