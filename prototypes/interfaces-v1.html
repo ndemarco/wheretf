@@ -1,0 +1,1191 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>WhereTF — Interface Types Admin v1</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  background: #0f172a;
+  color: #e2e8f0;
+  display: flex;
+  height: 100vh;
+  overflow: hidden;
+  font-size: 14px;
+}
+button { font-family: inherit; cursor: pointer; border: none; background: none; color: inherit; }
+input, textarea, select { font-family: inherit; outline: none; }
+.mono { font-family: 'SF Mono', 'Menlo', 'Consolas', monospace; }
+
+/* ─── Sidebar ─── */
+.sidebar {
+  width: 58px;
+  background: #1e293b;
+  border-right: 1px solid #334155;
+  display: flex; flex-direction: column; align-items: center;
+  padding: 12px 0;
+  gap: 8px;
+  flex-shrink: 0;
+}
+.sidebar-icon {
+  width: 36px; height: 36px; border-radius: 6px;
+  display: flex; align-items: center; justify-content: center;
+  color: #94a3b8; transition: all 0.15s;
+  cursor: pointer;
+}
+.sidebar-icon:hover { background: #334155; color: #e2e8f0; }
+.sidebar-icon.active { background: rgba(255,102,0,0.15); color: #ff6600; }
+.sidebar-icon svg { width: 20px; height: 20px; }
+.sidebar-spacer { flex: 1; }
+.sidebar-avatar {
+  width: 36px; height: 36px; border-radius: 50%;
+  background: linear-gradient(135deg, #ff6600, #cc5200);
+  display: flex; align-items: center; justify-content: center;
+  font-weight: 600; font-size: 13px; color: #0f172a;
+  cursor: pointer; position: relative;
+}
+.sidebar-avatar.menu-open::after {
+  content: ''; position: absolute; left: 44px; top: 10px;
+  border-width: 8px; border-style: solid;
+  border-color: transparent #334155 transparent transparent;
+}
+
+/* ─── Avatar menu ─── */
+.avatar-menu {
+  position: absolute; left: 68px; bottom: 12px;
+  background: #1e293b; border: 1px solid #334155; border-radius: 6px;
+  width: 200px; padding: 6px 0;
+  box-shadow: 0 10px 30px rgba(0,0,0,0.4);
+  z-index: 50;
+  display: none;
+}
+.avatar-menu.open { display: block; }
+.avatar-menu-section { padding: 8px 12px 4px; font-size: 11px; color: #64748b; text-transform: uppercase; letter-spacing: 0.05em; }
+.avatar-menu-item {
+  padding: 7px 12px; cursor: pointer; font-size: 13px;
+  display: flex; align-items: center; justify-content: space-between;
+}
+.avatar-menu-item:hover { background: #334155; }
+.avatar-menu-item.active { color: #ff6600; }
+.avatar-menu-divider { height: 1px; background: #334155; margin: 6px 0; }
+
+/* ─── Main ─── */
+.main {
+  flex: 1; display: flex; flex-direction: column;
+  min-width: 0;
+}
+
+.main-header {
+  height: 52px; background: #1e293b; border-bottom: 1px solid #334155;
+  display: flex; align-items: center; padding: 0 20px;
+  gap: 14px; flex-shrink: 0;
+}
+.breadcrumb { font-size: 13px; color: #94a3b8; display: flex; align-items: center; gap: 8px; }
+.breadcrumb-crumb { cursor: pointer; }
+.breadcrumb-crumb:hover { color: #e2e8f0; }
+.breadcrumb-sep { color: #475569; }
+.breadcrumb-current { color: #e2e8f0; font-weight: 500; }
+
+.main-header-spacer { flex: 1; }
+
+.header-btn {
+  padding: 6px 12px; border-radius: 5px; font-size: 13px;
+  border: 1px solid #334155; color: #e2e8f0;
+  background: #0f172a; transition: all 0.15s;
+  display: inline-flex; align-items: center; gap: 6px;
+}
+.header-btn:hover { background: #334155; }
+.header-btn.primary { background: #ff6600; color: #0f172a; border-color: #ff6600; font-weight: 600; }
+.header-btn.primary:hover { background: #e65c00; }
+
+/* ─── Split: list + detail ─── */
+.body-split { flex: 1; display: flex; min-height: 0; }
+
+.list-pane {
+  flex: 1.4; display: flex; flex-direction: column; min-width: 0;
+  border-right: 1px solid #334155;
+}
+
+.filter-tabs {
+  display: flex; gap: 2px; padding: 10px 20px 0;
+  border-bottom: 1px solid #334155;
+  background: #0f172a;
+}
+.filter-tab {
+  padding: 7px 14px 9px; font-size: 13px; color: #94a3b8;
+  border-bottom: 2px solid transparent; margin-bottom: -1px;
+  display: flex; align-items: center; gap: 6px;
+}
+.filter-tab:hover { color: #e2e8f0; }
+.filter-tab.active { color: #ff6600; border-bottom-color: #ff6600; }
+.filter-tab-count {
+  background: #334155; color: #94a3b8;
+  border-radius: 10px; padding: 1px 7px; font-size: 11px;
+}
+.filter-tab.active .filter-tab-count { background: rgba(255,102,0,0.15); color: #ff6600; }
+
+/* Bulk action bar */
+.bulk-bar {
+  background: #1e293b; border-bottom: 1px solid #334155;
+  padding: 10px 20px; display: none; align-items: center; gap: 12px;
+  font-size: 13px;
+}
+.bulk-bar.visible { display: flex; }
+.bulk-bar-count { color: #94a3b8; }
+.bulk-bar-count strong { color: #ff6600; }
+.bulk-bar .bulk-actions { display: flex; gap: 8px; margin-left: auto; }
+
+/* List toolbar */
+.list-toolbar {
+  padding: 10px 20px; background: #0f172a;
+  display: flex; align-items: center; gap: 12px; font-size: 13px;
+  border-bottom: 1px solid #334155;
+}
+.sort-select {
+  background: #1e293b; border: 1px solid #334155; border-radius: 4px;
+  color: #e2e8f0; font-size: 12px; padding: 4px 24px 4px 8px;
+  appearance: none; -webkit-appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='10' viewBox='0 0 10 10'%3E%3Cpath fill='%2394a3b8' d='M1 3l4 4 4-4'/%3E%3C/svg%3E");
+  background-repeat: no-repeat; background-position: right 8px center;
+}
+.list-toolbar-spacer { flex: 1; }
+
+/* Table */
+.list-scroll { flex: 1; overflow-y: auto; background: #0f172a; }
+.list-table { width: 100%; border-collapse: collapse; }
+.list-table thead th {
+  position: sticky; top: 0; background: #1e293b; z-index: 1;
+  text-align: left; padding: 10px 16px; font-size: 11px;
+  color: #94a3b8; font-weight: 600; text-transform: uppercase;
+  letter-spacing: 0.05em;
+  border-bottom: 1px solid #334155;
+}
+.list-table tbody td {
+  padding: 12px 16px; font-size: 13px; border-bottom: 1px solid #1e293b;
+  vertical-align: middle;
+}
+.list-table tbody tr { cursor: pointer; transition: background 0.1s; }
+.list-table tbody tr:hover { background: #1e293b; }
+.list-table tbody tr.selected { background: rgba(255,102,0,0.06); }
+.list-table tbody tr.active-row { background: rgba(255,102,0,0.12); }
+.list-table tbody tr.archived td:not(.col-checkbox) { opacity: 0.55; }
+.list-table .col-checkbox { width: 36px; padding-right: 0; }
+.list-table .col-checkbox input[type=checkbox] {
+  cursor: pointer; accent-color: #ff6600;
+}
+.list-table .col-identifier .mono { font-size: 12.5px; }
+.list-table .col-actions {
+  width: 80px; text-align: right;
+}
+.row-action-btn {
+  opacity: 0; padding: 4px; border-radius: 4px; color: #64748b;
+  transition: opacity 0.15s, color 0.15s, background 0.15s;
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 28px; height: 28px;
+}
+.list-table tbody tr:hover .row-action-btn,
+.list-table tbody tr.selected .row-action-btn,
+.list-table tbody tr.active-row .row-action-btn { opacity: 1; }
+.row-action-btn:hover { background: #334155; color: #e2e8f0; }
+.row-action-btn.danger:hover { background: rgba(239,68,68,0.15); color: #ef4444; }
+.row-action-btn svg { width: 14px; height: 14px; }
+
+/* Badges */
+.badge {
+  display: inline-block; padding: 2px 7px; border-radius: 10px;
+  font-size: 11px; font-weight: 600; letter-spacing: 0.02em;
+  white-space: nowrap;
+}
+.badge-stable { background: rgba(16,185,129,0.12); color: #10b981; }
+.badge-draft { background: rgba(250,204,21,0.12); color: #facc15; }
+.badge-active { background: rgba(94,234,212,0.1); color: #5eead4; }
+.badge-archived { background: rgba(148,163,184,0.12); color: #94a3b8; }
+
+.usage-cell { color: #94a3b8; font-size: 12px; }
+.usage-cell strong { color: #e2e8f0; font-weight: 500; }
+.created-cell { color: #64748b; font-size: 12px; }
+
+/* Detail pane */
+.detail-pane {
+  flex: 1; display: flex; flex-direction: column;
+  background: #1e293b; min-width: 400px; max-width: 540px;
+}
+.detail-empty {
+  flex: 1; display: flex; align-items: center; justify-content: center;
+  color: #64748b; font-size: 13px; padding: 40px; text-align: center;
+}
+
+.detail-header {
+  padding: 16px 20px; border-bottom: 1px solid #334155;
+  display: flex; align-items: center; gap: 10px;
+}
+.detail-title { font-size: 15px; font-weight: 600; flex: 1; }
+.detail-title .mono { color: #ff6600; }
+.detail-lifecycle-btn {
+  padding: 5px 10px; border-radius: 4px; font-size: 12px;
+  color: #94a3b8; border: 1px solid #334155;
+  display: inline-flex; align-items: center; gap: 4px;
+}
+.detail-lifecycle-btn:hover { background: #0f172a; color: #e2e8f0; }
+.detail-close {
+  width: 28px; height: 28px; border-radius: 4px;
+  color: #64748b;
+  display: inline-flex; align-items: center; justify-content: center;
+}
+.detail-close:hover { background: #0f172a; color: #e2e8f0; }
+
+.detail-scroll { flex: 1; overflow-y: auto; padding: 20px; }
+
+.form-section { margin-bottom: 22px; }
+.form-label {
+  display: block; font-size: 11px; color: #94a3b8; font-weight: 600;
+  text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 6px;
+}
+.form-label .hint { text-transform: none; font-weight: normal; color: #64748b; letter-spacing: 0; font-size: 11px; margin-left: 6px; }
+.form-input, .form-textarea {
+  width: 100%; padding: 7px 10px; background: #0f172a;
+  border: 1px solid #334155; border-radius: 4px; color: #e2e8f0;
+  font-size: 13px; transition: border-color 0.15s;
+}
+.form-input:focus, .form-textarea:focus { border-color: #ff6600; }
+.form-input.mono { font-size: 12.5px; }
+.form-textarea { resize: vertical; min-height: 60px; font-family: inherit; }
+
+.radio-group { display: flex; gap: 10px; }
+.radio-opt {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 5px 10px; border: 1px solid #334155; border-radius: 4px;
+  cursor: pointer; font-size: 13px; background: #0f172a;
+}
+.radio-opt input { accent-color: #ff6600; }
+.radio-opt.selected { border-color: #ff6600; background: rgba(255,102,0,0.1); }
+
+.toggle-row { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
+.toggle-switch {
+  width: 36px; height: 20px; background: #334155; border-radius: 10px;
+  position: relative; cursor: pointer; transition: background 0.15s;
+}
+.toggle-switch.on { background: #ff6600; }
+.toggle-switch::after {
+  content: ''; position: absolute; top: 2px; left: 2px;
+  width: 16px; height: 16px; background: #e2e8f0; border-radius: 50%;
+  transition: left 0.15s;
+}
+.toggle-switch.on::after { left: 18px; }
+.toggle-label { font-size: 13px; }
+.toggle-hint { font-size: 11px; color: #64748b; }
+
+.unit-system-editor {
+  border: 1px solid #334155; border-radius: 5px; padding: 10px;
+  background: #0f172a;
+  display: none;
+}
+.unit-system-editor.visible { display: block; }
+.unit-axis-row {
+  display: grid; grid-template-columns: 52px 1fr 1fr; gap: 8px;
+  align-items: center; margin-bottom: 6px;
+}
+.unit-axis-row:last-child { margin-bottom: 0; }
+.unit-axis-label {
+  font-size: 12px; color: #94a3b8; font-weight: 500;
+  text-transform: capitalize;
+}
+.unit-inline-input {
+  padding: 5px 8px; font-size: 12px;
+  background: #1e293b; border: 1px solid #334155;
+  border-radius: 4px; color: #e2e8f0;
+}
+.unit-inline-input::placeholder { color: #475569; }
+.unit-input-suffix { position: relative; }
+.unit-input-suffix::after {
+  content: attr(data-suffix); position: absolute; right: 10px; top: 50%;
+  transform: translateY(-50%); color: #64748b; font-size: 11px; pointer-events: none;
+}
+.unit-input-suffix input { padding-right: 28px; width: 100%; }
+
+.physical-contract-hint {
+  font-size: 11px; color: #64748b; margin-top: 4px;
+  line-height: 1.4;
+}
+
+.detail-footer {
+  border-top: 1px solid #334155; padding: 12px 20px;
+  display: flex; gap: 8px; background: #1e293b;
+}
+.btn {
+  padding: 7px 14px; border-radius: 4px; font-size: 13px;
+  border: 1px solid #334155;
+  display: inline-flex; align-items: center; gap: 6px;
+  transition: all 0.15s;
+}
+.btn-primary { background: #ff6600; color: #0f172a; border-color: #ff6600; font-weight: 600; }
+.btn-primary:hover { background: #e65c00; border-color: #e65c00; }
+.btn-secondary { background: #0f172a; color: #e2e8f0; }
+.btn-secondary:hover { background: #334155; }
+.btn-danger { background: #0f172a; color: #ef4444; border-color: rgba(239,68,68,0.4); }
+.btn-danger:hover { background: rgba(239,68,68,0.15); }
+.btn-ghost { background: transparent; color: #94a3b8; border-color: transparent; }
+.btn-ghost:hover { color: #e2e8f0; background: #0f172a; }
+.btn-footer-spacer { flex: 1; }
+
+/* Lifecycle popover */
+.lifecycle-popover {
+  position: absolute; background: #0f172a; border: 1px solid #334155;
+  border-radius: 6px; width: 220px; padding: 6px 0; z-index: 100;
+  box-shadow: 0 10px 25px rgba(0,0,0,0.5);
+  display: none;
+}
+.lifecycle-popover.open { display: block; }
+.lifecycle-popover-item {
+  padding: 8px 12px; font-size: 13px; cursor: pointer;
+  display: flex; align-items: center; gap: 8px;
+}
+.lifecycle-popover-item:hover { background: #1e293b; }
+.lifecycle-popover-item.destructive { color: #ef4444; }
+.lifecycle-popover-item:disabled, .lifecycle-popover-item[aria-disabled="true"] {
+  opacity: 0.4; cursor: not-allowed;
+}
+.lifecycle-popover-item svg { width: 14px; height: 14px; flex-shrink: 0; }
+.lifecycle-popover-hint {
+  padding: 4px 12px 8px; font-size: 11px; color: #64748b;
+}
+.lifecycle-divider { height: 1px; background: #334155; margin: 4px 0; }
+
+/* Chip preview */
+.chip-preview-section { margin-top: 10px; padding-top: 12px; border-top: 1px solid #334155; }
+.chip-preview-label { font-size: 11px; color: #64748b; margin-bottom: 8px; }
+.chip-preview { display: inline-flex; align-items: center; gap: 6px;
+  padding: 4px 10px; background: #1e293b; border: 1px solid #334155;
+  border-radius: 14px; font-size: 12px; position: relative;
+}
+.chip-preview.muted { opacity: 0.6; }
+.chip-preview-tooltip {
+  position: absolute; left: 0; top: calc(100% + 6px);
+  background: #0f172a; border: 1px solid #334155; border-radius: 4px;
+  padding: 8px 10px; font-size: 11.5px; color: #e2e8f0;
+  width: 240px; line-height: 1.45; z-index: 10;
+  box-shadow: 0 6px 18px rgba(0,0,0,0.4);
+}
+
+/* Modal */
+.modal-backdrop {
+  position: fixed; inset: 0; background: rgba(0,0,0,0.6);
+  display: none; align-items: center; justify-content: center; z-index: 200;
+}
+.modal-backdrop.open { display: flex; }
+.modal {
+  background: #1e293b; border: 1px solid #334155; border-radius: 8px;
+  width: 520px; max-width: 90vw; max-height: 85vh;
+  display: flex; flex-direction: column;
+  box-shadow: 0 20px 60px rgba(0,0,0,0.5);
+}
+.modal-header {
+  padding: 16px 20px; border-bottom: 1px solid #334155;
+  font-size: 15px; font-weight: 600;
+  display: flex; align-items: center; justify-content: space-between;
+}
+.modal-body { padding: 20px; overflow-y: auto; font-size: 13px; line-height: 1.5; }
+.modal-footer {
+  padding: 12px 20px; border-top: 1px solid #334155;
+  display: flex; gap: 8px; justify-content: flex-end;
+}
+
+.merge-summary {
+  background: #0f172a; border: 1px solid #334155; border-radius: 5px;
+  padding: 12px; margin-bottom: 16px;
+}
+.merge-summary-line { display: flex; gap: 8px; align-items: baseline; font-size: 12.5px; padding: 3px 0; }
+.merge-summary-line .label { color: #64748b; min-width: 80px; }
+.merge-summary-line .value { color: #e2e8f0; }
+.merge-summary-line .value strong { color: #ff6600; }
+
+.merge-survivor-picker {
+  border: 1px solid #334155; border-radius: 5px;
+  max-height: 180px; overflow-y: auto;
+}
+.merge-survivor-opt {
+  padding: 8px 12px; cursor: pointer;
+  display: flex; align-items: center; gap: 10px;
+  font-size: 13px; border-bottom: 1px solid #1e293b;
+}
+.merge-survivor-opt:last-child { border-bottom: none; }
+.merge-survivor-opt:hover { background: #0f172a; }
+.merge-survivor-opt.selected { background: rgba(255,102,0,0.1); }
+.merge-survivor-opt input[type=radio] { accent-color: #ff6600; }
+.merge-survivor-opt .mono { font-size: 12.5px; }
+.merge-warning {
+  background: rgba(239,68,68,0.08); border-left: 3px solid #ef4444;
+  padding: 10px 12px; margin-top: 14px; font-size: 12.5px; color: #fca5a5;
+  border-radius: 0 4px 4px 0;
+}
+
+/* Toast */
+.toast {
+  position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%);
+  background: #1e293b; border: 1px solid #334155; border-radius: 6px;
+  padding: 10px 16px; font-size: 13px; color: #e2e8f0;
+  display: none; align-items: center; gap: 10px;
+  box-shadow: 0 10px 30px rgba(0,0,0,0.5); z-index: 300;
+}
+.toast.visible { display: flex; }
+.toast-dot { width: 8px; height: 8px; background: #10b981; border-radius: 50%; }
+
+/* Utility */
+.icon-btn svg { pointer-events: none; }
+
+/* Scrollbars */
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-track { background: #0f172a; }
+::-webkit-scrollbar-thumb { background: #334155; border-radius: 5px; }
+::-webkit-scrollbar-thumb:hover { background: #475569; }
+</style>
+</head>
+<body>
+
+<!-- Sidebar -->
+<div class="sidebar">
+  <div class="sidebar-icon" title="Modules">
+    <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M3 7h18M3 12h18M3 17h18"/></svg>
+  </div>
+  <div class="sidebar-icon" title="Templates">
+    <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>
+  </div>
+  <div class="sidebar-icon" title="Inserts">
+    <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M4 4h16v6H4zM4 14h7v6H4zM14 14h6v6h-6z"/></svg>
+  </div>
+  <div class="sidebar-icon" title="Items">
+    <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M8 12l3 3 5-6"/></svg>
+  </div>
+  <div class="sidebar-spacer"></div>
+  <div class="sidebar-avatar menu-open" id="avatarBtn" onclick="toggleAvatarMenu()">ND</div>
+</div>
+
+<!-- Avatar menu -->
+<div class="avatar-menu open" id="avatarMenu">
+  <div class="avatar-menu-section">Account</div>
+  <div class="avatar-menu-item">Profile</div>
+  <div class="avatar-menu-item">Preferences</div>
+  <div class="avatar-menu-divider"></div>
+  <div class="avatar-menu-section">Admin</div>
+  <div class="avatar-menu-item active">Interfaces</div>
+  <div class="avatar-menu-item" style="color:#64748b">Categories <span style="font-size:10px">(soon)</span></div>
+  <div class="avatar-menu-item" style="color:#64748b">Parameters <span style="font-size:10px">(soon)</span></div>
+  <div class="avatar-menu-divider"></div>
+  <div class="avatar-menu-item">Sign out</div>
+</div>
+
+<!-- Main -->
+<div class="main">
+
+  <!-- Header -->
+  <div class="main-header">
+    <div class="breadcrumb">
+      <span class="breadcrumb-crumb">Admin</span>
+      <span class="breadcrumb-sep">›</span>
+      <span class="breadcrumb-current">Interface Types</span>
+    </div>
+    <div class="main-header-spacer"></div>
+    <button class="header-btn primary" onclick="openCreatePanel()">
+      <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>
+      New Interface Type
+    </button>
+  </div>
+
+  <!-- Body split -->
+  <div class="body-split">
+
+    <!-- List pane -->
+    <div class="list-pane">
+
+      <div class="filter-tabs">
+        <button class="filter-tab active" data-filter="active">Active <span class="filter-tab-count">7</span></button>
+        <button class="filter-tab" data-filter="archived">Archived <span class="filter-tab-count">1</span></button>
+        <button class="filter-tab" data-filter="all">All <span class="filter-tab-count">8</span></button>
+      </div>
+
+      <div class="bulk-bar" id="bulkBar">
+        <div class="bulk-bar-count"><strong id="bulkCount">0</strong> selected</div>
+        <div class="bulk-actions">
+          <button class="header-btn" onclick="openMergeModal()">
+            <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M7 3v6M17 3v6M7 9l5 5 5-5M12 14v7"/></svg>
+            Merge into…
+          </button>
+          <button class="header-btn">Archive selected</button>
+          <button class="header-btn btn-ghost" onclick="clearSelection()">Clear</button>
+        </div>
+      </div>
+
+      <div class="list-toolbar">
+        <span style="color:#64748b">Sort by</span>
+        <select class="sort-select">
+          <option>Identifier</option>
+          <option>Usage (desc)</option>
+          <option>Maturity</option>
+          <option>Recently created</option>
+        </select>
+        <div class="list-toolbar-spacer"></div>
+        <span style="color:#64748b">8 types</span>
+      </div>
+
+      <div class="list-scroll">
+        <table class="list-table" id="listTable">
+          <thead>
+            <tr>
+              <th class="col-checkbox"><input type="checkbox" id="selectAll" onclick="toggleSelectAll(this)"></th>
+              <th>Identifier</th>
+              <th>Maturity</th>
+              <th>Status</th>
+              <th>Description</th>
+              <th>Usage</th>
+              <th>Created</th>
+              <th class="col-actions"></th>
+            </tr>
+          </thead>
+          <tbody id="listBody"></tbody>
+        </table>
+      </div>
+
+    </div>
+
+    <!-- Detail pane -->
+    <div class="detail-pane" id="detailPane">
+      <div class="detail-empty" id="detailEmpty">
+        Select an interface type to view + edit.<br><br>
+        <span style="color:#475569">or click <strong style="color:#ff6600">New Interface Type</strong> above.</span>
+      </div>
+      <div id="detailForm" style="display:none; flex-direction:column; flex:1; min-height:0;"></div>
+    </div>
+
+  </div>
+</div>
+
+<!-- Merge modal -->
+<div class="modal-backdrop" id="mergeModal">
+  <div class="modal">
+    <div class="modal-header">
+      <div>Merge interface types</div>
+      <button class="detail-close" onclick="closeMergeModal()">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="merge-summary" id="mergeSummary"></div>
+      <div style="font-size:12px; color:#94a3b8; margin-bottom:6px; text-transform:uppercase; letter-spacing:0.05em; font-weight:600;">Merge into…</div>
+      <div class="merge-survivor-picker" id="survivorPicker"></div>
+      <div class="merge-warning">
+        This rewrites <strong>N references</strong> and mints <strong>M template versions</strong>.
+        Selected sources will be hard-deleted. This bypasses the archive-gate — merge is irreversible.
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeMergeModal()">Cancel</button>
+      <button class="btn btn-primary" onclick="executeMerge()">Merge</button>
+    </div>
+  </div>
+</div>
+
+<!-- Lifecycle popover -->
+<div class="lifecycle-popover" id="lifecyclePopover"></div>
+
+<!-- Toast -->
+<div class="toast" id="toast"><div class="toast-dot"></div><span id="toastText"></span></div>
+
+<script>
+// ─── Mock data ───────────────────────────────────────────────
+const INTERFACES = [
+  {
+    id: "ifc-001",
+    identifier: "gridfinity-42mm",
+    maturity: "stable",
+    archivedAt: null,
+    description: "Zack Freedman's Gridfinity system. 42×42mm cell grid with 7mm height increments. Baseplates accept bins 1+ cell wide and 1+ h tall.",
+    physicalContract: "Bins interlock via magnet pockets at 26mm spacing. Baseplate thickness 7mm. Stacking via top lip.",
+    unitSystem: { width: { label: "u", mm: 42 }, depth: { label: "u", mm: 42 }, height: { label: "h", mm: 7 } },
+    usage: { providers: 8, accepters: 3, receptacles: 14 },
+    createdAt: "3 weeks ago"
+  },
+  {
+    id: "ifc-002",
+    identifier: "plano-3600",
+    maturity: "stable",
+    archivedAt: null,
+    description: "Plano 3600-series Stowaway form factor. Plano 3700 trays fit 3600 boxes (per Plano's cross-compatibility). Fixed external dimensions.",
+    physicalContract: "External: 11.0 × 7.3 × 1.75 in. Latch at long edge.",
+    unitSystem: null,
+    usage: { providers: 4, accepters: 0, receptacles: 6 },
+    createdAt: "3 weeks ago"
+  },
+  {
+    id: "ifc-003",
+    identifier: "louver-hang",
+    maturity: "stable",
+    archivedAt: null,
+    description: "Continuous louver-rail hang interface. Bins suspend from a horizontal rail. Row pitch varies by manufacturer — stored per receptacle.",
+    physicalContract: "Hook geometry: 6.35mm thick plate, 12.7mm hang depth. Bins extend downward from rail.",
+    unitSystem: null,
+    usage: { providers: 3, accepters: 0, receptacles: 2 },
+    createdAt: "2 weeks ago"
+  },
+  {
+    id: "ifc-004",
+    identifier: "open-surface",
+    maturity: "stable",
+    archivedAt: null,
+    description: "Anything that sits on an open shelf or flat surface. Minimal contract — footprint fits, weight OK.",
+    physicalContract: "",
+    unitSystem: null,
+    usage: { providers: 12, accepters: 0, receptacles: 9 },
+    createdAt: "2 weeks ago"
+  },
+  {
+    id: "ifc-005",
+    identifier: "akro-mils-30250",
+    maturity: "draft",
+    archivedAt: null,
+    description: "Akro-Mils 30250 drawer-style insert form factor. Draft — need to verify height tolerance against louver rails vs. open surface.",
+    physicalContract: "",
+    unitSystem: null,
+    usage: { providers: 1, accepters: 0, receptacles: 0 },
+    createdAt: "4 days ago"
+  },
+  {
+    id: "ifc-006",
+    identifier: "gridfinity-48mm",
+    maturity: "draft",
+    archivedAt: null,
+    description: "Variant of Gridfinity with 48mm cell grid (not a standard — used by a specific community project). Draft until we model the first baseplate.",
+    physicalContract: "",
+    unitSystem: { width: { label: "u", mm: 48 }, depth: { label: "u", mm: 48 }, height: { label: "h", mm: 7 } },
+    usage: { providers: 0, accepters: 0, receptacles: 0 },
+    createdAt: "2 days ago"
+  },
+  {
+    id: "ifc-007",
+    identifier: "systainer-t-loc",
+    maturity: "draft",
+    archivedAt: null,
+    description: "Festool T-LOC Systainer stacking interface. Work in progress — ordering + latch geometry.",
+    physicalContract: "",
+    unitSystem: null,
+    usage: { providers: 0, accepters: 0, receptacles: 0 },
+    createdAt: "yesterday"
+  },
+  {
+    id: "ifc-008",
+    identifier: "plano-3500-legacy",
+    maturity: "stable",
+    archivedAt: "2026-03-20",
+    description: "Earlier Plano Stowaway generation. Superseded by plano-3600. Kept archived for historical references.",
+    physicalContract: "External: 11.0 × 7.3 × 1.38 in. Slightly shallower than 3600. Pre-2015 inventory only.",
+    unitSystem: null,
+    usage: { providers: 0, accepters: 0, receptacles: 0 },
+    createdAt: "3 weeks ago"
+  }
+];
+
+const state = {
+  selectedIds: new Set(),
+  activeDetailId: null,
+  filter: "active",
+  editingDraft: null, // working copy while editing
+  isCreating: false,
+};
+
+// ─── Rendering ──────────────────────────────────────────────
+function filteredList() {
+  return INTERFACES.filter(i => {
+    if (state.filter === "active") return !i.archivedAt;
+    if (state.filter === "archived") return !!i.archivedAt;
+    return true;
+  });
+}
+
+function usageTotal(u) { return u.providers + u.accepters + u.receptacles; }
+
+function renderList() {
+  const rows = filteredList().map(i => {
+    const archived = !!i.archivedAt;
+    const selected = state.selectedIds.has(i.id);
+    const active = state.activeDetailId === i.id;
+    const classes = [
+      archived ? "archived" : "",
+      selected ? "selected" : "",
+      active ? "active-row" : ""
+    ].filter(Boolean).join(" ");
+    return `<tr class="${classes}" data-id="${i.id}" onclick="openDetail('${i.id}', event)">
+      <td class="col-checkbox" onclick="event.stopPropagation()">
+        <input type="checkbox" ${selected ? "checked" : ""} onchange="toggleSelect('${i.id}')">
+      </td>
+      <td class="col-identifier"><span class="mono">${i.identifier}</span></td>
+      <td><span class="badge badge-${i.maturity}">${i.maturity}</span></td>
+      <td><span class="badge badge-${archived ? "archived" : "active"}">${archived ? "archived" : "active"}</span></td>
+      <td style="color:#cbd5e1; max-width:300px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;" title="${i.description.replace(/"/g, '&quot;')}">${i.description}</td>
+      <td class="usage-cell"><strong>${i.usage.providers}</strong> P · <strong>${i.usage.accepters}</strong> A · <strong>${i.usage.receptacles}</strong> R</td>
+      <td class="created-cell">${i.createdAt}</td>
+      <td class="col-actions" onclick="event.stopPropagation()">
+        ${renderRowActions(i)}
+      </td>
+    </tr>`;
+  }).join("");
+  document.getElementById("listBody").innerHTML = rows || `<tr><td colspan="8" style="text-align:center; padding:40px; color:#64748b;">No interface types match this filter.</td></tr>`;
+  updateSelectAllCheckbox();
+}
+
+function renderRowActions(i) {
+  const archived = !!i.archivedAt;
+  const canDelete = archived && usageTotal(i.usage) === 0;
+  const archiveBtn = `<button class="row-action-btn" title="${archived ? 'Unarchive' : 'Archive'}" onclick="toggleArchive('${i.id}')">
+    <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+      ${archived
+        ? '<path d="M4 4h16v4H4zM5 8l1 11h12l1-11M10 12h4"/>'
+        : '<path d="M4 4h16v4H4zM5 8l1 11h12l1-11M9 12l3 3 3-3M12 9v6"/>'}
+    </svg>
+  </button>`;
+  const deleteBtn = canDelete
+    ? `<button class="row-action-btn danger" title="Delete (archived + unused)" onclick="deleteInterface('${i.id}')">
+        <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/></svg>
+      </button>`
+    : "";
+  return archiveBtn + deleteBtn;
+}
+
+function updateBulkBar() {
+  const bar = document.getElementById("bulkBar");
+  const count = state.selectedIds.size;
+  document.getElementById("bulkCount").textContent = count;
+  bar.classList.toggle("visible", count >= 1);
+}
+
+function updateSelectAllCheckbox() {
+  const box = document.getElementById("selectAll");
+  const visible = filteredList();
+  const allSelected = visible.length > 0 && visible.every(i => state.selectedIds.has(i.id));
+  const anySelected = visible.some(i => state.selectedIds.has(i.id));
+  box.checked = allSelected;
+  box.indeterminate = anySelected && !allSelected;
+}
+
+function toggleSelect(id) {
+  if (state.selectedIds.has(id)) state.selectedIds.delete(id);
+  else state.selectedIds.add(id);
+  renderList();
+  updateBulkBar();
+}
+
+function toggleSelectAll(chk) {
+  const visible = filteredList();
+  if (chk.checked) visible.forEach(i => state.selectedIds.add(i.id));
+  else visible.forEach(i => state.selectedIds.delete(i.id));
+  renderList();
+  updateBulkBar();
+}
+
+function clearSelection() {
+  state.selectedIds.clear();
+  renderList();
+  updateBulkBar();
+}
+
+// ─── Detail pane ─────────────────────────────────────────────
+function openDetail(id, evt) {
+  if (evt && evt.target.tagName === "INPUT") return;
+  state.activeDetailId = id;
+  state.isCreating = false;
+  const ifc = INTERFACES.find(x => x.id === id);
+  state.editingDraft = JSON.parse(JSON.stringify(ifc));
+  renderList();
+  renderDetail();
+}
+
+function openCreatePanel() {
+  state.activeDetailId = null;
+  state.isCreating = true;
+  state.editingDraft = {
+    id: "ifc-new",
+    identifier: "",
+    maturity: "draft",
+    archivedAt: null,
+    description: "",
+    physicalContract: "",
+    unitSystem: null,
+    usage: { providers: 0, accepters: 0, receptacles: 0 },
+    createdAt: "now"
+  };
+  renderList();
+  renderDetail();
+}
+
+function closeDetail() {
+  state.activeDetailId = null;
+  state.editingDraft = null;
+  state.isCreating = false;
+  document.getElementById("detailEmpty").style.display = "flex";
+  document.getElementById("detailForm").style.display = "none";
+  renderList();
+}
+
+function renderDetail() {
+  const d = state.editingDraft;
+  if (!d) return;
+  document.getElementById("detailEmpty").style.display = "none";
+  const form = document.getElementById("detailForm");
+  form.style.display = "flex";
+
+  const canDelete = d.archivedAt && usageTotal(d.usage) === 0;
+  const archived = !!d.archivedAt;
+  const hasUnitSystem = !!d.unitSystem;
+  const ws = d.unitSystem?.width ?? {};
+  const ds = d.unitSystem?.depth ?? {};
+  const hs = d.unitSystem?.height ?? {};
+
+  form.innerHTML = `
+    <div class="detail-header">
+      <div class="detail-title">
+        ${state.isCreating ? "New interface type" : `<span class="mono">${d.identifier}</span>`}
+      </div>
+      ${state.isCreating ? "" : `
+        <button class="detail-lifecycle-btn" onclick="openLifecyclePopover(event)">
+          Lifecycle
+          <svg width="10" height="10" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 10 10"><path d="M1 3l4 4 4-4"/></svg>
+        </button>`}
+      <button class="detail-close" onclick="closeDetail()">✕</button>
+    </div>
+
+    <div class="detail-scroll">
+      <div class="form-section">
+        <label class="form-label">Identifier <span class="hint">slug, mutable — FKs are UUID</span></label>
+        <input class="form-input mono" value="${d.identifier}" placeholder="e.g. gridfinity-42mm" oninput="updateDraft('identifier', this.value)">
+      </div>
+
+      <div class="form-section">
+        <label class="form-label">Maturity</label>
+        <div class="radio-group">
+          <label class="radio-opt ${d.maturity === 'draft' ? 'selected' : ''}"><input type="radio" name="maturity" ${d.maturity === 'draft' ? 'checked' : ''} onchange="updateDraft('maturity','draft')"> draft</label>
+          <label class="radio-opt ${d.maturity === 'stable' ? 'selected' : ''}"><input type="radio" name="maturity" ${d.maturity === 'stable' ? 'checked' : ''} onchange="updateDraft('maturity','stable')"> stable</label>
+        </div>
+      </div>
+
+      <div class="form-section">
+        <label class="form-label">Description <span class="hint">shown as tooltip on every chip</span></label>
+        <textarea class="form-textarea" oninput="updateDraft('description', this.value)">${d.description}</textarea>
+      </div>
+
+      <div class="form-section">
+        <label class="form-label">Unit System <span class="hint">modular interfaces only — input convenience, storage is always mm</span></label>
+        <div class="toggle-row">
+          <div class="toggle-switch ${hasUnitSystem ? 'on' : ''}" onclick="toggleUnitSystem()"></div>
+          <span class="toggle-label">${hasUnitSystem ? 'This is a modular system' : 'Not a modular system'}</span>
+        </div>
+        <div class="unit-system-editor ${hasUnitSystem ? 'visible' : ''}">
+          ${["width","depth","height"].map(axis => `
+            <div class="unit-axis-row">
+              <div class="unit-axis-label">${axis}</div>
+              <input class="unit-inline-input" placeholder="label (e.g. u, h)" value="${d.unitSystem?.[axis]?.label ?? ''}" oninput="updateUnitAxis('${axis}','label', this.value)">
+              <div class="unit-input-suffix" data-suffix="mm">
+                <input class="unit-inline-input" placeholder="mm" type="number" value="${d.unitSystem?.[axis]?.mm ?? ''}" oninput="updateUnitAxis('${axis}','mm', this.value)">
+              </div>
+            </div>
+          `).join("")}
+        </div>
+      </div>
+
+      <div class="form-section">
+        <label class="form-label">Physical Contract <span class="hint">free-form notes; structured fields later</span></label>
+        <textarea class="form-textarea" placeholder="Footprint, mounting, clearance notes. Structured fields coming later." oninput="updateDraft('physicalContract', this.value)">${d.physicalContract}</textarea>
+      </div>
+
+      ${state.isCreating ? "" : `
+      <div class="form-section">
+        <label class="form-label">Usage</label>
+        <div style="background:#0f172a; border:1px solid #334155; border-radius:5px; padding:10px 12px; font-size:12.5px;">
+          <div style="display:flex; justify-content:space-between; padding:3px 0;">
+            <span style="color:#94a3b8;">Templates providing this</span><span style="color:#e2e8f0;"><strong>${d.usage.providers}</strong></span>
+          </div>
+          <div style="display:flex; justify-content:space-between; padding:3px 0;">
+            <span style="color:#94a3b8;">Templates accepting this</span><span style="color:#e2e8f0;"><strong>${d.usage.accepters}</strong></span>
+          </div>
+          <div style="display:flex; justify-content:space-between; padding:3px 0;">
+            <span style="color:#94a3b8;">Receptacles accepting this</span><span style="color:#e2e8f0;"><strong>${d.usage.receptacles}</strong></span>
+          </div>
+        </div>
+      </div>`}
+
+      <div class="chip-preview-section">
+        <div class="chip-preview-label">Chip preview (as it appears in template/level editors)</div>
+        <span class="chip-preview ${d.maturity === 'draft' ? 'muted' : ''}">
+          ${d.identifier || '—'}${d.maturity === 'draft' ? ' (draft)' : ''}
+          <span class="chip-preview-tooltip" style="display:none;" id="chipTooltipPreview">${d.description || '—'}</span>
+        </span>
+        <span style="font-size:11px; color:#64748b; margin-left:10px;">Hover in real UI shows description tooltip.</span>
+      </div>
+    </div>
+
+    <div class="detail-footer">
+      ${state.isCreating ? "" : `
+        <button class="btn btn-secondary" onclick="deriveFromCurrent()">
+          <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M12 5v14M8 9l4-4 4 4M20 20H4"/></svg>
+          Derive new
+        </button>`}
+      <div class="btn-footer-spacer"></div>
+      <button class="btn btn-ghost" onclick="closeDetail()">Cancel</button>
+      <button class="btn btn-primary" onclick="saveDraft()">${state.isCreating ? 'Create' : 'Save'}</button>
+    </div>
+  `;
+}
+
+function updateDraft(field, value) {
+  state.editingDraft[field] = value;
+  // re-render chip preview + header only if identifier changed
+  if (field === "identifier" || field === "maturity" || field === "description") {
+    // lightweight: re-render the chip preview + header title
+    const t = document.querySelector(".detail-title");
+    if (t && !state.isCreating) t.innerHTML = `<span class="mono">${state.editingDraft.identifier}</span>`;
+    const chip = document.querySelector(".chip-preview");
+    if (chip) {
+      chip.classList.toggle("muted", state.editingDraft.maturity === "draft");
+      chip.firstChild.textContent = `${state.editingDraft.identifier || '—'}${state.editingDraft.maturity === 'draft' ? ' (draft)' : ''}`;
+    }
+  }
+}
+
+function toggleUnitSystem() {
+  if (state.editingDraft.unitSystem) {
+    state.editingDraft.unitSystem = null;
+  } else {
+    state.editingDraft.unitSystem = {
+      width: { label: "", mm: null },
+      depth: { label: "", mm: null },
+      height: { label: "", mm: null }
+    };
+  }
+  renderDetail();
+}
+
+function updateUnitAxis(axis, field, value) {
+  if (!state.editingDraft.unitSystem) return;
+  if (!state.editingDraft.unitSystem[axis]) state.editingDraft.unitSystem[axis] = { label: "", mm: null };
+  state.editingDraft.unitSystem[axis][field] = field === "mm" ? (value === "" ? null : Number(value)) : value;
+}
+
+function saveDraft() {
+  const d = state.editingDraft;
+  if (state.isCreating) {
+    d.id = "ifc-" + (INTERFACES.length + 1).toString().padStart(3, "0");
+    INTERFACES.push(JSON.parse(JSON.stringify(d)));
+    showToast(`Interface type created: ${d.identifier}`);
+  } else {
+    const idx = INTERFACES.findIndex(x => x.id === d.id);
+    INTERFACES[idx] = JSON.parse(JSON.stringify(d));
+    showToast(`Updated: ${d.identifier}`);
+  }
+  state.isCreating = false;
+  state.activeDetailId = d.id;
+  renderList();
+  renderDetail();
+}
+
+function deriveFromCurrent() {
+  const src = state.editingDraft;
+  state.activeDetailId = null;
+  state.isCreating = true;
+  state.editingDraft = {
+    id: "ifc-new",
+    identifier: "",
+    maturity: "draft",
+    archivedAt: null,
+    description: src.description,
+    physicalContract: src.physicalContract,
+    unitSystem: src.unitSystem ? JSON.parse(JSON.stringify(src.unitSystem)) : null,
+    usage: { providers: 0, accepters: 0, receptacles: 0 },
+    createdAt: "now"
+  };
+  renderList();
+  renderDetail();
+}
+
+// ─── Lifecycle actions ──────────────────────────────────────
+function toggleArchive(id) {
+  const ifc = INTERFACES.find(x => x.id === id);
+  if (ifc.archivedAt) {
+    ifc.archivedAt = null;
+    showToast(`Unarchived: ${ifc.identifier}`);
+  } else {
+    ifc.archivedAt = new Date().toISOString().slice(0, 10);
+    showToast(`Archived: ${ifc.identifier}`);
+  }
+  if (state.editingDraft && state.editingDraft.id === id) {
+    state.editingDraft.archivedAt = ifc.archivedAt;
+    renderDetail();
+  }
+  renderList();
+  updateTabCounts();
+}
+
+function deleteInterface(id) {
+  const ifc = INTERFACES.find(x => x.id === id);
+  if (!confirm(`Hard-delete '${ifc.identifier}'? This is irreversible.`)) return;
+  const idx = INTERFACES.findIndex(x => x.id === id);
+  INTERFACES.splice(idx, 1);
+  if (state.activeDetailId === id) closeDetail();
+  state.selectedIds.delete(id);
+  renderList();
+  updateBulkBar();
+  updateTabCounts();
+  showToast(`Deleted: ${ifc.identifier}`);
+}
+
+function openLifecyclePopover(evt) {
+  evt.stopPropagation();
+  const d = state.editingDraft;
+  const archived = !!d.archivedAt;
+  const canDelete = archived && usageTotal(d.usage) === 0;
+  const pop = document.getElementById("lifecyclePopover");
+  const rect = evt.currentTarget.getBoundingClientRect();
+  pop.style.left = rect.right - 220 + "px";
+  pop.style.top = rect.bottom + 6 + "px";
+  pop.innerHTML = `
+    <div class="lifecycle-popover-item" onclick="toggleArchive('${d.id}'); closeLifecyclePopover()">
+      <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+        ${archived ? '<path d="M4 4h16v4H4zM5 8l1 11h12l1-11M10 12h4"/>' : '<path d="M4 4h16v4H4zM5 8l1 11h12l1-11M9 12l3 3 3-3M12 9v6"/>'}
+      </svg>
+      ${archived ? 'Unarchive' : 'Archive'}
+    </div>
+    <div class="lifecycle-popover-item" onclick="startMergeFromDetail('${d.id}'); closeLifecyclePopover()">
+      <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M7 3v6M17 3v6M7 9l5 5 5-5M12 14v7"/></svg>
+      Merge into…
+    </div>
+    <div class="lifecycle-divider"></div>
+    <div class="lifecycle-popover-item destructive ${canDelete ? '' : ''}" ${canDelete ? `onclick="deleteInterface('${d.id}'); closeLifecyclePopover()"` : 'aria-disabled="true" title="Archive + 0 usage required to delete"'}>
+      <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/></svg>
+      Delete
+    </div>
+    ${!canDelete ? `<div class="lifecycle-popover-hint">Delete requires archived + 0 usage.</div>` : ''}
+  `;
+  pop.classList.add("open");
+  setTimeout(() => document.addEventListener("click", closeLifecyclePopoverOnOutside, { once: true }), 10);
+}
+
+function closeLifecyclePopover() {
+  document.getElementById("lifecyclePopover").classList.remove("open");
+}
+
+function closeLifecyclePopoverOnOutside(e) {
+  if (!e.target.closest(".lifecycle-popover")) closeLifecyclePopover();
+}
+
+// ─── Merge modal ────────────────────────────────────────────
+function startMergeFromDetail(id) {
+  state.selectedIds.clear();
+  state.selectedIds.add(id);
+  renderList();
+  updateBulkBar();
+  openMergeModal();
+}
+
+function openMergeModal() {
+  if (state.selectedIds.size < 1) return;
+  const sources = INTERFACES.filter(i => state.selectedIds.has(i.id));
+  const totalRefs = sources.reduce((n, i) => n + usageTotal(i.usage), 0);
+  const affectedTemplates = Math.ceil(totalRefs * 0.6); // mock
+
+  document.getElementById("mergeSummary").innerHTML = `
+    <div class="merge-summary-line"><span class="label">Sources</span><span class="value">${sources.map(s => `<span class="mono">${s.identifier}</span>`).join(", ")}</span></div>
+    <div class="merge-summary-line"><span class="label">References</span><span class="value"><strong>${totalRefs}</strong> to rewrite</span></div>
+    <div class="merge-summary-line"><span class="label">Template versions</span><span class="value"><strong>${affectedTemplates}</strong> to mint</span></div>
+  `;
+
+  const candidates = INTERFACES.filter(i => !state.selectedIds.has(i.id) && !i.archivedAt);
+  document.getElementById("survivorPicker").innerHTML = candidates.map((c, idx) => `
+    <label class="merge-survivor-opt ${idx === 0 ? 'selected' : ''}">
+      <input type="radio" name="survivor" value="${c.id}" ${idx === 0 ? 'checked' : ''} onchange="selectSurvivor(this)">
+      <span class="mono">${c.identifier}</span>
+      <span class="badge badge-${c.maturity}">${c.maturity}</span>
+      <span style="flex:1"></span>
+      <span style="font-size:11px; color:#64748b;">${usageTotal(c.usage)} refs</span>
+    </label>
+  `).join("");
+
+  document.getElementById("mergeModal").classList.add("open");
+}
+
+function selectSurvivor(inp) {
+  document.querySelectorAll(".merge-survivor-opt").forEach(o => o.classList.remove("selected"));
+  inp.closest(".merge-survivor-opt").classList.add("selected");
+}
+
+function closeMergeModal() {
+  document.getElementById("mergeModal").classList.remove("open");
+}
+
+function executeMerge() {
+  const survivorId = document.querySelector("input[name=survivor]:checked")?.value;
+  if (!survivorId) return;
+  const survivor = INTERFACES.find(x => x.id === survivorId);
+  const sources = INTERFACES.filter(i => state.selectedIds.has(i.id));
+  let totalRefs = 0, totalTemplates = 0;
+  sources.forEach(s => {
+    totalRefs += usageTotal(s.usage);
+    totalTemplates += Math.ceil(usageTotal(s.usage) * 0.6);
+    survivor.usage.providers += s.usage.providers;
+    survivor.usage.accepters += s.usage.accepters;
+    survivor.usage.receptacles += s.usage.receptacles;
+    const idx = INTERFACES.findIndex(x => x.id === s.id);
+    INTERFACES.splice(idx, 1);
+  });
+  state.selectedIds.clear();
+  if (state.activeDetailId && !INTERFACES.find(x => x.id === state.activeDetailId)) closeDetail();
+  closeMergeModal();
+  renderList();
+  updateBulkBar();
+  updateTabCounts();
+  showToast(`Merged ${sources.length} into ${survivor.identifier}. ${totalRefs} refs updated, ${totalTemplates} template versions minted.`);
+}
+
+// ─── Filter tabs ────────────────────────────────────────────
+document.querySelectorAll(".filter-tab").forEach(t => {
+  t.addEventListener("click", () => {
+    document.querySelectorAll(".filter-tab").forEach(x => x.classList.remove("active"));
+    t.classList.add("active");
+    state.filter = t.dataset.filter;
+    renderList();
+  });
+});
+
+function updateTabCounts() {
+  const active = INTERFACES.filter(i => !i.archivedAt).length;
+  const archived = INTERFACES.filter(i => !!i.archivedAt).length;
+  document.querySelectorAll(".filter-tab").forEach(t => {
+    const key = t.dataset.filter;
+    const cnt = t.querySelector(".filter-tab-count");
+    if (key === "active") cnt.textContent = active;
+    if (key === "archived") cnt.textContent = archived;
+    if (key === "all") cnt.textContent = INTERFACES.length;
+  });
+}
+
+// ─── Toast ──────────────────────────────────────────────────
+let toastTimer;
+function showToast(msg) {
+  const t = document.getElementById("toast");
+  document.getElementById("toastText").textContent = msg;
+  t.classList.add("visible");
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => t.classList.remove("visible"), 3500);
+}
+
+// ─── Avatar menu ────────────────────────────────────────────
+function toggleAvatarMenu() {
+  const m = document.getElementById("avatarMenu");
+  m.classList.toggle("open");
+  document.getElementById("avatarBtn").classList.toggle("menu-open", m.classList.contains("open"));
+}
+
+// Initial render
+renderList();
+updateTabCounts();
+// Open one by default to show the detail view
+openDetail("ifc-001");
+</script>
+
+</body>
+</html>
