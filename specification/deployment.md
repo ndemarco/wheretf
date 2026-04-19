@@ -201,85 +201,123 @@ These are **planned, not implemented.** Deployment as described above
 works without them. When any one of them lands, this doc and the
 deployment system both get revisited.
 
-### Identity provider on the homelab (TODO)
+### Identity provider (external dependency)
 
-The homelab currently has **no IdP deployed**. Before authentication
-can ship, one has to be stood up and maintained.
+The homelab team deploys and operates the OIDC IdP (Authentik /
+Keycloak / Zitadel, TBD) — **out of scope for WhereTF**. WhereTF
+consumes it as an OIDC client. The homelab OIDC provider is
+registered only when `AUTH_HOMELAB_ISSUER`, `AUTH_HOMELAB_CLIENT_ID`,
+and `AUTH_HOMELAB_CLIENT_SECRET` are set; customer credentials and
+dev impersonate work without it.
 
-Scope for that effort (separate project, separate plan cycle):
-- Evaluate Authentik, Keycloak, Zitadel. Pick one.
-- Deploy (Proxmox LXC or container), put behind Caddy, back with the
-  homelab Postgres VM or its own DB.
-- Automate lifecycle with Ansible so it's reproducible.
-- Add monitoring + backups alongside existing services.
+Until the IdP is live, WhereTF runs with customer credentials only
+and must not be internet-reachable.
 
-Until that lands, WhereTF runs without auth and must not be internet-
-reachable.
+### Authentication
 
-### Authentication (TODO)
+Auth.js v5 (next-auth) in `web/`. Hybrid providers:
 
-Depends on the IdP decision above. Plan:
+- **Homelab IdP OIDC** — env-gated, for staff/admin federation.
+- **Credentials** — email + password (bcryptjs), for customer
+  accounts. Signup endpoint creates a `users` row and a default owner
+  `orgs` row with `plan = 'free'`.
+- **Dev impersonate** — registered only when
+  `NODE_ENV !== "production"`, lets any email through for local dev.
 
-- **App side**: Auth.js (next-auth v5) with an OIDC provider. DB-backed
-  sessions — new `users`, `sessions` tables, users identified by
-  `(auth_provider, auth_subject)` for provider portability.
-- **Dev**: local "impersonate" login gated on
-  `NODE_ENV !== "production"` so dev doesn't require the IdP to be
-  running.
-- **CSRF**: Auth.js covers `/api/auth/*`; our mutation routes get a
-  shared helper.
+**Session strategy: JWT.** Auth.js v5 requires JWT sessions when a
+Credentials provider is in play. The JWT carries `sub` (user id);
+per-request authz hydrates orgs and active role from the database.
 
-### Authorization (TODO)
+**CSRF**: Auth.js covers `/api/auth/*`; mutation routes call
+`requireCsrf()` from `web/lib/auth/csrf.ts`.
 
-Model: **org-scoped, role per user-org pair.**
+### Authorization
 
-- New tables: `orgs`, `user_orgs (user_id, org_id, role)`.
-  Roles: `owner | admin | member | viewer`.
+Model: **org-scoped, role per user-org pair, three-mode data
+isolation.**
+
+- New tables:
+  - `users`, `accounts`, `sessions`, `verification_tokens` (Auth.js)
+  - `orgs (id, name, slug, plan: 'free' | 'paid', ...)`
+  - `user_orgs (user_id, org_id, role)`, roles
+    `owner | admin | member | viewer`, PK `(user_id, org_id)`
 - Every authenticated request carries
-  `{ userId, currentOrgId, role }`, derived from session + an
-  "active org" cookie.
-- **Per-org** tables: `modules`, `locations`, `inserts`, `assignments`,
-  `templates`, `template_versions`, `co_storability`.
-- **Global** tables: `items`, `item_aspects`, `item_parameter_values`,
-  `aspects`, `parameters`, `standards`, `designations`, `categories`.
-  Items are deliberately shared — see project memory on the global
-  catalog vision.
-- Enforcement starts application-layer (every repo method takes
-  `{ orgId }`), moves to Postgres RLS when the threat model justifies
-  the complexity.
+  `{ userId, activeOrgId, role }`, hydrated in `web/middleware.ts`
+  from the session + `wtf-active-org` cookie (fallback = user's
+  first org).
+- Isolation mode per table:
+  - **isolated** — `ownerOrgId NOT NULL`, strict filter
+    `ownerOrgId = :orgId`.
+    Tables: `modules`, `inserts`, `locations`, `assignments`,
+    `location_interfaces_accepted`, `transactions`.
+  - **additive** — `ownerOrgId` nullable. Read union
+    `(ownerOrgId IS NULL OR ownerOrgId = :orgId)`. Writes default to
+    the active org; writing a global row (`ownerOrgId = NULL`)
+    requires elevated permission.
+    Tables: `templates`, `template_versions`,
+    `template_version_interfaces_provided`,
+    `template_version_interfaces_accepted`, `items`, `item_aspects`,
+    `item_parameter_values`, `item_categories`, `item_standards`,
+    `co_storability`, `categories`, `parameter_definitions`,
+    `aspects`, `aspect_parameters`, `standards`,
+    `standard_parameters`, `standard_designations`,
+    `aspect_standards`, `interface_types`.
+  - **open** — no `ownerOrgId`, global only.
+    Tables: none at launch.
+- **Private items** are additive `items` rows with
+  `ownerOrgId IS NOT NULL`. Free tier rejects private inserts; paid
+  tier allows. No separate table, no visibility enum.
+- **Global catalog edit policy**: any signed-in user may create or
+  edit global rows. Every write lands in `transactions` with actor
+  `userId`. No moderation UI at launch.
+- Enforcement app-layer in repositories. Postgres RLS is a future
+  refinement, not scheduled.
 
-### API access + rate limiting (TODO)
+### Plan gating
+
+`orgs.plan` drives two gates at launch:
+
+1. **Seat limit** — free orgs reject a 2nd `user_orgs` insert.
+2. **Private items** — free orgs reject `items` inserts with
+   `ownerOrgId != null`.
+
+Parametric metadata is in-app readable for any signed-in user, free
+or paid. External API access (API keys) is paid-only; enforcement
+ships with the API keys phase.
+
+Billing integration is a separate phase (product TBD). Until it
+lands, `orgs.plan` is toggled by a platform admin (`users.is_admin`)
+via an admin-only endpoint.
+
+### API access + rate limiting (future phase)
 
 Two surfaces:
 
-1. **Internal** — session-cookie auth, CSRF for mutations.
-   Generous per-user limits (e.g. 60 rps burst, 300 rpm sustained).
-2. **External** — API keys. New table `api_keys` with hashed keys,
-   scopes, per-key rate limits tied to the org's plan (subscription
-   hook).
+1. **Internal** — session auth + CSRF for mutations. Generous
+   per-user limits (e.g. 60 rps burst, 300 rpm sustained).
+2. **External** — `api_keys` table with hashed keys, scopes, per-key
+   rate limits tied to `orgs.plan`. Paid-only.
 
-Limiter: token bucket, sliding window. In-memory in dev; Redis (or
-similar) in prod.
+Limiter: token bucket, sliding window. In-memory in dev; Redis in
+prod.
 
-Middleware lives in `web/middleware.ts`, intercepts `/api/*`, runs
-auth + rate-limit + org hydration before the route handler. Exempts
-`/api/health*`.
+Middleware in `web/middleware.ts` intercepts `/api/*`, runs auth +
+rate-limit + org hydration before the route handler. Exempts
+`/api/health*` and `/api/auth/*`.
 
-### Multi-tenancy migration (TODO, depends on auth + authz)
+### Multi-tenancy migration (execution order)
 
-Execution order when picked up:
-
-1. Migration adds `users`, `orgs`, `user_orgs`, `sessions`. Adds
-   nullable `org_id` on every per-org table; backfills existing rows
-   to a "default" org; follow-up migration flips NOT NULL.
-2. Repo refactor: every org-scoped method takes `{ orgId }`.
-   Integration test with two orgs enforces isolation per repo.
-3. API middleware populates request-local org context.
-4. Org switcher UI.
-5. Items stay global. Write-heavy catalog paths audit into the
-   existing `transactions` table.
-6. `orgs.plan` → rate limits + feature flags. Stripe (or whatever)
-   webhook updates it.
+1. Add `ownerOrgId uuid` nullable to every additive + isolated table
+   (no FK yet).
+2. Create `users`, `accounts`, `sessions`, `verification_tokens`,
+   `orgs`, `user_orgs`. Insert a default org and assign the current
+   single user as `owner`.
+3. Backfill isolated tables to the default org. Additive tables stay
+   `NULL` — they become the global catalog.
+4. Add FK `ownerOrgId → orgs.id` on every touched table. Flip
+   `NOT NULL` on isolated tables.
+5. Repo refactor: every method takes `{ userId, orgId, ... }`.
+6. Two-org isolation integration test per repo.
 
 None of the above blocks the deploy work. Ship the image now; layer
-auth + tenancy in when the IdP is ready.
+auth + tenancy in when the org model lands.
