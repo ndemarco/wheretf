@@ -141,10 +141,10 @@ export const locationInterfacesAccepted = pgTable(
   "location_interfaces_accepted",
   {
     id: uuid("id").primaryKey().defaultRandom(),
-    // Isolation: isolated (locations are isolated; junction follows).
-    ownerOrgId: uuid("owner_org_id").references(() => orgs.id, {
-      onDelete: "cascade",
-    }),
+    // Isolation: isolated (follows locations). NOT NULL since migration 0017.
+    ownerOrgId: uuid("owner_org_id")
+      .notNull()
+      .references(() => orgs.id, { onDelete: "cascade" }),
     // FK to locations added in the locations schema to avoid circular import;
     // logically this is locations.id with ON DELETE CASCADE. Constraint added
     // manually in the migration.

@@ -460,13 +460,16 @@ export const interfaceTypeRepository = {
         );
       let rewritesLocations = 0;
       if (affectedLocations.length > 0) {
-        const holderOwner = new Map<string, string | null>();
-        for (const r of affectedLocations) holderOwner.set(r.locationId, r.ownerOrgId);
+        // location_interfaces_accepted is isolated + NOT NULL, so ownerOrgId
+        // for every affected row equals orgId (we filtered on that above).
+        const uniqueLocationIds = Array.from(
+          new Set(affectedLocations.map((r) => r.locationId)),
+        );
         await tx
           .insert(locationInterfacesAccepted)
           .values(
-            Array.from(holderOwner.entries()).map(([locationId, ownerOrgId]) => ({
-              ownerOrgId,
+            uniqueLocationIds.map((locationId) => ({
+              ownerOrgId: orgId,
               locationId,
               interfaceTypeId: targetId,
             })),

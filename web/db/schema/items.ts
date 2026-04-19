@@ -42,10 +42,10 @@ export const coStorability = pgTable("co_storability", {
 
 export const assignments = pgTable("assignments", {
   id: uuid("id").primaryKey().defaultRandom(),
-  // Isolation: isolated.
-  ownerOrgId: uuid("owner_org_id").references(() => orgs.id, {
-    onDelete: "cascade",
-  }),
+  // Isolation: isolated. NOT NULL since migration 0017.
+  ownerOrgId: uuid("owner_org_id")
+    .notNull()
+    .references(() => orgs.id, { onDelete: "cascade" }),
   itemId: uuid("item_id")
     .notNull()
     .references(() => items.id),

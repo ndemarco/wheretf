@@ -14,10 +14,10 @@ export const transactions = pgTable("transactions", {
   id: uuid("id").primaryKey().defaultRandom(),
   // Isolation: isolated. Audit events are scoped to the org whose data
   // changed. Global-catalog edits (ownerOrgId = NULL on target row)
-  // still log under the acting user's active org.
-  ownerOrgId: uuid("owner_org_id").references(() => orgs.id, {
-    onDelete: "cascade",
-  }),
+  // still log under the acting user's active org. NOT NULL since 0017.
+  ownerOrgId: uuid("owner_org_id")
+    .notNull()
+    .references(() => orgs.id, { onDelete: "cascade" }),
   // Actor who made the change. Nullable for historical rows predating
   // auth; always set on new writes.
   actorUserId: uuid("actor_user_id").references(() => users.id, {
