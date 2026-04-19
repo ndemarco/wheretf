@@ -3,6 +3,9 @@ import { db } from "@/db/connection";
 import {
   templates,
   templateVersions,
+  templateVersionInterfacesProvided,
+  templateVersionInterfacesAccepted,
+  interfaceTypes,
   inserts,
   locations,
 } from "@/db/schema";
@@ -29,14 +32,13 @@ export const templateRepository = {
     maxRows,
     minColumns,
     maxColumns,
-    unitSize,
     rowLabelScheme,
     columnLabelScheme,
     originPosition,
     rowDividersFixed,
     columnDividersFixed,
-    interfaceTypeProvided,
-    interfaceTypeAccepted,
+    interfacesProvidedIds,
+    interfacesAcceptedIds,
     subdivisionOptions,
     physicalConstraints,
   }: {
@@ -59,63 +61,81 @@ export const templateRepository = {
     maxRows?: number | null;
     minColumns?: number | null;
     maxColumns?: number | null;
-    unitSize?: string | null;
     rowLabelScheme?: string;
     columnLabelScheme?: string;
     originPosition?: string;
     rowDividersFixed?: boolean;
     columnDividersFixed?: boolean;
-    interfaceTypeProvided?: string | null;
-    interfaceTypeAccepted?: string | null;
+    /** UUIDs of interface_types this template version provides. */
+    interfacesProvidedIds?: string[];
+    /** UUIDs of interface_types this template version accepts. */
+    interfacesAcceptedIds?: string[];
     subdivisionOptions?: Record<string, unknown> | null;
     physicalConstraints?: Record<string, unknown> | null;
   }) {
-    const [template] = await db
-      .insert(templates)
-      .values({
-        name,
-        description,
-        metadata,
-        scope: scope ?? "shared",
-        currentVersion: 1,
-        activeVersion: 1,
-      })
-      .returning();
+    const { template, version } = await db.transaction(async (tx) => {
+      const [t] = await tx
+        .insert(templates)
+        .values({
+          name,
+          description,
+          metadata,
+          scope: scope ?? "shared",
+          currentVersion: 1,
+          activeVersion: 1,
+        })
+        .returning();
 
-    // Auto-create version 1 with provided or default values
-    const [version] = await db
-      .insert(templateVersions)
-      .values({
-        templateId: template.id,
-        version: 1,
-        isParametric: isParametric ?? false,
-        isContinuous: isContinuous ?? false,
-        widthMm: widthMm != null ? String(widthMm) : null,
-        heightMm: heightMm != null ? String(heightMm) : null,
-        depthMm: depthMm != null ? String(depthMm) : null,
-        rowPitchMm: rowPitchMm != null ? String(rowPitchMm) : null,
-        overflowDirection: overflowDirection ?? null,
-        bufferMm: bufferMm != null ? String(bufferMm) : null,
-        unitSystem: unitSystem ?? "metric",
-        rows: rows ?? 1,
-        columns: columns ?? 1,
-        minRows: minRows ?? null,
-        maxRows: maxRows ?? null,
-        minColumns: minColumns ?? null,
-        maxColumns: maxColumns ?? null,
-        unitSize: unitSize ?? null,
-        rowLabelScheme: rowLabelScheme ?? "alpha",
-        columnLabelScheme: columnLabelScheme ?? "numeric",
-        originPosition: originPosition ?? "top-left",
-        primaryAxis: "row",
-        rowDividersFixed: rowDividersFixed ?? false,
-        columnDividersFixed: columnDividersFixed ?? false,
-        interfaceTypeProvided: interfaceTypeProvided ?? null,
-        interfaceTypeAccepted: interfaceTypeAccepted ?? null,
-        subdivisionOptions: subdivisionOptions ?? null,
-        physicalConstraints: physicalConstraints ?? null,
-      })
-      .returning();
+      const [v] = await tx
+        .insert(templateVersions)
+        .values({
+          templateId: t.id,
+          version: 1,
+          isParametric: isParametric ?? false,
+          isContinuous: isContinuous ?? false,
+          widthMm: widthMm != null ? String(widthMm) : null,
+          heightMm: heightMm != null ? String(heightMm) : null,
+          depthMm: depthMm != null ? String(depthMm) : null,
+          rowPitchMm: rowPitchMm != null ? String(rowPitchMm) : null,
+          overflowDirection: overflowDirection ?? null,
+          bufferMm: bufferMm != null ? String(bufferMm) : null,
+          unitSystem: unitSystem ?? "metric",
+          rows: rows ?? 1,
+          columns: columns ?? 1,
+          minRows: minRows ?? null,
+          maxRows: maxRows ?? null,
+          minColumns: minColumns ?? null,
+          maxColumns: maxColumns ?? null,
+          rowLabelScheme: rowLabelScheme ?? "alpha",
+          columnLabelScheme: columnLabelScheme ?? "numeric",
+          originPosition: originPosition ?? "top-left",
+          primaryAxis: "row",
+          rowDividersFixed: rowDividersFixed ?? false,
+          columnDividersFixed: columnDividersFixed ?? false,
+          subdivisionOptions: subdivisionOptions ?? null,
+          physicalConstraints: physicalConstraints ?? null,
+        })
+        .returning();
+
+      if (interfacesProvidedIds?.length) {
+        await tx.insert(templateVersionInterfacesProvided).values(
+          interfacesProvidedIds.map((interfaceTypeId) => ({
+            templateVersionId: v.id,
+            interfaceTypeId,
+          })),
+        );
+      }
+      if (interfacesAcceptedIds?.length) {
+        await tx.insert(templateVersionInterfacesAccepted).values(
+          interfacesAcceptedIds.map((interfaceTypeId) => ({
+            templateVersionId: v.id,
+            interfaceTypeId,
+          })),
+        );
+      }
+
+      return { template: t, version: v };
+    });
 
     await transactionRepository.log({
       actionType: "template.create",
@@ -171,12 +191,84 @@ export const templateRepository = {
       versionMap.set(v.templateId, list);
     }
 
+    // Batch-load interface identifiers for the current versions so callers
+    // can filter / render chips without a second round-trip.
+    const currentVersionIds = allTemplates
+      .map((t) => versionMap.get(t.id)?.find((v) => v.version === t.currentVersion)?.id)
+      .filter((x): x is string => !!x);
+    const providedByVersion = new Map<
+      string,
+      Array<{ id: string; identifier: string }>
+    >();
+    const acceptedByVersion = new Map<
+      string,
+      Array<{ id: string; identifier: string }>
+    >();
+    if (currentVersionIds.length > 0) {
+      const providedRows = await db
+        .select({
+          versionId: templateVersionInterfacesProvided.templateVersionId,
+          id: interfaceTypes.id,
+          identifier: interfaceTypes.identifier,
+        })
+        .from(templateVersionInterfacesProvided)
+        .innerJoin(
+          interfaceTypes,
+          eq(
+            templateVersionInterfacesProvided.interfaceTypeId,
+            interfaceTypes.id,
+          ),
+        )
+        .where(
+          inArray(
+            templateVersionInterfacesProvided.templateVersionId,
+            currentVersionIds,
+          ),
+        );
+      for (const r of providedRows) {
+        const list = providedByVersion.get(r.versionId) ?? [];
+        list.push({ id: r.id, identifier: r.identifier });
+        providedByVersion.set(r.versionId, list);
+      }
+      const acceptedRows = await db
+        .select({
+          versionId: templateVersionInterfacesAccepted.templateVersionId,
+          id: interfaceTypes.id,
+          identifier: interfaceTypes.identifier,
+        })
+        .from(templateVersionInterfacesAccepted)
+        .innerJoin(
+          interfaceTypes,
+          eq(
+            templateVersionInterfacesAccepted.interfaceTypeId,
+            interfaceTypes.id,
+          ),
+        )
+        .where(
+          inArray(
+            templateVersionInterfacesAccepted.templateVersionId,
+            currentVersionIds,
+          ),
+        );
+      for (const r of acceptedRows) {
+        const list = acceptedByVersion.get(r.versionId) ?? [];
+        list.push({ id: r.id, identifier: r.identifier });
+        acceptedByVersion.set(r.versionId, list);
+      }
+    }
+
     return allTemplates.map((t) => {
       const versions = versionMap.get(t.id) ?? [];
       const currentVer = versions.find((v) => v.version === t.currentVersion);
       return {
         ...t,
-        currentVersionData: currentVer ?? null,
+        currentVersionData: currentVer
+          ? {
+              ...currentVer,
+              interfacesProvided: providedByVersion.get(currentVer.id) ?? [],
+              interfacesAccepted: acceptedByVersion.get(currentVer.id) ?? [],
+            }
+          : null,
       };
     });
   },
@@ -313,14 +405,13 @@ export const templateRepository = {
     maxRows,
     minColumns,
     maxColumns,
-    unitSize,
     rowLabelScheme,
     columnLabelScheme,
     originPosition,
     rowDividersFixed,
     columnDividersFixed,
-    interfaceTypeProvided,
-    interfaceTypeAccepted,
+    interfacesProvidedIds,
+    interfacesAcceptedIds,
     subdivisionOptions,
     physicalConstraints,
   }: {
@@ -332,14 +423,13 @@ export const templateRepository = {
     maxRows?: number | null;
     minColumns?: number | null;
     maxColumns?: number | null;
-    unitSize?: string | null;
     rowLabelScheme?: string;
     columnLabelScheme?: string;
     originPosition?: string;
     rowDividersFixed?: boolean;
     columnDividersFixed?: boolean;
-    interfaceTypeProvided?: string | null;
-    interfaceTypeAccepted?: string | null;
+    interfacesProvidedIds?: string[];
+    interfacesAcceptedIds?: string[];
     subdivisionOptions?: Record<string, unknown> | null;
     physicalConstraints?: Record<string, unknown> | null;
   }) {
@@ -348,37 +438,55 @@ export const templateRepository = {
 
     const newVersionNumber = template.currentVersion + 1;
 
-    const [version] = await db
-      .insert(templateVersions)
-      .values({
-        templateId,
-        version: newVersionNumber,
-        isParametric: isParametric ?? false,
-        rows: rows ?? null,
-        columns: columns ?? null,
-        minRows: minRows ?? null,
-        maxRows: maxRows ?? null,
-        minColumns: minColumns ?? null,
-        maxColumns: maxColumns ?? null,
-        unitSize: unitSize ?? null,
-        rowLabelScheme: rowLabelScheme ?? "alpha",
-        columnLabelScheme: columnLabelScheme ?? "numeric",
-        originPosition: originPosition ?? "top-left",
-        primaryAxis: "row",
-        rowDividersFixed: rowDividersFixed ?? false,
-        columnDividersFixed: columnDividersFixed ?? false,
-        interfaceTypeProvided: interfaceTypeProvided ?? null,
-        interfaceTypeAccepted: interfaceTypeAccepted ?? null,
-        subdivisionOptions: subdivisionOptions ?? null,
-        physicalConstraints: physicalConstraints ?? null,
-      })
-      .returning();
+    const { version, updatedTemplate } = await db.transaction(async (tx) => {
+      const [v] = await tx
+        .insert(templateVersions)
+        .values({
+          templateId,
+          version: newVersionNumber,
+          isParametric: isParametric ?? false,
+          rows: rows ?? null,
+          columns: columns ?? null,
+          minRows: minRows ?? null,
+          maxRows: maxRows ?? null,
+          minColumns: minColumns ?? null,
+          maxColumns: maxColumns ?? null,
+          rowLabelScheme: rowLabelScheme ?? "alpha",
+          columnLabelScheme: columnLabelScheme ?? "numeric",
+          originPosition: originPosition ?? "top-left",
+          primaryAxis: "row",
+          rowDividersFixed: rowDividersFixed ?? false,
+          columnDividersFixed: columnDividersFixed ?? false,
+          subdivisionOptions: subdivisionOptions ?? null,
+          physicalConstraints: physicalConstraints ?? null,
+        })
+        .returning();
 
-    const [updatedTemplate] = await db
-      .update(templates)
-      .set({ currentVersion: newVersionNumber, updatedAt: new Date() })
-      .where(eq(templates.id, templateId))
-      .returning();
+      if (interfacesProvidedIds?.length) {
+        await tx.insert(templateVersionInterfacesProvided).values(
+          interfacesProvidedIds.map((interfaceTypeId) => ({
+            templateVersionId: v.id,
+            interfaceTypeId,
+          })),
+        );
+      }
+      if (interfacesAcceptedIds?.length) {
+        await tx.insert(templateVersionInterfacesAccepted).values(
+          interfacesAcceptedIds.map((interfaceTypeId) => ({
+            templateVersionId: v.id,
+            interfaceTypeId,
+          })),
+        );
+      }
+
+      const [t] = await tx
+        .update(templates)
+        .set({ currentVersion: newVersionNumber, updatedAt: new Date() })
+        .where(eq(templates.id, templateId))
+        .returning();
+
+      return { version: v, updatedTemplate: t };
+    });
 
     await transactionRepository.log({
       actionType: "template.publishVersion",
@@ -389,6 +497,97 @@ export const templateRepository = {
     });
 
     return version;
+  },
+
+  /**
+   * Read interfaces declared on a specific template version.
+   * Returns full interface_types rows so callers can render chips / labels.
+   */
+  async getVersionInterfaces({ versionId }: { versionId: string }) {
+    const provided = await db
+      .select({
+        id: interfaceTypes.id,
+        identifier: interfaceTypes.identifier,
+        description: interfaceTypes.description,
+        maturity: interfaceTypes.maturity,
+        archivedAt: interfaceTypes.archivedAt,
+        unitSystem: interfaceTypes.unitSystem,
+      })
+      .from(templateVersionInterfacesProvided)
+      .innerJoin(
+        interfaceTypes,
+        eq(templateVersionInterfacesProvided.interfaceTypeId, interfaceTypes.id),
+      )
+      .where(eq(templateVersionInterfacesProvided.templateVersionId, versionId));
+
+    const accepted = await db
+      .select({
+        id: interfaceTypes.id,
+        identifier: interfaceTypes.identifier,
+        description: interfaceTypes.description,
+        maturity: interfaceTypes.maturity,
+        archivedAt: interfaceTypes.archivedAt,
+        unitSystem: interfaceTypes.unitSystem,
+      })
+      .from(templateVersionInterfacesAccepted)
+      .innerJoin(
+        interfaceTypes,
+        eq(templateVersionInterfacesAccepted.interfaceTypeId, interfaceTypes.id),
+      )
+      .where(eq(templateVersionInterfacesAccepted.templateVersionId, versionId));
+
+    return { provided, accepted };
+  },
+
+  /**
+   * Replace the set of provided/accepted interfaces on a template version.
+   * Idempotent. Either list can be omitted to leave that side untouched.
+   */
+  async setVersionInterfaces({
+    versionId,
+    providedIds,
+    acceptedIds,
+  }: {
+    versionId: string;
+    providedIds?: string[];
+    acceptedIds?: string[];
+  }) {
+    await db.transaction(async (tx) => {
+      if (providedIds !== undefined) {
+        await tx
+          .delete(templateVersionInterfacesProvided)
+          .where(eq(templateVersionInterfacesProvided.templateVersionId, versionId));
+        if (providedIds.length > 0) {
+          await tx.insert(templateVersionInterfacesProvided).values(
+            providedIds.map((interfaceTypeId) => ({
+              templateVersionId: versionId,
+              interfaceTypeId,
+            })),
+          );
+        }
+      }
+      if (acceptedIds !== undefined) {
+        await tx
+          .delete(templateVersionInterfacesAccepted)
+          .where(eq(templateVersionInterfacesAccepted.templateVersionId, versionId));
+        if (acceptedIds.length > 0) {
+          await tx.insert(templateVersionInterfacesAccepted).values(
+            acceptedIds.map((interfaceTypeId) => ({
+              templateVersionId: versionId,
+              interfaceTypeId,
+            })),
+          );
+        }
+      }
+    });
+
+    await transactionRepository.log({
+      actionType: "templateVersion.setInterfaces",
+      entityType: "templateVersion",
+      entityId: versionId,
+      beforeState: null,
+      afterState: { providedIds, acceptedIds },
+    });
   },
 
   async getVersion({

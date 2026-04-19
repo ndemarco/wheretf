@@ -19,7 +19,7 @@ interface LevelRow {
   moduleId: string;
   label: string;
   locationType: string;
-  interfaceTypeAccepted: string | null;
+  interfacesAccepted: Array<{ id: string; identifier: string }>;
   isDisabled: boolean;
   parentId: string | null;
   createdAt: string;

@@ -81,3 +81,4 @@ Tailwind v4 with custom `accent` color (#ff6600 orange). Dark mode supported. Gr
 - [specification/item-management-design.md](specification/item-management-design.md) — item management UI/UX spec
 - [specification/ui-paradigms.md](specification/ui-paradigms.md) — cross-cutting UI/UX rules
 - [specification/ai-agent-architecture.md](specification/ai-agent-architecture.md) — AI agent patterns (deferred, reference only)
+- [specification/interface-type-management.md](specification/interface-type-management.md) — admin CRUD + template/receptacle integration for interface types

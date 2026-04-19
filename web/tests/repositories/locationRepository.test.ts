@@ -1,6 +1,7 @@
 import { db } from "@/db/connection";
 import { templates, templateVersions } from "@/db/schema";
 import { eq } from "drizzle-orm";
+import { interfaceTypeRepository } from "@/repositories/interfaceTypeRepository";
 import { locationRepository } from "@/repositories/locationRepository";
 import { moduleRepository } from "@/repositories/moduleRepository";
 import { transactionRepository } from "@/repositories/transactionRepository";
@@ -83,19 +84,27 @@ describe("locationRepository", () => {
       expect(location.templateVersionId).toBe(ver.id);
     });
 
-    it("creates a receptacle with interfaceTypeAccepted", async () => {
+    it("creates a receptacle with accepted interface types", async () => {
       const module = await createTestModule();
+      const plano = await interfaceTypeRepository.create({
+        identifier: "plano-3600",
+      });
 
       const location = await locationRepository.create({
         moduleId: module.id,
         label: "A1",
         pathSegments: ["MUSE", "3", "A1"],
         locationType: "receptacle",
-        interfaceTypeAccepted: "plano-3600",
+        interfacesAcceptedIds: [plano.id],
       });
 
       expect(location.locationType).toBe("receptacle");
-      expect(location.interfaceTypeAccepted).toBe("plano-3600");
+
+      const accepted = await locationRepository.getAcceptedInterfaces({
+        locationId: location.id,
+      });
+      expect(accepted).toHaveLength(1);
+      expect(accepted[0].identifier).toBe("plano-3600");
     });
 
     it("creates a child location with parentId", async () => {
@@ -304,11 +313,21 @@ describe("locationRepository", () => {
       const updated = await locationRepository.update({
         id: created.id,
         locationType: "receptacle",
-        interfaceTypeAccepted: "plano-3600",
       });
 
       expect(updated.locationType).toBe("receptacle");
-      expect(updated.interfaceTypeAccepted).toBe("plano-3600");
+
+      const plano = await interfaceTypeRepository.create({
+        identifier: "plano-3600",
+      });
+      await locationRepository.setAcceptedInterfaces({
+        locationId: created.id,
+        interfaceTypeIds: [plano.id],
+      });
+      const accepted = await locationRepository.getAcceptedInterfaces({
+        locationId: created.id,
+      });
+      expect(accepted.map((a) => a.identifier)).toEqual(["plano-3600"]);
     });
 
     it("logs a transaction with before and after state", async () => {

@@ -7,7 +7,8 @@ import { useEffect, useMemo, useState } from "react";
 interface LevelConfig {
   label: string;
   type: "receptacle" | "fixed";
-  interfaceTypeAccepted: string;
+  /** interface_types.id (UUID) — empty string = no interface set. */
+  interfaceTypeId: string;
   notes: string;
   selected: boolean;
 }
@@ -27,20 +28,20 @@ export default function NewModulePage() {
     {
       label: "1",
       type: "receptacle",
-      interfaceTypeAccepted: "",
+      interfaceTypeId: "",
       notes: "",
       selected: false,
     },
   ]);
 
   const [interfaceOptions, setInterfaceOptions] = useState<
-    Array<{ identifier: string; description: string | null }>
+    Array<{ id: string; identifier: string; description: string | null }>
   >([]);
 
   useEffect(() => {
     (async () => {
       try {
-        const r = await fetch("/api/interface-types");
+        const r = await fetch("/api/interface-types?status=active");
         const d = await r.json();
         setInterfaceOptions(d.interfaceTypes ?? []);
       } catch (err) {
@@ -54,8 +55,8 @@ export default function NewModulePage() {
   useEffect(() => {
     setLevels((prev) =>
       prev.map((l) =>
-        l.type === "receptacle" && l.interfaceTypeAccepted === ""
-          ? { ...l, interfaceTypeAccepted: defaultIface }
+        l.type === "receptacle" && l.interfaceTypeId === ""
+          ? { ...l, interfaceTypeId: defaultIface }
           : l
       )
     );
@@ -67,7 +68,7 @@ export default function NewModulePage() {
       {
         label: String(p.length + 1),
         type: "receptacle",
-        interfaceTypeAccepted: defaultIface,
+        interfaceTypeId: defaultIface,
         notes: "",
         selected: false,
       },
@@ -96,10 +97,10 @@ export default function NewModulePage() {
   function batchType(type: "receptacle" | "fixed") {
     setLevels((p) => p.map((l) => (l.selected ? { ...l, type } : l)));
   }
-  function batchIface(iface: string) {
+  function batchIface(ifaceId: string) {
     setLevels((p) =>
       p.map((l) =>
-        l.selected ? { ...l, interfaceTypeAccepted: iface } : l
+        l.selected ? { ...l, interfaceTypeId: ifaceId } : l
       )
     );
   }
@@ -137,9 +138,9 @@ export default function NewModulePage() {
             label: level.label,
             pathSegments: [moduleName, level.label],
             locationType: level.type,
-            interfaceTypeAccepted:
-              level.type === "receptacle"
-                ? level.interfaceTypeAccepted || undefined
+            interfacesAcceptedIds:
+              level.type === "receptacle" && level.interfaceTypeId
+                ? [level.interfaceTypeId]
                 : undefined,
             metadata: level.notes ? { notes: level.notes } : undefined,
           }),
@@ -234,7 +235,7 @@ export default function NewModulePage() {
           >
             <option value="">— none —</option>
             {interfaceOptions.map((i) => (
-              <option key={i.identifier} value={i.identifier}>
+              <option key={i.id} value={i.id}>
                 {i.identifier}
               </option>
             ))}
@@ -279,7 +280,7 @@ export default function NewModulePage() {
                   </option>
                   <option value="">— none —</option>
                   {interfaceOptions.map((i) => (
-                    <option key={i.identifier} value={i.identifier}>
+                    <option key={i.id} value={i.id}>
                       {i.identifier}
                     </option>
                   ))}
@@ -357,17 +358,17 @@ export default function NewModulePage() {
                     <td className="px-3 py-1.5">
                       {level.type === "receptacle" ? (
                         <select
-                          value={level.interfaceTypeAccepted}
+                          value={level.interfaceTypeId}
                           onChange={(e) =>
                             updateLevel(i, {
-                              interfaceTypeAccepted: e.target.value,
+                              interfaceTypeId: e.target.value,
                             })
                           }
                           className="px-2 py-1 bg-slate-800 border border-slate-700 rounded text-slate-100 text-sm focus:border-accent focus:outline-none w-36"
                         >
                           <option value="">— none —</option>
                           {interfaceOptions.map((i) => (
-                            <option key={i.identifier} value={i.identifier}>
+                            <option key={i.id} value={i.id}>
                               {i.identifier}
                             </option>
                           ))}

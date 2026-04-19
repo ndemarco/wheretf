@@ -1,4 +1,5 @@
 import { insertRepository } from "@/repositories/insertRepository";
+import { interfaceTypeRepository } from "@/repositories/interfaceTypeRepository";
 import { locationRepository } from "@/repositories/locationRepository";
 import { moduleRepository } from "@/repositories/moduleRepository";
 import { templateRepository } from "@/repositories/templateRepository";
@@ -14,15 +15,32 @@ async function createTestModule() {
 
 async function createReceptacleLocation(
   moduleId: string,
-  interfaceTypeAccepted?: string
+  interfacesAcceptedIds?: string[]
 ) {
   return locationRepository.create({
     moduleId,
     label: "A1",
     pathSegments: ["MUSE", "3", "A1"],
     locationType: "receptacle",
-    interfaceTypeAccepted,
+    interfacesAcceptedIds,
   });
+}
+
+async function createTemplateProviding(identifiers: string[]) {
+  const ifaces = await Promise.all(
+    identifiers.map((id) =>
+      interfaceTypeRepository.create({ identifier: id }),
+    ),
+  );
+  const template = await templateRepository.create({
+    name: `tmpl-${identifiers.join("-")}-${Math.random()}`,
+    interfacesProvidedIds: ifaces.map((i) => i.id),
+  });
+  const version = await templateRepository.getVersion({
+    templateId: template.id,
+    version: 1,
+  });
+  return { ifaces, template, version: version! };
 }
 
 describe("insertRepository", () => {
@@ -30,12 +48,10 @@ describe("insertRepository", () => {
     it("creates an unplaced insert", async () => {
       const insert = await insertRepository.create({
         name: "Resistor tray",
-        interfaceTypeProvided: "plano-3600",
       });
 
       expect(insert.id).toBeDefined();
       expect(insert.name).toBe("Resistor tray");
-      expect(insert.interfaceTypeProvided).toBe("plano-3600");
       expect(insert.locationId).toBeNull();
     });
 
@@ -111,13 +127,14 @@ describe("insertRepository", () => {
 
     it("succeeds when interface types match", async () => {
       const module = await createTestModule();
-      const location = await createReceptacleLocation(
-        module.id,
-        "plano-3600"
-      );
+      const { ifaces, template, version } = await createTemplateProviding([
+        "plano-3600",
+      ]);
+      const location = await createReceptacleLocation(module.id, [ifaces[0].id]);
       const insert = await insertRepository.create({
         name: "Tray",
-        interfaceTypeProvided: "plano-3600",
+        templateId: template.id,
+        templateVersionId: version.id,
       });
 
       const placed = await insertRepository.place({
@@ -128,12 +145,12 @@ describe("insertRepository", () => {
       expect(placed.locationId).toBe(location.id);
     });
 
-    it("succeeds when insert has no interface type", async () => {
+    it("succeeds when insert has no interface type (template provides none)", async () => {
       const module = await createTestModule();
-      const location = await createReceptacleLocation(
-        module.id,
-        "plano-3600"
-      );
+      const plano = await interfaceTypeRepository.create({
+        identifier: "plano-3600",
+      });
+      const location = await createReceptacleLocation(module.id, [plano.id]);
       const insert = await insertRepository.create({ name: "Generic tray" });
 
       const placed = await insertRepository.place({
@@ -146,10 +163,14 @@ describe("insertRepository", () => {
 
     it("succeeds when location has no interface type", async () => {
       const module = await createTestModule();
+      const { template, version } = await createTemplateProviding([
+        "plano-3600",
+      ]);
       const location = await createReceptacleLocation(module.id);
       const insert = await insertRepository.create({
         name: "Tray",
-        interfaceTypeProvided: "plano-3600",
+        templateId: template.id,
+        templateVersionId: version.id,
       });
 
       const placed = await insertRepository.place({
@@ -162,13 +183,17 @@ describe("insertRepository", () => {
 
     it("fails when interface types do not match", async () => {
       const module = await createTestModule();
-      const location = await createReceptacleLocation(
-        module.id,
-        "plano-3600"
-      );
+      const plano = await interfaceTypeRepository.create({
+        identifier: "plano-3600",
+      });
+      const { template, version } = await createTemplateProviding([
+        "gridfinity-42mm",
+      ]);
+      const location = await createReceptacleLocation(module.id, [plano.id]);
       const insert = await insertRepository.create({
         name: "Tray",
-        interfaceTypeProvided: "gridfinity-42mm",
+        templateId: template.id,
+        templateVersionId: version.id,
       });
 
       await expect(
@@ -176,7 +201,7 @@ describe("insertRepository", () => {
           id: insert.id,
           locationId: location.id,
         })
-      ).rejects.toThrow("Interface type mismatch");
+      ).rejects.toThrow(/No compatible interface/i);
     });
 
     it("fails when location is not a receptacle", async () => {

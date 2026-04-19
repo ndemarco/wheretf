@@ -23,7 +23,7 @@ interface Location {
   label: string;
   path: string;
   locationType: string;
-  interfaceTypeAccepted: string | null;
+  interfacesAccepted: Array<{ id: string; identifier: string }>;
   isDisabled: boolean;
   disableReason: string | null;
   templateVersionId: string | null;
@@ -61,7 +61,7 @@ interface Insert {
   name: string | null;
   templateId: string | null;
   templateName?: string | null;
-  interfaceType?: string | null;
+  interfaceTypes?: Array<{ id: string; identifier: string }>;
   locationId: string | null;
   locationPath?: string | null;
 }
@@ -114,12 +114,13 @@ export default function ModuleDetailPage() {
   const [levelDraft, setLevelDraft] = useState<{
     label: string;
     description: string;
-    interfaceTypeAccepted: string;
-  }>({ label: "", description: "", interfaceTypeAccepted: "" });
+    /** interface_types.id (UUID); empty string = none. Single-select for now. */
+    interfaceTypeId: string;
+  }>({ label: "", description: "", interfaceTypeId: "" });
 
   // Available interface types (for the receptacle dropdown in level edit)
   const [interfaceOptions, setInterfaceOptions] = useState<
-    Array<{ identifier: string; description: string | null }>
+    Array<{ id: string; identifier: string; description: string | null }>
   >([]);
 
   // Inline rename for the selected level's label (pencil on center header)
@@ -138,7 +139,7 @@ export default function ModuleDetailPage() {
       name: string | null;
       templateId: string | null;
       templateName: string | null;
-      interfaceType: string | null;
+      interfaceTypes: Array<{ id: string; identifier: string }>;
       rows: number | null;
       columns: number | null;
     }>
@@ -161,7 +162,7 @@ export default function ModuleDetailPage() {
         maxRows: number | null;
         minColumns: number | null;
         maxColumns: number | null;
-        interfaceTypeProvided: string | null;
+        interfacesProvided: Array<{ id: string; identifier: string }>;
       } | null;
     }>
   >([]);
@@ -281,7 +282,7 @@ export default function ModuleDetailPage() {
   useEffect(() => {
     (async () => {
       try {
-        const res = await fetch("/api/interface-types");
+        const res = await fetch("/api/interface-types?status=active");
         const data = await res.json();
         setInterfaceOptions(data.interfaceTypes ?? []);
       } catch (err) {
@@ -307,14 +308,16 @@ export default function ModuleDetailPage() {
       setCandidateTemplates([]);
       return;
     }
-    const iface = level.interfaceTypeAccepted;
+    // Level can accept multiple interfaces; use the first as the filter
+    // for candidate inserts/templates (single-select UI today).
+    const iface = level.interfacesAccepted[0]?.id ?? null;
     setCandidatesLoading(true);
     (async () => {
       try {
         const qs = new URLSearchParams({
           placement: candidatesShowAll ? "all" : "unplaced",
         });
-        if (iface) qs.set("interfaceType", iface);
+        if (iface) qs.set("interfaceTypeId", iface);
         const [insRes, tplRes] = await Promise.all([
           fetch(`/api/inserts?${qs}`),
           fetch("/api/templates"),
@@ -332,10 +335,12 @@ export default function ModuleDetailPage() {
             ? allT.filter(
                 (t: {
                   currentVersionData?: {
-                    interfaceTypeProvided?: string | null;
+                    interfacesProvided?: Array<{ id: string }>;
                   } | null;
                 }) =>
-                  t.currentVersionData?.interfaceTypeProvided === iface
+                  (t.currentVersionData?.interfacesProvided ?? []).some(
+                    (p) => p.id === iface,
+                  )
               )
             : allT
         );
@@ -501,11 +506,11 @@ export default function ModuleDetailPage() {
         ? (selectedLevel.metadata as { notes?: string }).notes ?? ""
         : "";
     const newDesc = levelDraft.description.trim();
-    const newIface = levelDraft.interfaceTypeAccepted.trim() || null;
+    const newIface = levelDraft.interfaceTypeId.trim() || null;
+    const currentIface = selectedLevel.interfacesAccepted[0]?.id ?? null;
     const labelChanged = label !== selectedLevel.label;
     const descChanged = newDesc !== existingNotes;
-    const ifaceChanged =
-      newIface !== (selectedLevel.interfaceTypeAccepted ?? null);
+    const ifaceChanged = newIface !== currentIface;
     if (!labelChanged && !descChanged && !ifaceChanged) {
       setEditingLevel(false);
       return;
@@ -513,7 +518,9 @@ export default function ModuleDetailPage() {
     try {
       const body: Record<string, unknown> = {};
       if (labelChanged) body.label = label;
-      if (ifaceChanged) body.interfaceTypeAccepted = newIface;
+      if (ifaceChanged) {
+        body.interfacesAcceptedIds = newIface ? [newIface] : [];
+      }
       if (descChanged) {
         const nextMetadata = {
           ...(selectedLevel.metadata ?? {}),
@@ -545,7 +552,7 @@ export default function ModuleDetailPage() {
     setLevelDraft({
       label: selectedLevel.label,
       description: notes,
-      interfaceTypeAccepted: selectedLevel.interfaceTypeAccepted ?? "",
+      interfaceTypeId: selectedLevel.interfacesAccepted[0]?.id ?? "",
     });
     setEditingLevel(false);
   }
@@ -566,7 +573,7 @@ export default function ModuleDetailPage() {
       setLevelDraft({
         label: level.label,
         description: notes,
-        interfaceTypeAccepted: level.interfaceTypeAccepted ?? "",
+        interfaceTypeId: level.interfacesAccepted[0]?.id ?? "",
       });
     }
   }
@@ -995,7 +1002,10 @@ export default function ModuleDetailPage() {
                         badgeText = ins.name ?? ins.templateName ?? "insert";
                         badgeClass = "bg-slate-700 text-slate-100";
                       } else if (level.locationType === "receptacle") {
-                        badgeText = level.interfaceTypeAccepted ?? "empty";
+                        badgeText =
+                          level.interfacesAccepted
+                            .map((i) => i.identifier)
+                            .join(", ") || "empty";
                         badgeClass = "bg-blue-900/40 text-blue-300";
                       } else {
                         badgeText = level.locationType;
@@ -1175,11 +1185,14 @@ export default function ModuleDetailPage() {
                 if (
                   !ins &&
                   selectedLevel.locationType === "receptacle" &&
-                  selectedLevel.interfaceTypeAccepted
+                  selectedLevel.interfacesAccepted.length > 0
                 ) {
                   bits.push(
                     <span key="iface" className="text-blue-300">
-                      empty / accepts {selectedLevel.interfaceTypeAccepted}
+                      empty / accepts{" "}
+                      {selectedLevel.interfacesAccepted
+                        .map((i) => i.identifier)
+                        .join(", ")}
                     </span>
                   );
                 }
@@ -1953,7 +1966,7 @@ interface CandidateInsert {
   name: string | null;
   templateId: string | null;
   templateName: string | null;
-  interfaceType: string | null;
+  interfaceTypes: Array<{ id: string; identifier: string }>;
   rows: number | null;
   columns: number | null;
 }
@@ -1970,7 +1983,7 @@ interface CandidateTemplate {
     maxRows: number | null;
     minColumns: number | null;
     maxColumns: number | null;
-    interfaceTypeProvided: string | null;
+    interfacesProvided: Array<{ id: string; identifier: string }>;
   } | null;
 }
 
@@ -2049,8 +2062,8 @@ function PlaceInsertInline({
       ) : inserts.length === 0 ? (
         <div className="text-xs text-slate-500">
           No compatible {showAll ? "" : "unplaced "}inserts
-          {level.interfaceTypeAccepted
-            ? ` for ${level.interfaceTypeAccepted}.`
+          {level.interfacesAccepted.length > 0
+            ? ` for ${level.interfacesAccepted.map((i) => i.identifier).join(", ")}.`
             : "."}
         </div>
       ) : (
@@ -2272,14 +2285,18 @@ function LevelPanel({
   draft: {
     label: string;
     description: string;
-    interfaceTypeAccepted: string;
+    interfaceTypeId: string;
   };
   setDraft: (v: {
     label: string;
     description: string;
-    interfaceTypeAccepted: string;
+    interfaceTypeId: string;
   }) => void;
-  interfaceOptions: Array<{ identifier: string; description: string | null }>;
+  interfaceOptions: Array<{
+    id: string;
+    identifier: string;
+    description: string | null;
+  }>;
   insert: Insert | null;
   candidateInserts: CandidateInsert[];
   candidateTemplates: CandidateTemplate[];
@@ -2370,18 +2387,18 @@ function LevelPanel({
                   Interface accepted
                 </label>
                 <select
-                  value={draft.interfaceTypeAccepted}
+                  value={draft.interfaceTypeId}
                   onChange={(e) =>
                     setDraft({
                       ...draft,
-                      interfaceTypeAccepted: e.target.value,
+                      interfaceTypeId: e.target.value,
                     })
                   }
                   className="w-full px-2 py-1.5 bg-slate-800 border border-slate-600 rounded text-sm text-slate-200 focus:border-accent focus:outline-none"
                 >
                   <option value="">— none —</option>
                   {interfaceOptions.map((i) => (
-                    <option key={i.identifier} value={i.identifier}>
+                    <option key={i.id} value={i.id}>
                       {i.identifier}
                     </option>
                   ))}

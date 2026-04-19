@@ -92,6 +92,20 @@
       "when": 1776430000000,
       "tag": "0012_category_svg",
       "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "7",
+      "when": 1776605670000,
+      "tag": "0013_interface_type_lifecycle",
+      "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "7",
+      "when": 1776605680000,
+      "tag": "0014_interface_type_junctions_migrate",
+      "breakpoints": true
     }
   ]
 }
