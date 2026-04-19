@@ -8,23 +8,36 @@ import {
   itemAspects,
   items,
 } from "@/db/schema";
+import { additiveOrgFilter } from "@/lib/auth/scope";
 import { transactionRepository } from "./transactionRepository";
 import { type AuditCheck, jaccardTokens } from "@/lib/audit";
 
+// aspects + related junctions are additive. NULL = global taxonomy;
+// set = org-private. Junction inserts inherit ownerOrgId from the
+// parent aspect.
 export const aspectRepository = {
   async create({
+    userId,
+    orgId,
+    asGlobal,
     name,
     description,
   }: {
+    userId: string;
+    orgId: string;
+    asGlobal?: boolean;
     name: string;
     description?: string;
   }) {
+    const ownerOrgId = asGlobal ? null : orgId;
     const [aspect] = await db
       .insert(aspects)
-      .values({ name, description })
+      .values({ ownerOrgId, name, description })
       .returning();
 
     await transactionRepository.log({
+      userId,
+      orgId,
       actionType: "aspect.create",
       entityType: "aspect",
       entityId: aspect.id,
@@ -35,34 +48,35 @@ export const aspectRepository = {
     return aspect;
   },
 
-  async findById({ id }: { id: string }) {
+  async findById({ orgId, id }: { orgId: string; id: string }) {
     const [aspect] = await db
       .select()
       .from(aspects)
-      .where(eq(aspects.id, id));
+      .where(and(additiveOrgFilter(aspects.ownerOrgId, orgId), eq(aspects.id, id)));
     return aspect ?? null;
   },
 
-  async findByName({ name }: { name: string }) {
+  async findByName({ orgId, name }: { orgId: string; name: string }) {
     const [aspect] = await db
       .select()
       .from(aspects)
-      .where(eq(aspects.name, name));
+      .where(and(additiveOrgFilter(aspects.ownerOrgId, orgId), eq(aspects.name, name)));
     return aspect ?? null;
   },
 
-  async list() {
-    return db.select().from(aspects).orderBy(aspects.name);
+  async list({ orgId }: { orgId: string }) {
+    return db
+      .select()
+      .from(aspects)
+      .where(additiveOrgFilter(aspects.ownerOrgId, orgId))
+      .orderBy(aspects.name);
   },
 
-  /**
-   * Like list() but each row includes usage counts computed via correlated
-   * subqueries so the list page can show context per aspect.
-   */
-  async listWithUsage() {
+  async listWithUsage({ orgId }: { orgId: string }) {
     const rows = await db
       .select({
         id: aspects.id,
+        ownerOrgId: aspects.ownerOrgId,
         name: aspects.name,
         description: aspects.description,
         createdAt: aspects.createdAt,
@@ -70,17 +84,21 @@ export const aspectRepository = {
         parameterCount: sql<number>`(
           SELECT COUNT(*)::int FROM ${aspectParameters}
           WHERE ${aspectParameters.aspectId} = ${aspects.id}
+            AND (${aspectParameters.ownerOrgId} IS NULL OR ${aspectParameters.ownerOrgId} = ${orgId})
         )`.as("parameterCount"),
         itemCount: sql<number>`(
           SELECT COUNT(*)::int FROM ${itemAspects}
           WHERE ${itemAspects.aspectId} = ${aspects.id}
+            AND (${itemAspects.ownerOrgId} IS NULL OR ${itemAspects.ownerOrgId} = ${orgId})
         )`.as("itemCount"),
         standardCount: sql<number>`(
           SELECT COUNT(*)::int FROM ${aspectStandards}
           WHERE ${aspectStandards.aspectId} = ${aspects.id}
+            AND (${aspectStandards.ownerOrgId} IS NULL OR ${aspectStandards.ownerOrgId} = ${orgId})
         )`.as("standardCount"),
       })
       .from(aspects)
+      .where(additiveOrgFilter(aspects.ownerOrgId, orgId))
       .orderBy(aspects.name);
     return rows.map((r) => ({
       ...r,
@@ -90,14 +108,12 @@ export const aspectRepository = {
     }));
   },
 
-  /**
-   * Items that have this aspect applied. Limited so the list detail
-   * panel stays snappy — the count lives on getUsage().
-   */
   async listItemsUsing({
+    orgId,
     aspectId,
     limit = 50,
   }: {
+    orgId: string;
     aspectId: string;
     limit?: number;
   }) {
@@ -109,25 +125,46 @@ export const aspectRepository = {
       })
       .from(itemAspects)
       .innerJoin(items, eq(itemAspects.itemId, items.id))
-      .where(eq(itemAspects.aspectId, aspectId))
+      .where(
+        and(
+          additiveOrgFilter(itemAspects.ownerOrgId, orgId),
+          additiveOrgFilter(items.ownerOrgId, orgId),
+          eq(itemAspects.aspectId, aspectId),
+        ),
+      )
       .orderBy(sql`${itemAspects.createdAt} DESC`)
       .limit(limit);
     return rows;
   },
 
-  async getUsage({ aspectId }: { aspectId: string }) {
+  async getUsage({ orgId, aspectId }: { orgId: string; aspectId: string }) {
     const [pc] = await db
       .select({ n: count() })
       .from(aspectParameters)
-      .where(eq(aspectParameters.aspectId, aspectId));
+      .where(
+        and(
+          additiveOrgFilter(aspectParameters.ownerOrgId, orgId),
+          eq(aspectParameters.aspectId, aspectId),
+        ),
+      );
     const [ic] = await db
       .select({ n: count() })
       .from(itemAspects)
-      .where(eq(itemAspects.aspectId, aspectId));
+      .where(
+        and(
+          additiveOrgFilter(itemAspects.ownerOrgId, orgId),
+          eq(itemAspects.aspectId, aspectId),
+        ),
+      );
     const [sc] = await db
       .select({ n: count() })
       .from(aspectStandards)
-      .where(eq(aspectStandards.aspectId, aspectId));
+      .where(
+        and(
+          additiveOrgFilter(aspectStandards.ownerOrgId, orgId),
+          eq(aspectStandards.aspectId, aspectId),
+        ),
+      );
     return {
       parameterCount: pc?.n ?? 0,
       itemCount: ic?.n ?? 0,
@@ -135,45 +172,43 @@ export const aspectRepository = {
     };
   },
 
-  /**
-   * Suggest parameters that commonly co-occur with the ones already
-   * attached to this aspect. Used by the typeahead "commonly paired
-   * with" strip.
-   *
-   * Algorithm: find aspects (other than this one) that share ≥1 of
-   * this aspect's parameters. From each such aspect collect its other
-   * parameters. Rank the candidates by frequency — parameters that
-   * appear across many such aspects are more likely to belong here.
-   * Exclude parameters already attached to this aspect.
-   */
   async suggestCoOccurringParameters({
+    orgId,
     aspectId,
     limit = 5,
   }: {
+    orgId: string;
     aspectId: string;
     limit?: number;
   }) {
-    // Current attached params.
     const attachedRows = await db
       .select({ id: aspectParameters.parameterDefinitionId })
       .from(aspectParameters)
-      .where(eq(aspectParameters.aspectId, aspectId));
+      .where(
+        and(
+          additiveOrgFilter(aspectParameters.ownerOrgId, orgId),
+          eq(aspectParameters.aspectId, aspectId),
+        ),
+      );
     const attached = new Set(attachedRows.map((r) => r.id));
     if (attached.size === 0) return [];
 
-    // Aspects that share any of those params.
     const sharingRows = await db
       .selectDistinctOn([aspectParameters.aspectId], {
         aspectId: aspectParameters.aspectId,
       })
       .from(aspectParameters)
-      .where(sql`${aspectParameters.parameterDefinitionId} IN (${sql.join(Array.from(attached).map((id) => sql`${id}`), sql`, `)})`);
+      .where(
+        and(
+          additiveOrgFilter(aspectParameters.ownerOrgId, orgId),
+          sql`${aspectParameters.parameterDefinitionId} IN (${sql.join(Array.from(attached).map((id) => sql`${id}`), sql`, `)})`,
+        ),
+      );
     const sharingAspectIds = sharingRows
       .map((r) => r.aspectId)
       .filter((id) => id !== aspectId);
     if (sharingAspectIds.length === 0) return [];
 
-    // All parameters on those aspects.
     const candidateRows = await db
       .select({
         aspectId: aspectParameters.aspectId,
@@ -187,11 +222,17 @@ export const aspectRepository = {
       .innerJoin(aspects, eq(aspects.id, aspectParameters.aspectId))
       .innerJoin(
         parameterDefinitions,
-        eq(parameterDefinitions.id, aspectParameters.parameterDefinitionId)
+        eq(parameterDefinitions.id, aspectParameters.parameterDefinitionId),
       )
-      .where(sql`${aspectParameters.aspectId} IN (${sql.join(sharingAspectIds.map((id) => sql`${id}`), sql`, `)})`);
+      .where(
+        and(
+          additiveOrgFilter(aspectParameters.ownerOrgId, orgId),
+          additiveOrgFilter(aspects.ownerOrgId, orgId),
+          additiveOrgFilter(parameterDefinitions.ownerOrgId, orgId),
+          sql`${aspectParameters.aspectId} IN (${sql.join(sharingAspectIds.map((id) => sql`${id}`), sql`, `)})`,
+        ),
+      );
 
-    // Tally freq; track source aspects.
     const tally = new Map<
       string,
       {
@@ -204,7 +245,7 @@ export const aspectRepository = {
       }
     >();
     for (const r of candidateRows) {
-      if (attached.has(r.parameterDefinitionId)) continue; // already attached
+      if (attached.has(r.parameterDefinitionId)) continue;
       const existing = tally.get(r.parameterDefinitionId);
       if (existing) {
         existing.frequency += 1;
@@ -234,19 +275,15 @@ export const aspectRepository = {
       .slice(0, limit);
   },
 
-  /**
-   * Taxonomy-level audit of aspects: empty, unused, duplicate or
-   * overlapping parameter sets, similar names. Complements
-   * parameterDefinitionRepository.audit().
-   */
-  async audit(): Promise<AuditCheck[]> {
-    const withUsage = await aspectRepository.listWithUsage();
+  async audit({ orgId }: { orgId: string }): Promise<AuditCheck[]> {
+    const withUsage = await aspectRepository.listWithUsage({ orgId });
     const paramRows = await db
       .select({
         aspectId: aspectParameters.aspectId,
         parameterDefinitionId: aspectParameters.parameterDefinitionId,
       })
-      .from(aspectParameters);
+      .from(aspectParameters)
+      .where(additiveOrgFilter(aspectParameters.ownerOrgId, orgId));
     const paramsByAspect = new Map<string, Set<string>>();
     for (const r of paramRows) {
       const bag = paramsByAspect.get(r.aspectId) ?? new Set<string>();
@@ -354,23 +391,29 @@ export const aspectRepository = {
   },
 
   async update({
+    userId,
+    orgId,
     id,
     ...updates
   }: {
+    userId: string;
+    orgId: string;
     id: string;
     name?: string;
     description?: string;
   }) {
-    const before = await aspectRepository.findById({ id });
+    const before = await aspectRepository.findById({ orgId, id });
     if (!before) throw new Error(`Aspect ${id} not found`);
 
     const [updated] = await db
       .update(aspects)
       .set({ ...updates, updatedAt: new Date() })
-      .where(eq(aspects.id, id))
+      .where(and(additiveOrgFilter(aspects.ownerOrgId, orgId), eq(aspects.id, id)))
       .returning();
 
     await transactionRepository.log({
+      userId,
+      orgId,
       actionType: "aspect.update",
       entityType: "aspect",
       entityId: id,
@@ -381,13 +424,25 @@ export const aspectRepository = {
     return updated;
   },
 
-  async remove({ id }: { id: string }) {
-    const before = await aspectRepository.findById({ id });
+  async remove({
+    userId,
+    orgId,
+    id,
+  }: {
+    userId: string;
+    orgId: string;
+    id: string;
+  }) {
+    const before = await aspectRepository.findById({ orgId, id });
     if (!before) throw new Error(`Aspect ${id} not found`);
 
-    await db.delete(aspects).where(eq(aspects.id, id));
+    await db
+      .delete(aspects)
+      .where(and(additiveOrgFilter(aspects.ownerOrgId, orgId), eq(aspects.id, id)));
 
     await transactionRepository.log({
+      userId,
+      orgId,
       actionType: "aspect.delete",
       entityType: "aspect",
       entityId: id,
@@ -396,35 +451,51 @@ export const aspectRepository = {
     });
   },
 
-  async countItemsUsing({ aspectId }: { aspectId: string }) {
+  async countItemsUsing({
+    orgId,
+    aspectId,
+  }: {
+    orgId: string;
+    aspectId: string;
+  }) {
     const [result] = await db
       .select({ count: count() })
       .from(itemAspects)
-      .where(eq(itemAspects.aspectId, aspectId));
+      .where(
+        and(
+          additiveOrgFilter(itemAspects.ownerOrgId, orgId),
+          eq(itemAspects.aspectId, aspectId),
+        ),
+      );
     return result?.count ?? 0;
   },
 
   // --- Aspect parameter management ---
 
   async addParameter({
+    userId,
+    orgId,
     aspectId,
     parameterDefinitionId,
     required,
     defaultValue,
     sortOrder,
   }: {
+    userId: string;
+    orgId: string;
     aspectId: string;
     parameterDefinitionId: string;
     required?: boolean;
     defaultValue?: unknown;
     sortOrder?: number;
   }) {
-    const aspect = await aspectRepository.findById({ id: aspectId });
+    const aspect = await aspectRepository.findById({ orgId, id: aspectId });
     if (!aspect) throw new Error(`Aspect ${aspectId} not found`);
 
     const [ap] = await db
       .insert(aspectParameters)
       .values({
+        ownerOrgId: aspect.ownerOrgId,
         aspectId,
         parameterDefinitionId,
         required: required ?? false,
@@ -433,13 +504,16 @@ export const aspectRepository = {
       })
       .returning();
 
+    void userId;
     return ap;
   },
 
   async removeParameter({
+    orgId,
     aspectId,
     parameterDefinitionId,
   }: {
+    orgId: string;
     aspectId: string;
     parameterDefinitionId: string;
   }) {
@@ -447,20 +521,27 @@ export const aspectRepository = {
       .delete(aspectParameters)
       .where(
         and(
+          additiveOrgFilter(aspectParameters.ownerOrgId, orgId),
           eq(aspectParameters.aspectId, aspectId),
-          eq(aspectParameters.parameterDefinitionId, parameterDefinitionId)
-        )
+          eq(aspectParameters.parameterDefinitionId, parameterDefinitionId),
+        ),
       )
       .returning();
 
     if (!deleted) {
       throw new Error(
-        `Parameter ${parameterDefinitionId} not found on aspect ${aspectId}`
+        `Parameter ${parameterDefinitionId} not found on aspect ${aspectId}`,
       );
     }
   },
 
-  async getParameters({ aspectId }: { aspectId: string }) {
+  async getParameters({
+    orgId,
+    aspectId,
+  }: {
+    orgId: string;
+    aspectId: string;
+  }) {
     return db
       .select({
         id: aspectParameters.id,
@@ -477,9 +558,15 @@ export const aspectRepository = {
       .from(aspectParameters)
       .innerJoin(
         parameterDefinitions,
-        eq(aspectParameters.parameterDefinitionId, parameterDefinitions.id)
+        eq(aspectParameters.parameterDefinitionId, parameterDefinitions.id),
       )
-      .where(eq(aspectParameters.aspectId, aspectId))
+      .where(
+        and(
+          additiveOrgFilter(aspectParameters.ownerOrgId, orgId),
+          additiveOrgFilter(parameterDefinitions.ownerOrgId, orgId),
+          eq(aspectParameters.aspectId, aspectId),
+        ),
+      )
       .orderBy(aspectParameters.sortOrder);
   },
 };

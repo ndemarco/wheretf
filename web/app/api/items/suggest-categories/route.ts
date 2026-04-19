@@ -1,8 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { itemRepository } from "@/repositories/itemRepository";
+import { requireContext, errorResponse } from "@/lib/auth/route";
 
 export async function GET(request: NextRequest) {
   try {
+    const ctx = await requireContext();
     const { searchParams } = new URL(request.url);
     const aspectIds = searchParams.getAll("aspectId");
     const standardIds = searchParams.getAll("standardId");
@@ -10,6 +12,7 @@ export async function GET(request: NextRequest) {
     const limit = limitStr ? parseInt(limitStr, 10) : 3;
 
     const suggestions = await itemRepository.suggestCategories({
+      orgId: ctx.activeOrgId,
       aspectIds,
       standardIds,
       limit: Number.isFinite(limit) && limit > 0 ? limit : 3,
@@ -17,9 +20,6 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json({ suggestions });
   } catch (err) {
-    return NextResponse.json(
-      { error: err instanceof Error ? err.message : "Unknown error" },
-      { status: 500 }
-    );
+    return errorResponse(err);
   }
 }

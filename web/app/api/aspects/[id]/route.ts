@@ -1,19 +1,24 @@
 import { NextRequest, NextResponse } from "next/server";
 import { aspectRepository } from "@/repositories/aspectRepository";
+import { requireContext, errorResponse } from "@/lib/auth/route";
 
 export async function GET(
   _request: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ) {
   try {
+    const ctx = await requireContext();
     const { id } = await params;
-    const aspect = await aspectRepository.findById({ id });
+    const aspect = await aspectRepository.findById({
+      orgId: ctx.activeOrgId,
+      id,
+    });
     if (!aspect) {
       return NextResponse.json({ error: "Aspect not found" }, { status: 404 });
     }
     const [usage, parameters] = await Promise.all([
-      aspectRepository.getUsage({ aspectId: id }),
-      aspectRepository.getParameters({ aspectId: id }),
+      aspectRepository.getUsage({ orgId: ctx.activeOrgId, aspectId: id }),
+      aspectRepository.getParameters({ orgId: ctx.activeOrgId, aspectId: id }),
     ]);
     return NextResponse.json({
       aspect,
@@ -23,10 +28,7 @@ export async function GET(
       standardCount: usage.standardCount,
     });
   } catch (err) {
-    return NextResponse.json(
-      { error: err instanceof Error ? err.message : "Unexpected error" },
-      { status: 500 },
-    );
+    return errorResponse(err);
   }
 }
 
@@ -35,16 +37,18 @@ export async function PATCH(
   { params }: { params: Promise<{ id: string }> },
 ) {
   try {
+    const ctx = await requireContext();
     const { id } = await params;
     const body = await request.json();
-    const aspect = await aspectRepository.update({ id, ...body });
+    const aspect = await aspectRepository.update({
+      userId: ctx.userId,
+      orgId: ctx.activeOrgId,
+      id,
+      ...body,
+    });
     return NextResponse.json({ aspect });
   } catch (err) {
-    const message = err instanceof Error ? err.message : "Unexpected error";
-    if (message.includes("not found")) {
-      return NextResponse.json({ error: message }, { status: 404 });
-    }
-    return NextResponse.json({ error: message }, { status: 400 });
+    return errorResponse(err);
   }
 }
 
@@ -53,14 +57,15 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> },
 ) {
   try {
+    const ctx = await requireContext();
     const { id } = await params;
-    await aspectRepository.remove({ id });
+    await aspectRepository.remove({
+      userId: ctx.userId,
+      orgId: ctx.activeOrgId,
+      id,
+    });
     return NextResponse.json({ success: true });
   } catch (err) {
-    const message = err instanceof Error ? err.message : "Unexpected error";
-    if (message.includes("not found")) {
-      return NextResponse.json({ error: message }, { status: 404 });
-    }
-    return NextResponse.json({ error: message }, { status: 400 });
+    return errorResponse(err);
   }
 }

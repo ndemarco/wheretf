@@ -3,10 +3,12 @@ import { itemRepository } from "@/repositories/itemRepository";
 import { assignmentRepository } from "@/repositories/assignmentRepository";
 import { locationRepository } from "@/repositories/locationRepository";
 import { transactionRepository } from "@/repositories/transactionRepository";
+import { testCtx } from "../setup";
 
 async function createTestModule() {
   return moduleRepository.create({
-    name: `MOD-${Date.now()}`,
+    ...testCtx,
+    name: `MOD-${Date.now()}-${Math.random()}`,
     primaryDimensionLabel: "level",
     primaryDimensionCount: 5,
   });
@@ -14,6 +16,7 @@ async function createTestModule() {
 
 async function createTestLocation(moduleId: string, label: string) {
   return locationRepository.create({
+    ...testCtx,
     moduleId,
     label,
     pathSegments: ["TEST", label],
@@ -22,7 +25,9 @@ async function createTestLocation(moduleId: string, label: string) {
 }
 
 async function createTestItem(name: string) {
-  return itemRepository.create({ name });
+  // Items are additive (global catalog). Seed as global so they're
+  // visible across orgs — matches the catalog model.
+  return itemRepository.create({ ...testCtx, asGlobal: true, name });
 }
 
 describe("assignmentRepository", () => {
@@ -33,6 +38,7 @@ describe("assignmentRepository", () => {
       const item = await createTestItem("Resistor Pack");
 
       const assignment = await assignmentRepository.create({
+        ...testCtx,
         itemId: item.id,
         locationId: loc.id,
         assignmentType: "placed",
@@ -42,6 +48,7 @@ describe("assignmentRepository", () => {
       expect(assignment.itemId).toBe(item.id);
       expect(assignment.locationId).toBe(loc.id);
       expect(assignment.assignmentType).toBe("placed");
+      expect(assignment.ownerOrgId).toBe(testCtx.orgId);
     });
 
     it("creates a provisional assignment", async () => {
@@ -50,6 +57,7 @@ describe("assignmentRepository", () => {
       const item = await createTestItem("Capacitor Pack");
 
       const assignment = await assignmentRepository.create({
+        ...testCtx,
         itemId: item.id,
         locationId: loc.id,
         assignmentType: "provisional",
@@ -64,12 +72,15 @@ describe("assignmentRepository", () => {
       const item = await createTestItem("LED Strip");
 
       const assignment = await assignmentRepository.create({
+        ...testCtx,
         itemId: item.id,
         locationId: loc.id,
         assignmentType: "placed",
       });
 
-      const txns = await transactionRepository.listRecent();
+      const txns = await transactionRepository.listRecent({
+        orgId: testCtx.orgId,
+      });
       const createTx = txns.find(
         (t) =>
           t.actionType === "assignment.create" &&
@@ -78,6 +89,8 @@ describe("assignmentRepository", () => {
       expect(createTx).toBeDefined();
       expect(createTx!.entityType).toBe("assignment");
       expect(createTx!.beforeState).toBeNull();
+      expect(createTx!.actorUserId).toBe(testCtx.userId);
+      expect(createTx!.ownerOrgId).toBe(testCtx.orgId);
     });
 
     it("blocks second placed assignment at same location without co-storability", async () => {
@@ -87,6 +100,7 @@ describe("assignmentRepository", () => {
       const item2 = await createTestItem("Item B");
 
       await assignmentRepository.create({
+        ...testCtx,
         itemId: item1.id,
         locationId: loc.id,
         assignmentType: "placed",
@@ -94,6 +108,7 @@ describe("assignmentRepository", () => {
 
       await expect(
         assignmentRepository.create({
+          ...testCtx,
           itemId: item2.id,
           locationId: loc.id,
           assignmentType: "placed",
@@ -110,18 +125,21 @@ describe("assignmentRepository", () => {
       const item2 = await createTestItem("M3 Nut");
 
       await itemRepository.addCoStorability({
+        ...testCtx,
         itemAId: item1.id,
         itemBId: item2.id,
         reason: "Same thread size",
       });
 
       await assignmentRepository.create({
+        ...testCtx,
         itemId: item1.id,
         locationId: loc.id,
         assignmentType: "placed",
       });
 
       const second = await assignmentRepository.create({
+        ...testCtx,
         itemId: item2.id,
         locationId: loc.id,
         assignmentType: "placed",
@@ -138,12 +156,14 @@ describe("assignmentRepository", () => {
       const item2 = await createTestItem("Widget B");
 
       const a1 = await assignmentRepository.create({
+        ...testCtx,
         itemId: item1.id,
         locationId: loc.id,
         assignmentType: "provisional",
       });
 
       const a2 = await assignmentRepository.create({
+        ...testCtx,
         itemId: item2.id,
         locationId: loc.id,
         assignmentType: "provisional",
@@ -161,18 +181,23 @@ describe("assignmentRepository", () => {
       const item = await createTestItem("Screw");
 
       const created = await assignmentRepository.create({
+        ...testCtx,
         itemId: item.id,
         locationId: loc.id,
         assignmentType: "placed",
       });
 
-      const found = await assignmentRepository.findById({ id: created.id });
+      const found = await assignmentRepository.findById({
+        orgId: testCtx.orgId,
+        id: created.id,
+      });
       expect(found).not.toBeNull();
       expect(found!.itemId).toBe(item.id);
     });
 
     it("returns null for nonexistent ID", async () => {
       const found = await assignmentRepository.findById({
+        orgId: testCtx.orgId,
         id: "00000000-0000-0000-0000-000000000000",
       });
       expect(found).toBeNull();
@@ -187,17 +212,20 @@ describe("assignmentRepository", () => {
       const item = await createTestItem("Washer");
 
       await assignmentRepository.create({
+        ...testCtx,
         itemId: item.id,
         locationId: loc1.id,
         assignmentType: "placed",
       });
       await assignmentRepository.create({
+        ...testCtx,
         itemId: item.id,
         locationId: loc2.id,
         assignmentType: "provisional",
       });
 
       const results = await assignmentRepository.findByItemId({
+        orgId: testCtx.orgId,
         itemId: item.id,
       });
       expect(results).toHaveLength(2);
@@ -212,22 +240,26 @@ describe("assignmentRepository", () => {
       const item2 = await createTestItem("Nut");
 
       await itemRepository.addCoStorability({
+        ...testCtx,
         itemAId: item1.id,
         itemBId: item2.id,
       });
 
       await assignmentRepository.create({
+        ...testCtx,
         itemId: item1.id,
         locationId: loc.id,
         assignmentType: "placed",
       });
       await assignmentRepository.create({
+        ...testCtx,
         itemId: item2.id,
         locationId: loc.id,
         assignmentType: "placed",
       });
 
       const results = await assignmentRepository.findByLocationId({
+        orgId: testCtx.orgId,
         locationId: loc.id,
       });
       expect(results).toHaveLength(2);
@@ -242,12 +274,14 @@ describe("assignmentRepository", () => {
       const item = await createTestItem("Diode");
 
       const provisional = await assignmentRepository.create({
+        ...testCtx,
         itemId: item.id,
         locationId: loc1.id,
         assignmentType: "provisional",
       });
 
       const placed = await assignmentRepository.convertToPlaced({
+        ...testCtx,
         id: provisional.id,
         locationId: loc2.id,
       });
@@ -262,17 +296,21 @@ describe("assignmentRepository", () => {
       const item = await createTestItem("Transistor");
 
       const provisional = await assignmentRepository.create({
+        ...testCtx,
         itemId: item.id,
         locationId: loc.id,
         assignmentType: "provisional",
       });
 
       await assignmentRepository.convertToPlaced({
+        ...testCtx,
         id: provisional.id,
         locationId: loc.id,
       });
 
-      const txns = await transactionRepository.listRecent();
+      const txns = await transactionRepository.listRecent({
+        orgId: testCtx.orgId,
+      });
       const convertTx = txns.find(
         (t) => t.actionType === "assignment.convertToPlaced",
       );
@@ -284,6 +322,7 @@ describe("assignmentRepository", () => {
     it("throws for nonexistent assignment", async () => {
       await expect(
         assignmentRepository.convertToPlaced({
+          ...testCtx,
           id: "00000000-0000-0000-0000-000000000000",
           locationId: "00000000-0000-0000-0000-000000000000",
         }),
@@ -299,12 +338,14 @@ describe("assignmentRepository", () => {
       const item = await createTestItem("Relay");
 
       const assignment = await assignmentRepository.create({
+        ...testCtx,
         itemId: item.id,
         locationId: loc1.id,
         assignmentType: "placed",
       });
 
       const moved = await assignmentRepository.move({
+        ...testCtx,
         id: assignment.id,
         newLocationId: loc2.id,
       });
@@ -319,17 +360,21 @@ describe("assignmentRepository", () => {
       const item = await createTestItem("Fuse");
 
       const assignment = await assignmentRepository.create({
+        ...testCtx,
         itemId: item.id,
         locationId: loc1.id,
         assignmentType: "placed",
       });
 
       await assignmentRepository.move({
+        ...testCtx,
         id: assignment.id,
         newLocationId: loc2.id,
       });
 
-      const txns = await transactionRepository.listRecent();
+      const txns = await transactionRepository.listRecent({
+        orgId: testCtx.orgId,
+      });
       const moveTx = txns.find((t) => t.actionType === "assignment.move");
       expect(moveTx).toBeDefined();
       expect(moveTx!.beforeState).toBeTruthy();
@@ -344,12 +389,14 @@ describe("assignmentRepository", () => {
       const item2 = await createTestItem("Part Y");
 
       await assignmentRepository.create({
+        ...testCtx,
         itemId: item1.id,
         locationId: loc2.id,
         assignmentType: "placed",
       });
 
       const assignment = await assignmentRepository.create({
+        ...testCtx,
         itemId: item2.id,
         locationId: loc1.id,
         assignmentType: "placed",
@@ -357,6 +404,7 @@ describe("assignmentRepository", () => {
 
       await expect(
         assignmentRepository.move({
+          ...testCtx,
           id: assignment.id,
           newLocationId: loc2.id,
         }),
@@ -371,14 +419,19 @@ describe("assignmentRepository", () => {
       const item = await createTestItem("Connector");
 
       const assignment = await assignmentRepository.create({
+        ...testCtx,
         itemId: item.id,
         locationId: loc.id,
         assignmentType: "placed",
       });
 
-      await assignmentRepository.remove({ id: assignment.id });
+      await assignmentRepository.remove({
+        ...testCtx,
+        id: assignment.id,
+      });
 
       const found = await assignmentRepository.findById({
+        orgId: testCtx.orgId,
         id: assignment.id,
       });
       expect(found).toBeNull();
@@ -390,14 +443,20 @@ describe("assignmentRepository", () => {
       const item = await createTestItem("Switch");
 
       const assignment = await assignmentRepository.create({
+        ...testCtx,
         itemId: item.id,
         locationId: loc.id,
         assignmentType: "placed",
       });
 
-      await assignmentRepository.remove({ id: assignment.id });
+      await assignmentRepository.remove({
+        ...testCtx,
+        id: assignment.id,
+      });
 
-      const txns = await transactionRepository.listRecent();
+      const txns = await transactionRepository.listRecent({
+        orgId: testCtx.orgId,
+      });
       const deleteTx = txns.find(
         (t) => t.actionType === "assignment.delete",
       );
@@ -408,6 +467,7 @@ describe("assignmentRepository", () => {
     it("throws for nonexistent assignment", async () => {
       await expect(
         assignmentRepository.remove({
+          ...testCtx,
           id: "00000000-0000-0000-0000-000000000000",
         }),
       ).rejects.toThrow("not found");
@@ -424,22 +484,27 @@ describe("assignmentRepository", () => {
       const item3 = await createTestItem("Sensor C");
 
       await assignmentRepository.create({
+        ...testCtx,
         itemId: item1.id,
         locationId: loc1.id,
         assignmentType: "provisional",
       });
       await assignmentRepository.create({
+        ...testCtx,
         itemId: item2.id,
         locationId: loc2.id,
         assignmentType: "provisional",
       });
       await assignmentRepository.create({
+        ...testCtx,
         itemId: item3.id,
         locationId: loc1.id,
         assignmentType: "placed",
       });
 
-      const provisionals = await assignmentRepository.listProvisional();
+      const provisionals = await assignmentRepository.listProvisional({
+        orgId: testCtx.orgId,
+      });
       expect(provisionals).toHaveLength(2);
       expect(provisionals.every((a) => a.assignmentType === "provisional")).toBe(
         true,
@@ -447,7 +512,9 @@ describe("assignmentRepository", () => {
     });
 
     it("returns empty array when no provisional assignments exist", async () => {
-      const provisionals = await assignmentRepository.listProvisional();
+      const provisionals = await assignmentRepository.listProvisional({
+        orgId: testCtx.orgId,
+      });
       expect(provisionals).toHaveLength(0);
     });
   });

@@ -1,11 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import { standardRepository } from "@/repositories/standardRepository";
+import { requireContext, errorResponse } from "@/lib/auth/route";
 
 export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const ctx = await requireContext();
     const { id: standardId } = await params;
     const body = await request.json();
     const { aspectId } = body;
@@ -17,13 +19,15 @@ export async function POST(
       );
     }
 
-    const link = await standardRepository.addAspect({ standardId, aspectId });
+    const link = await standardRepository.addAspect({
+      userId: ctx.userId,
+      orgId: ctx.activeOrgId,
+      standardId,
+      aspectId,
+    });
     return NextResponse.json({ link }, { status: 201 });
-  } catch (error: unknown) {
-    return NextResponse.json(
-      { error: error instanceof Error ? error.message : "Unknown error" },
-      { status: 500 }
-    );
+  } catch (err) {
+    return errorResponse(err);
   }
 }
 
@@ -32,6 +36,7 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const ctx = await requireContext();
     const { id: standardId } = await params;
     const { searchParams } = new URL(request.url);
     const aspectId = searchParams.get("aspectId");
@@ -43,12 +48,14 @@ export async function DELETE(
       );
     }
 
-    await standardRepository.removeAspect({ standardId, aspectId });
+    await standardRepository.removeAspect({
+      userId: ctx.userId,
+      orgId: ctx.activeOrgId,
+      standardId,
+      aspectId,
+    });
     return NextResponse.json({ success: true });
-  } catch (error: unknown) {
-    return NextResponse.json(
-      { error: error instanceof Error ? error.message : "Unknown error" },
-      { status: 500 }
-    );
+  } catch (err) {
+    return errorResponse(err);
   }
 }

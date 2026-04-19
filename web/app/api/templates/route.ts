@@ -1,30 +1,36 @@
 import { NextRequest, NextResponse } from "next/server";
 import { templateRepository } from "@/repositories/templateRepository";
+import { requireContext, errorResponse } from "@/lib/auth/route";
 
 export async function GET(request: NextRequest) {
   try {
+    const ctx = await requireContext();
     const includeHidden =
       request.nextUrl.searchParams.get("includeHidden") === "true";
     const templates = await templateRepository.listWithCurrentVersion({
+      orgId: ctx.activeOrgId,
       includeHidden,
     });
     return NextResponse.json({ templates });
   } catch (err) {
-    const message = err instanceof Error ? err.message : "Unknown error";
-    return NextResponse.json({ error: message }, { status: 500 });
+    return errorResponse(err);
   }
 }
 
 export async function POST(request: NextRequest) {
   try {
+    const ctx = await requireContext();
     const body = await request.json();
-    const { name, description, metadata, ...versionFields } = body;
+    const { name, description, metadata, asGlobal, ...versionFields } = body;
 
     if (!name) {
       return NextResponse.json({ error: "name is required" }, { status: 400 });
     }
 
     const template = await templateRepository.create({
+      userId: ctx.userId,
+      orgId: ctx.activeOrgId,
+      asGlobal: Boolean(asGlobal),
       name,
       description,
       metadata,
@@ -33,7 +39,6 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({ template }, { status: 201 });
   } catch (err) {
-    const message = err instanceof Error ? err.message : "Unknown error";
-    return NextResponse.json({ error: message }, { status: 500 });
+    return errorResponse(err);
   }
 }

@@ -1,14 +1,18 @@
 import { NextRequest, NextResponse } from "next/server";
 import { locationRepository } from "@/repositories/locationRepository";
+import { requireContext } from "@/lib/auth/route";
 
 export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ) {
   try {
+    const ctx = await requireContext();
     const { id } = await params;
     const body = await request.json().catch(() => ({}));
     const location = await locationRepository.disable({
+      userId: ctx.userId,
+      orgId: ctx.activeOrgId,
       id,
       reason: body.reason,
     });
@@ -30,8 +34,13 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> },
 ) {
   try {
+    const ctx = await requireContext();
     const { id } = await params;
-    const location = await locationRepository.enable({ id });
+    const location = await locationRepository.enable({
+      userId: ctx.userId,
+      orgId: ctx.activeOrgId,
+      id,
+    });
     return NextResponse.json({ location });
   } catch (err) {
     const message = err instanceof Error ? err.message : "Unexpected error";

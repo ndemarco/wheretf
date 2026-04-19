@@ -1,14 +1,18 @@
 import { NextRequest, NextResponse } from "next/server";
 import { locationRepository } from "@/repositories/locationRepository";
+import { requireContext } from "@/lib/auth/route";
 
 type RouteParams = { params: Promise<{ id: string }> };
 
 export async function PATCH(request: NextRequest, { params }: RouteParams) {
   try {
+    const ctx = await requireContext();
     const { id } = await params;
     const body = await request.json().catch(() => ({}));
     const { maxWidthMm, maxHeightMm, maxDepthMm, reason } = body ?? {};
     const location = await locationRepository.restrict({
+      userId: ctx.userId,
+      orgId: ctx.activeOrgId,
       id,
       maxWidthMm: normalizeNum(maxWidthMm),
       maxHeightMm: normalizeNum(maxHeightMm),
@@ -30,8 +34,13 @@ export async function DELETE(
   { params }: RouteParams
 ) {
   try {
+    const ctx = await requireContext();
     const { id } = await params;
-    const location = await locationRepository.clearRestrict({ id });
+    const location = await locationRepository.clearRestrict({
+      userId: ctx.userId,
+      orgId: ctx.activeOrgId,
+      id,
+    });
     return NextResponse.json({ location });
   } catch (err) {
     const message = err instanceof Error ? err.message : "Unexpected error";

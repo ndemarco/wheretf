@@ -1,15 +1,23 @@
 import { NextRequest, NextResponse } from "next/server";
 import { locationRepository } from "@/repositories/locationRepository";
+import { requireContext, errorResponse } from "@/lib/auth/route";
 
 export async function GET(request: NextRequest) {
   try {
+    const ctx = await requireContext();
     const moduleId = request.nextUrl.searchParams.get("moduleId");
     const insertId = request.nextUrl.searchParams.get("insertId");
     let locations;
     if (insertId) {
-      locations = await locationRepository.findByInsertId({ insertId });
+      locations = await locationRepository.findByInsertId({
+        orgId: ctx.activeOrgId,
+        insertId,
+      });
     } else if (moduleId) {
-      locations = await locationRepository.findByModuleId({ moduleId });
+      locations = await locationRepository.findByModuleId({
+        orgId: ctx.activeOrgId,
+        moduleId,
+      });
     } else {
       return NextResponse.json(
         { error: "moduleId or insertId query parameter is required" },
@@ -19,7 +27,7 @@ export async function GET(request: NextRequest) {
     // Attach accepted interfaces per location (batched).
     const ids = locations.map((l) => l.id);
     const ifaceMap = await locationRepository.getAcceptedInterfacesByLocationIds(
-      { locationIds: ids },
+      { orgId: ctx.activeOrgId, locationIds: ids },
     );
     return NextResponse.json({
       locations: locations.map((l) => ({
@@ -28,22 +36,21 @@ export async function GET(request: NextRequest) {
       })),
     });
   } catch (err) {
-    return NextResponse.json(
-      { error: err instanceof Error ? err.message : "Unexpected error" },
-      { status: 500 },
-    );
+    return errorResponse(err);
   }
 }
 
 export async function POST(request: NextRequest) {
   try {
+    const ctx = await requireContext();
     const body = await request.json();
-    const location = await locationRepository.create(body);
+    const location = await locationRepository.create({
+      userId: ctx.userId,
+      orgId: ctx.activeOrgId,
+      ...body,
+    });
     return NextResponse.json({ location }, { status: 201 });
   } catch (err) {
-    return NextResponse.json(
-      { error: err instanceof Error ? err.message : "Unexpected error" },
-      { status: 400 },
-    );
+    return errorResponse(err);
   }
 }

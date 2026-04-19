@@ -10,6 +10,7 @@ import {
   type AnyPgColumn,
 } from "drizzle-orm/pg-core";
 import { modules } from "./modules";
+import { orgs } from "./orgs";
 import { templates, templateVersions } from "./templates";
 // Forward reference: inserts ↔ locations is intentionally asymmetric.
 // inserts.locationId → locations.id (insert lives in a receptacle)
@@ -17,6 +18,10 @@ import { templates, templateVersions } from "./templates";
 
 export const locations = pgTable("locations", {
   id: uuid("id").primaryKey().defaultRandom(),
+  // Isolation: isolated. NOT NULL since migration 0017.
+  ownerOrgId: uuid("owner_org_id")
+    .notNull()
+    .references(() => orgs.id, { onDelete: "cascade" }),
   // Nullable: unplaced insert cells have no host module. Set on placement.
   moduleId: uuid("module_id").references(() => modules.id),
   parentId: uuid("parent_id").references((): AnyPgColumn => locations.id),
@@ -66,6 +71,10 @@ export const locations = pgTable("locations", {
 
 export const inserts = pgTable("inserts", {
   id: uuid("id").primaryKey().defaultRandom(),
+  // Isolation: isolated. NOT NULL since migration 0017.
+  ownerOrgId: uuid("owner_org_id")
+    .notNull()
+    .references(() => orgs.id, { onDelete: "cascade" }),
   uid: text("uid").unique(), // short alphanumeric identifier, writable to RFID tags
   name: text("name"), // optional user-given name for this specific insert
   templateId: uuid("template_id").references(() => templates.id),

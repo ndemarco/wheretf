@@ -1,4 +1,4 @@
-import { eq, sql } from "drizzle-orm";
+import { eq, and, sql } from "drizzle-orm";
 import { db } from "@/db/connection";
 import {
   parameterDefinitions,
@@ -9,6 +9,7 @@ import {
   items,
   standards,
 } from "@/db/schema";
+import { additiveOrgFilter } from "@/lib/auth/scope";
 import { transactionRepository } from "./transactionRepository";
 import {
   type AuditCheck,
@@ -24,8 +25,12 @@ interface Constraints {
   max?: number;
 }
 
+// parameter_definitions is additive. NULL = global taxonomy; set = org-private.
 export const parameterDefinitionRepository = {
   async create({
+    userId,
+    orgId,
+    asGlobal,
     name,
     dataType,
     unit,
@@ -34,6 +39,9 @@ export const parameterDefinitionRepository = {
     defaultValue,
     constraints,
   }: {
+    userId: string;
+    orgId: string;
+    asGlobal?: boolean;
     name: string;
     dataType: DataType;
     unit?: string;
@@ -48,9 +56,11 @@ export const parameterDefinitionRepository = {
       }
     }
 
+    const ownerOrgId = asGlobal ? null : orgId;
     const [paramDef] = await db
       .insert(parameterDefinitions)
       .values({
+        ownerOrgId,
         name,
         dataType,
         unit,
@@ -62,6 +72,8 @@ export const parameterDefinitionRepository = {
       .returning();
 
     await transactionRepository.log({
+      userId,
+      orgId,
       actionType: "parameterDefinition.create",
       entityType: "parameterDefinition",
       entityId: paramDef.id,
@@ -72,38 +84,45 @@ export const parameterDefinitionRepository = {
     return paramDef;
   },
 
-  async findById({ id }: { id: string }) {
+  async findById({ orgId, id }: { orgId: string; id: string }) {
     const [paramDef] = await db
       .select()
       .from(parameterDefinitions)
-      .where(eq(parameterDefinitions.id, id));
+      .where(
+        and(
+          additiveOrgFilter(parameterDefinitions.ownerOrgId, orgId),
+          eq(parameterDefinitions.id, id),
+        ),
+      );
     return paramDef ?? null;
   },
 
-  async findByName({ name }: { name: string }) {
+  async findByName({ orgId, name }: { orgId: string; name: string }) {
     const [paramDef] = await db
       .select()
       .from(parameterDefinitions)
-      .where(eq(parameterDefinitions.name, name));
+      .where(
+        and(
+          additiveOrgFilter(parameterDefinitions.ownerOrgId, orgId),
+          eq(parameterDefinitions.name, name),
+        ),
+      );
     return paramDef ?? null;
   },
 
-  async list() {
-    return db.select().from(parameterDefinitions).orderBy(parameterDefinitions.name);
+  async list({ orgId }: { orgId: string }) {
+    return db
+      .select()
+      .from(parameterDefinitions)
+      .where(additiveOrgFilter(parameterDefinitions.ownerOrgId, orgId))
+      .orderBy(parameterDefinitions.name);
   },
 
-  /**
-   * Like list() but each row includes usage counts so the Parameters
-   * table can show an at-a-glance context column.
-   *
-   * - aspectCount: how many aspects include this parameter.
-   * - itemCount: how many distinct items have a stored value for it.
-   * - standardCount: how many standards reference it.
-   */
-  async listWithUsage() {
+  async listWithUsage({ orgId }: { orgId: string }) {
     const rows = await db
       .select({
         id: parameterDefinitions.id,
+        ownerOrgId: parameterDefinitions.ownerOrgId,
         name: parameterDefinitions.name,
         dataType: parameterDefinitions.dataType,
         unit: parameterDefinitions.unit,
@@ -116,18 +135,22 @@ export const parameterDefinitionRepository = {
         aspectCount: sql<number>`(
           SELECT COUNT(*)::int FROM ${aspectParameters}
           WHERE ${aspectParameters.parameterDefinitionId} = ${parameterDefinitions.id}
+            AND (${aspectParameters.ownerOrgId} IS NULL OR ${aspectParameters.ownerOrgId} = ${orgId})
         )`.as("aspectCount"),
         itemCount: sql<number>`(
           SELECT COUNT(DISTINCT ${itemParameterValues.itemId})::int
           FROM ${itemParameterValues}
           WHERE ${itemParameterValues.parameterDefinitionId} = ${parameterDefinitions.id}
+            AND (${itemParameterValues.ownerOrgId} IS NULL OR ${itemParameterValues.ownerOrgId} = ${orgId})
         )`.as("itemCount"),
         standardCount: sql<number>`(
           SELECT COUNT(*)::int FROM ${standardParameters}
           WHERE ${standardParameters.parameterDefinitionId} = ${parameterDefinitions.id}
+            AND (${standardParameters.ownerOrgId} IS NULL OR ${standardParameters.ownerOrgId} = ${orgId})
         )`.as("standardCount"),
       })
       .from(parameterDefinitions)
+      .where(additiveOrgFilter(parameterDefinitions.ownerOrgId, orgId))
       .orderBy(parameterDefinitions.name);
     return rows.map((r) => ({
       ...r,
@@ -138,20 +161,28 @@ export const parameterDefinitionRepository = {
   },
 
   /**
-   * Detect data-quality and duplication issues in the parameter catalog.
-   * Runs in Node, no expensive joins — just transforms listWithUsage() output.
-   */
-  /**
    * Where-used drilldown for a single parameter definition.
    * Returns the aspects that include it, the items that have a stored
    * value, and the standards that reference it.
    */
-  async getUsage({ parameterDefinitionId }: { parameterDefinitionId: string }) {
+  async getUsage({
+    orgId,
+    parameterDefinitionId,
+  }: {
+    orgId: string;
+    parameterDefinitionId: string;
+  }) {
     const aspectRows = await db
       .select({ id: aspects.id, name: aspects.name })
       .from(aspectParameters)
       .innerJoin(aspects, eq(aspectParameters.aspectId, aspects.id))
-      .where(eq(aspectParameters.parameterDefinitionId, parameterDefinitionId))
+      .where(
+        and(
+          additiveOrgFilter(aspectParameters.ownerOrgId, orgId),
+          additiveOrgFilter(aspects.ownerOrgId, orgId),
+          eq(aspectParameters.parameterDefinitionId, parameterDefinitionId),
+        ),
+      )
       .orderBy(aspects.name);
 
     const itemRows = await db
@@ -159,7 +190,11 @@ export const parameterDefinitionRepository = {
       .from(itemParameterValues)
       .innerJoin(items, eq(itemParameterValues.itemId, items.id))
       .where(
-        eq(itemParameterValues.parameterDefinitionId, parameterDefinitionId)
+        and(
+          additiveOrgFilter(itemParameterValues.ownerOrgId, orgId),
+          additiveOrgFilter(items.ownerOrgId, orgId),
+          eq(itemParameterValues.parameterDefinitionId, parameterDefinitionId),
+        ),
       )
       .orderBy(items.id, items.name);
 
@@ -168,7 +203,11 @@ export const parameterDefinitionRepository = {
       .from(standardParameters)
       .innerJoin(standards, eq(standardParameters.standardId, standards.id))
       .where(
-        eq(standardParameters.parameterDefinitionId, parameterDefinitionId)
+        and(
+          additiveOrgFilter(standardParameters.ownerOrgId, orgId),
+          additiveOrgFilter(standards.ownerOrgId, orgId),
+          eq(standardParameters.parameterDefinitionId, parameterDefinitionId),
+        ),
       )
       .orderBy(standards.name);
 
@@ -179,11 +218,10 @@ export const parameterDefinitionRepository = {
     };
   },
 
-  async audit(): Promise<AuditCheck[]> {
-    const defs = await parameterDefinitionRepository.listWithUsage();
+  async audit({ orgId }: { orgId: string }): Promise<AuditCheck[]> {
+    const defs = await parameterDefinitionRepository.listWithUsage({ orgId });
     const out: AuditCheck[] = [];
 
-    // no_description
     const noDesc = defs.filter((d) => !d.description || !d.description.trim());
     if (noDesc.length > 0) {
       out.push({
@@ -194,9 +232,8 @@ export const parameterDefinitionRepository = {
       });
     }
 
-    // numeric_no_unit
     const numericNoUnit = defs.filter(
-      (d) => d.dataType === "numeric" && !d.unit
+      (d) => d.dataType === "numeric" && !d.unit,
     );
     if (numericNoUnit.length > 0) {
       out.push({
@@ -207,7 +244,6 @@ export const parameterDefinitionRepository = {
       });
     }
 
-    // enum_no_values
     const enumNoValues = defs.filter((d) => {
       if (d.dataType !== "enum") return false;
       const c = d.constraints as { enumValues?: string[] } | null;
@@ -222,7 +258,6 @@ export const parameterDefinitionRepository = {
       });
     }
 
-    // orphan (attached to 0 aspects)
     const orphans = defs.filter((d) => (d.aspectCount ?? 0) === 0);
     if (orphans.length > 0) {
       out.push({
@@ -233,7 +268,6 @@ export const parameterDefinitionRepository = {
       });
     }
 
-    // name_collision_with_searchterm
     const byName = new Map(defs.map((d) => [d.name.toLowerCase(), d]));
     const collisions: Array<{ id: string; name: string }> = [];
     for (const d of defs) {
@@ -253,7 +287,6 @@ export const parameterDefinitionRepository = {
       });
     }
 
-    // duplicate_name_ignoring_separators
     const normalized = new Map<string, Array<{ id: string; name: string }>>();
     for (const d of defs) {
       const key = d.name.toLowerCase().replace(/[_\s-]+/g, "");
@@ -274,7 +307,6 @@ export const parameterDefinitionRepository = {
       });
     }
 
-    // near_duplicate: same dataType + unit, Jaccard ≥ 0.6 on name tokens
     const nearDup: Array<{ id: string; name: string }> = [];
     for (let i = 0; i < defs.length; i++) {
       for (let j = i + 1; j < defs.length; j++) {
@@ -301,9 +333,13 @@ export const parameterDefinitionRepository = {
   },
 
   async update({
+    userId,
+    orgId,
     id,
     ...updates
   }: {
+    userId: string;
+    orgId: string;
     id: string;
     name?: string;
     dataType?: DataType;
@@ -313,7 +349,7 @@ export const parameterDefinitionRepository = {
     defaultValue?: unknown;
     constraints?: Constraints;
   }) {
-    const before = await parameterDefinitionRepository.findById({ id });
+    const before = await parameterDefinitionRepository.findById({ orgId, id });
     if (!before) throw new Error(`ParameterDefinition ${id} not found`);
 
     const effectiveDataType = updates.dataType ?? before.dataType;
@@ -328,10 +364,17 @@ export const parameterDefinitionRepository = {
     const [updated] = await db
       .update(parameterDefinitions)
       .set({ ...updates, updatedAt: new Date() })
-      .where(eq(parameterDefinitions.id, id))
+      .where(
+        and(
+          additiveOrgFilter(parameterDefinitions.ownerOrgId, orgId),
+          eq(parameterDefinitions.id, id),
+        ),
+      )
       .returning();
 
     await transactionRepository.log({
+      userId,
+      orgId,
       actionType: "parameterDefinition.update",
       entityType: "parameterDefinition",
       entityId: id,
@@ -342,15 +385,30 @@ export const parameterDefinitionRepository = {
     return updated;
   },
 
-  async remove({ id }: { id: string }) {
-    const before = await parameterDefinitionRepository.findById({ id });
+  async remove({
+    userId,
+    orgId,
+    id,
+  }: {
+    userId: string;
+    orgId: string;
+    id: string;
+  }) {
+    const before = await parameterDefinitionRepository.findById({ orgId, id });
     if (!before) throw new Error(`ParameterDefinition ${id} not found`);
 
     await db
       .delete(parameterDefinitions)
-      .where(eq(parameterDefinitions.id, id));
+      .where(
+        and(
+          additiveOrgFilter(parameterDefinitions.ownerOrgId, orgId),
+          eq(parameterDefinitions.id, id),
+        ),
+      );
 
     await transactionRepository.log({
+      userId,
+      orgId,
       actionType: "parameterDefinition.delete",
       entityType: "parameterDefinition",
       entityId: id,

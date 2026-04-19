@@ -7,9 +7,15 @@ import {
   boolean,
 } from "drizzle-orm/pg-core";
 import { locations } from "./locations";
+import { orgs } from "./orgs";
 
 export const items = pgTable("items", {
   id: uuid("id").primaryKey().defaultRandom(),
+  // Isolation: additive. NULL = global catalog row (anyone may read/edit);
+  // set = private item owned by that org (paid-tier feature).
+  ownerOrgId: uuid("owner_org_id").references(() => orgs.id, {
+    onDelete: "cascade",
+  }),
   name: text("name").notNull(),
   description: text("description"),
   metadata: jsonb("metadata"), // images, datasheets, notes — no prescribed shape
@@ -20,6 +26,10 @@ export const items = pgTable("items", {
 // Co-storability: item-level relationship declaring which items can share a location
 export const coStorability = pgTable("co_storability", {
   id: uuid("id").primaryKey().defaultRandom(),
+  // Isolation: additive.
+  ownerOrgId: uuid("owner_org_id").references(() => orgs.id, {
+    onDelete: "cascade",
+  }),
   itemAId: uuid("item_a_id")
     .notNull()
     .references(() => items.id),
@@ -32,6 +42,10 @@ export const coStorability = pgTable("co_storability", {
 
 export const assignments = pgTable("assignments", {
   id: uuid("id").primaryKey().defaultRandom(),
+  // Isolation: isolated. NOT NULL since migration 0017.
+  ownerOrgId: uuid("owner_org_id")
+    .notNull()
+    .references(() => orgs.id, { onDelete: "cascade" }),
   itemId: uuid("item_id")
     .notNull()
     .references(() => items.id),

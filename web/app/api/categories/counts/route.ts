@@ -1,8 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { itemRepository } from "@/repositories/itemRepository";
+import { requireContext, errorResponse } from "@/lib/auth/route";
 
 export async function GET(request: NextRequest) {
   try {
+    const ctx = await requireContext();
     const params = request.nextUrl.searchParams;
     const q = params.get("q") || undefined;
 
@@ -27,15 +29,13 @@ export async function GET(request: NextRequest) {
     }
 
     const categories = await itemRepository.getCategoryCounts({
+      orgId: ctx.activeOrgId,
       query: q,
       filters,
     });
 
     return NextResponse.json({ categories });
   } catch (err) {
-    return NextResponse.json(
-      { error: err instanceof Error ? err.message : "Unexpected error" },
-      { status: 500 },
-    );
+    return errorResponse(err);
   }
 }

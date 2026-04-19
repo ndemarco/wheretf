@@ -1,11 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import { standardRepository } from "@/repositories/standardRepository";
+import { requireContext, errorResponse } from "@/lib/auth/route";
 
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const ctx = await requireContext();
     const { id } = await params;
     const { searchParams } = new URL(request.url);
     const limit = searchParams.get("limit")
@@ -17,16 +19,22 @@ export async function GET(
     const q = searchParams.get("q") ?? undefined;
 
     const [designations, total] = await Promise.all([
-      standardRepository.listDesignations({ standardId: id, q, limit, offset }),
-      standardRepository.countDesignations({ standardId: id }),
+      standardRepository.listDesignations({
+        orgId: ctx.activeOrgId,
+        standardId: id,
+        q,
+        limit,
+        offset,
+      }),
+      standardRepository.countDesignations({
+        orgId: ctx.activeOrgId,
+        standardId: id,
+      }),
     ]);
 
     return NextResponse.json({ designations, total, limit, offset });
-  } catch (error: unknown) {
-    return NextResponse.json(
-      { error: error instanceof Error ? error.message : "Unknown error" },
-      { status: 500 }
-    );
+  } catch (err) {
+    return errorResponse(err);
   }
 }
 
@@ -35,6 +43,7 @@ export async function POST(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const ctx = await requireContext();
     const { id } = await params;
     const body = await request.json();
     const { designation, values, metadata } = body;
@@ -47,6 +56,7 @@ export async function POST(
     }
 
     const entry = await standardRepository.createDesignation({
+      orgId: ctx.activeOrgId,
       standardId: id,
       designation,
       values,
@@ -54,16 +64,14 @@ export async function POST(
     });
 
     return NextResponse.json({ designation: entry }, { status: 201 });
-  } catch (error: unknown) {
-    return NextResponse.json(
-      { error: error instanceof Error ? error.message : "Unknown error" },
-      { status: 500 }
-    );
+  } catch (err) {
+    return errorResponse(err);
   }
 }
 
 export async function DELETE(request: NextRequest) {
   try {
+    const ctx = await requireContext();
     const designationId = new URL(request.url).searchParams.get("id");
     if (!designationId) {
       return NextResponse.json(
@@ -71,11 +79,12 @@ export async function DELETE(request: NextRequest) {
         { status: 400 }
       );
     }
-    await standardRepository.removeDesignation({ id: designationId });
+    await standardRepository.removeDesignation({
+      orgId: ctx.activeOrgId,
+      id: designationId,
+    });
     return NextResponse.json({ success: true });
-  } catch (error: unknown) {
-    const message = error instanceof Error ? error.message : "Unknown error";
-    const status = message.includes("not found") ? 404 : 500;
-    return NextResponse.json({ error: message }, { status });
+  } catch (err) {
+    return errorResponse(err);
   }
 }

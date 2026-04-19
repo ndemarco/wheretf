@@ -1,19 +1,21 @@
 import { NextRequest, NextResponse } from "next/server";
 import { standardRepository } from "@/repositories/standardRepository";
+import { requireContext, errorResponse } from "@/lib/auth/route";
 
 export async function GET(
   _request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const ctx = await requireContext();
     const { id } = await params;
-    const standards = await standardRepository.getItemStandards({ itemId: id });
+    const standards = await standardRepository.getItemStandards({
+      orgId: ctx.activeOrgId,
+      itemId: id,
+    });
     return NextResponse.json({ standards });
-  } catch (error: unknown) {
-    return NextResponse.json(
-      { error: error instanceof Error ? error.message : "Unknown error" },
-      { status: 500 }
-    );
+  } catch (err) {
+    return errorResponse(err);
   }
 }
 
@@ -22,6 +24,7 @@ export async function POST(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const ctx = await requireContext();
     const { id } = await params;
     const body = await request.json();
     const { standardId, designationId } = body;
@@ -34,17 +37,16 @@ export async function POST(
     }
 
     const itemStandard = await standardRepository.applyToItem({
+      userId: ctx.userId,
+      orgId: ctx.activeOrgId,
       itemId: id,
       standardId,
       designationId,
     });
 
     return NextResponse.json({ itemStandard }, { status: 201 });
-  } catch (error: unknown) {
-    return NextResponse.json(
-      { error: error instanceof Error ? error.message : "Unknown error" },
-      { status: 500 }
-    );
+  } catch (err) {
+    return errorResponse(err);
   }
 }
 
@@ -53,6 +55,7 @@ export async function PATCH(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const ctx = await requireContext();
     const { id } = await params;
     const body = await request.json();
     const { standardId, designationId } = body;
@@ -65,17 +68,15 @@ export async function PATCH(
     }
 
     const updated = await standardRepository.setDesignation({
+      orgId: ctx.activeOrgId,
       itemId: id,
       standardId,
       designationId,
     });
 
     return NextResponse.json({ itemStandard: updated });
-  } catch (error: unknown) {
-    return NextResponse.json(
-      { error: error instanceof Error ? error.message : "Unknown error" },
-      { status: 500 }
-    );
+  } catch (err) {
+    return errorResponse(err);
   }
 }
 
@@ -84,6 +85,7 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const ctx = await requireContext();
     const { id } = await params;
     const { searchParams } = new URL(request.url);
     const standardId = searchParams.get("standardId");
@@ -95,12 +97,14 @@ export async function DELETE(
       );
     }
 
-    await standardRepository.removeFromItem({ itemId: id, standardId });
+    await standardRepository.removeFromItem({
+      userId: ctx.userId,
+      orgId: ctx.activeOrgId,
+      itemId: id,
+      standardId,
+    });
     return NextResponse.json({ success: true });
-  } catch (error: unknown) {
-    return NextResponse.json(
-      { error: error instanceof Error ? error.message : "Unknown error" },
-      { status: 500 }
-    );
+  } catch (err) {
+    return errorResponse(err);
   }
 }

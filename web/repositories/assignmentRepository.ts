@@ -1,21 +1,30 @@
 import { eq, and, or } from "drizzle-orm";
 import { db } from "@/db/connection";
 import { assignments, coStorability } from "@/db/schema";
+import { isolatedOrgFilter } from "@/lib/auth/scope";
 import { transactionRepository } from "./transactionRepository";
 
+// assignments is an isolated table. Every method is org-scoped.
+// Co-storability is additive (global catalog entries visible to every
+// org), but when we look up co-storability we key by item IDs only —
+// the lookup doesn't need an org filter because any org that can see
+// both items should benefit from a global pairing.
 async function checkPlacedCoStorability({
+  orgId,
   locationId,
   itemId,
 }: {
+  orgId: string;
   locationId: string;
   itemId: string;
 }) {
-  // Find existing placed assignments at this location
+  // Find existing placed assignments at this location (scoped to org).
   const existing = await db
     .select()
     .from(assignments)
     .where(
       and(
+        isolatedOrgFilter(assignments.ownerOrgId, orgId),
         eq(assignments.locationId, locationId),
         eq(assignments.assignmentType, "placed"),
       ),
@@ -53,23 +62,28 @@ async function checkPlacedCoStorability({
 
 export const assignmentRepository = {
   async create({
+    userId,
+    orgId,
     itemId,
     locationId,
     assignmentType,
     metadata,
   }: {
+    userId: string;
+    orgId: string;
     itemId: string;
     locationId: string;
     assignmentType: "placed" | "provisional";
     metadata?: Record<string, unknown>;
   }) {
     if (assignmentType === "placed") {
-      await checkPlacedCoStorability({ locationId, itemId });
+      await checkPlacedCoStorability({ orgId, locationId, itemId });
     }
 
     const [assignment] = await db
       .insert(assignments)
       .values({
+        ownerOrgId: orgId,
         itemId,
         locationId,
         assignmentType,
@@ -78,6 +92,8 @@ export const assignmentRepository = {
       .returning();
 
     await transactionRepository.log({
+      userId,
+      orgId,
       actionType: "assignment.create",
       entityType: "assignment",
       entityId: assignment.id,
@@ -88,39 +104,64 @@ export const assignmentRepository = {
     return assignment;
   },
 
-  async findById({ id }: { id: string }) {
+  async findById({ orgId, id }: { orgId: string; id: string }) {
     const [assignment] = await db
       .select()
       .from(assignments)
-      .where(eq(assignments.id, id));
+      .where(
+        and(
+          isolatedOrgFilter(assignments.ownerOrgId, orgId),
+          eq(assignments.id, id),
+        ),
+      );
     return assignment ?? null;
   },
 
-  async findByItemId({ itemId }: { itemId: string }) {
+  async findByItemId({ orgId, itemId }: { orgId: string; itemId: string }) {
     return db
       .select()
       .from(assignments)
-      .where(eq(assignments.itemId, itemId));
+      .where(
+        and(
+          isolatedOrgFilter(assignments.ownerOrgId, orgId),
+          eq(assignments.itemId, itemId),
+        ),
+      );
   },
 
-  async findByLocationId({ locationId }: { locationId: string }) {
+  async findByLocationId({
+    orgId,
+    locationId,
+  }: {
+    orgId: string;
+    locationId: string;
+  }) {
     return db
       .select()
       .from(assignments)
-      .where(eq(assignments.locationId, locationId));
+      .where(
+        and(
+          isolatedOrgFilter(assignments.ownerOrgId, orgId),
+          eq(assignments.locationId, locationId),
+        ),
+      );
   },
 
   async convertToPlaced({
+    userId,
+    orgId,
     id,
     locationId,
   }: {
+    userId: string;
+    orgId: string;
     id: string;
     locationId: string;
   }) {
-    const before = await assignmentRepository.findById({ id });
+    const before = await assignmentRepository.findById({ orgId, id });
     if (!before) throw new Error(`Assignment ${id} not found`);
 
-    await checkPlacedCoStorability({ locationId, itemId: before.itemId });
+    await checkPlacedCoStorability({ orgId, locationId, itemId: before.itemId });
 
     const [updated] = await db
       .update(assignments)
@@ -129,10 +170,17 @@ export const assignmentRepository = {
         locationId,
         updatedAt: new Date(),
       })
-      .where(eq(assignments.id, id))
+      .where(
+        and(
+          isolatedOrgFilter(assignments.ownerOrgId, orgId),
+          eq(assignments.id, id),
+        ),
+      )
       .returning();
 
     await transactionRepository.log({
+      userId,
+      orgId,
       actionType: "assignment.convertToPlaced",
       entityType: "assignment",
       entityId: id,
@@ -143,11 +191,22 @@ export const assignmentRepository = {
     return updated;
   },
 
-  async move({ id, newLocationId }: { id: string; newLocationId: string }) {
-    const before = await assignmentRepository.findById({ id });
+  async move({
+    userId,
+    orgId,
+    id,
+    newLocationId,
+  }: {
+    userId: string;
+    orgId: string;
+    id: string;
+    newLocationId: string;
+  }) {
+    const before = await assignmentRepository.findById({ orgId, id });
     if (!before) throw new Error(`Assignment ${id} not found`);
 
     await checkPlacedCoStorability({
+      orgId,
       locationId: newLocationId,
       itemId: before.itemId,
     });
@@ -158,10 +217,17 @@ export const assignmentRepository = {
         locationId: newLocationId,
         updatedAt: new Date(),
       })
-      .where(eq(assignments.id, id))
+      .where(
+        and(
+          isolatedOrgFilter(assignments.ownerOrgId, orgId),
+          eq(assignments.id, id),
+        ),
+      )
       .returning();
 
     await transactionRepository.log({
+      userId,
+      orgId,
       actionType: "assignment.move",
       entityType: "assignment",
       entityId: id,
@@ -172,13 +238,30 @@ export const assignmentRepository = {
     return updated;
   },
 
-  async remove({ id }: { id: string }) {
-    const before = await assignmentRepository.findById({ id });
+  async remove({
+    userId,
+    orgId,
+    id,
+  }: {
+    userId: string;
+    orgId: string;
+    id: string;
+  }) {
+    const before = await assignmentRepository.findById({ orgId, id });
     if (!before) throw new Error(`Assignment ${id} not found`);
 
-    await db.delete(assignments).where(eq(assignments.id, id));
+    await db
+      .delete(assignments)
+      .where(
+        and(
+          isolatedOrgFilter(assignments.ownerOrgId, orgId),
+          eq(assignments.id, id),
+        ),
+      );
 
     await transactionRepository.log({
+      userId,
+      orgId,
       actionType: "assignment.delete",
       entityType: "assignment",
       entityId: id,
@@ -187,10 +270,15 @@ export const assignmentRepository = {
     });
   },
 
-  async listProvisional() {
+  async listProvisional({ orgId }: { orgId: string }) {
     return db
       .select()
       .from(assignments)
-      .where(eq(assignments.assignmentType, "provisional"));
+      .where(
+        and(
+          isolatedOrgFilter(assignments.ownerOrgId, orgId),
+          eq(assignments.assignmentType, "provisional"),
+        ),
+      );
   },
 };

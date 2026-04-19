@@ -106,6 +106,27 @@
       "when": 1776605680000,
       "tag": "0014_interface_type_junctions_migrate",
       "breakpoints": true
+    },
+    {
+      "idx": 15,
+      "version": "7",
+      "when": 1776692000000,
+      "tag": "0015_auth_and_orgs",
+      "breakpoints": true
+    },
+    {
+      "idx": 16,
+      "version": "7",
+      "when": 1776692100000,
+      "tag": "0016_owner_org_id_and_backfill",
+      "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "7",
+      "when": 1776692200000,
+      "tag": "0017_isolated_owner_org_id_not_null",
+      "breakpoints": true
     }
   ]
 }

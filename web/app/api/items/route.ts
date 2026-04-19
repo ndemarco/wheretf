@@ -1,8 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { itemRepository } from "@/repositories/itemRepository";
+import { requireContext, errorResponse } from "@/lib/auth/route";
 
 export async function GET(request: NextRequest) {
   try {
+    const ctx = await requireContext();
     const params = request.nextUrl.searchParams;
     const q = params.get("q") || undefined;
     const categoryId = params.get("category") || undefined;
@@ -29,6 +31,7 @@ export async function GET(request: NextRequest) {
     }
 
     const result = await itemRepository.listRich({
+      orgId: ctx.activeOrgId,
       query: q,
       filters,
       categoryId,
@@ -38,22 +41,30 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json(result);
   } catch (err) {
-    return NextResponse.json(
-      { error: err instanceof Error ? err.message : "Unexpected error" },
-      { status: 500 },
-    );
+    return errorResponse(err);
   }
 }
 
 export async function POST(request: NextRequest) {
   try {
+    const ctx = await requireContext();
     const body = await request.json();
-    const item = await itemRepository.create(body);
+    const { name, description, metadata, asGlobal } = body;
+
+    if (!name) {
+      return NextResponse.json({ error: "name is required" }, { status: 400 });
+    }
+
+    const item = await itemRepository.create({
+      userId: ctx.userId,
+      orgId: ctx.activeOrgId,
+      asGlobal: Boolean(asGlobal),
+      name,
+      description,
+      metadata,
+    });
     return NextResponse.json({ item }, { status: 201 });
   } catch (err) {
-    return NextResponse.json(
-      { error: err instanceof Error ? err.message : "Unexpected error" },
-      { status: 400 },
-    );
+    return errorResponse(err);
   }
 }

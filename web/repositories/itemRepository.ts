@@ -1,4 +1,4 @@
-import { eq, or, and, ilike, inArray, sql, asc, desc } from "drizzle-orm";
+import { eq, or, and, ilike, inArray, sql } from "drizzle-orm";
 import { db } from "@/db/connection";
 import {
   items,
@@ -14,22 +14,43 @@ import {
   locations,
   itemStandards,
 } from "@/db/schema";
+import { additiveOrgFilter, isolatedOrgFilter } from "@/lib/auth/scope";
 import { transactionRepository } from "./transactionRepository";
 import { type AuditCheck } from "@/lib/audit";
 
+// items is an additive table. Reads union (global ∪ org). Writes default
+// to org-private; pass `asGlobal: true` to contribute to the global
+// catalog (any signed-in user may create or edit globals; audited).
+//
+// Junction / value tables (item_categories, item_aspects,
+// item_parameter_values, item_standards, co_storability) are also
+// additive. Each row inherits its ownerOrgId from the parent item — a
+// global item's junctions are global, an org-private item's are org.
+//
+// assignments is isolated. Reads here (the listRich join) strictly
+// scope by orgId.
 export const itemRepository = {
   async create({
+    userId,
+    orgId,
+    asGlobal,
     name,
     description,
     metadata,
   }: {
+    userId: string;
+    orgId: string;
+    asGlobal?: boolean;
     name: string;
     description?: string;
     metadata?: Record<string, unknown>;
   }) {
+    const ownerOrgId = asGlobal ? null : orgId;
+
     const [item] = await db
       .insert(items)
       .values({
+        ownerOrgId,
         name,
         description,
         metadata,
@@ -37,6 +58,8 @@ export const itemRepository = {
       .returning();
 
     await transactionRepository.log({
+      userId,
+      orgId,
       actionType: "item.create",
       entityType: "item",
       entityId: item.id,
@@ -47,54 +70,71 @@ export const itemRepository = {
     return item;
   },
 
-  async findById({ id }: { id: string }) {
+  async findById({ orgId, id }: { orgId: string; id: string }) {
     const [item] = await db
       .select()
       .from(items)
-      .where(eq(items.id, id));
+      .where(and(additiveOrgFilter(items.ownerOrgId, orgId), eq(items.id, id)));
     return item ?? null;
   },
 
-  async findByName({ name }: { name: string }) {
+  async findByName({ orgId, name }: { orgId: string; name: string }) {
     const [item] = await db
       .select()
       .from(items)
-      .where(eq(items.name, name));
+      .where(
+        and(additiveOrgFilter(items.ownerOrgId, orgId), eq(items.name, name)),
+      );
     return item ?? null;
   },
 
-  async search({ query }: { query: string }) {
+  async search({ orgId, query }: { orgId: string; query: string }) {
     const pattern = `%${query}%`;
     return db
       .select()
       .from(items)
       .where(
-        or(
-          ilike(items.name, pattern),
-          ilike(items.description, pattern),
+        and(
+          additiveOrgFilter(items.ownerOrgId, orgId),
+          or(
+            ilike(items.name, pattern),
+            ilike(items.description, pattern),
+          ),
         ),
       );
   },
 
-  async list() {
-    return db.select().from(items);
+  async list({ orgId }: { orgId: string }) {
+    return db
+      .select()
+      .from(items)
+      .where(additiveOrgFilter(items.ownerOrgId, orgId));
   },
 
   // --- Rich listing with filters, search, sort ---
 
   async listRich({
+    orgId,
     query,
     filters,
     categoryId,
     sortBy,
     sortDirection,
   }: {
+    orgId: string;
     query?: string;
     filters?: { parameterDefinitionId: string; value: unknown }[];
     categoryId?: string;
     sortBy?: string; // "name" or a parameter definition ID
     sortDirection?: "asc" | "desc";
-  } = {}) {
+  }) {
+    const itemScope = additiveOrgFilter(items.ownerOrgId, orgId);
+    const ipvScope = additiveOrgFilter(itemParameterValues.ownerOrgId, orgId);
+    const icScope = additiveOrgFilter(itemCategories.ownerOrgId, orgId);
+    const iaScope = additiveOrgFilter(itemAspects.ownerOrgId, orgId);
+    const asScope = isolatedOrgFilter(assignments.ownerOrgId, orgId);
+    const locScope = isolatedOrgFilter(locations.ownerOrgId, orgId);
+
     // Step 1: Build filtered item ID set
     let itemIds: string[] | null = null;
 
@@ -106,12 +146,13 @@ export const itemRepository = {
           .from(itemParameterValues)
           .where(
             and(
+              ipvScope,
               eq(
                 itemParameterValues.parameterDefinitionId,
-                filter.parameterDefinitionId
+                filter.parameterDefinitionId,
               ),
-              sql`${itemParameterValues.value} = ${JSON.stringify(filter.value)}::jsonb`
-            )
+              sql`${itemParameterValues.value} = ${JSON.stringify(filter.value)}::jsonb`,
+            ),
           );
 
         const matchingIds = new Set(matchingRows.map((r) => r.itemId));
@@ -131,7 +172,9 @@ export const itemRepository = {
       const catRows = await db
         .select({ itemId: itemCategories.itemId })
         .from(itemCategories)
-        .where(eq(itemCategories.categoryId, categoryId));
+        .where(
+          and(icScope, eq(itemCategories.categoryId, categoryId)),
+        );
 
       const catIds = new Set(catRows.map((r) => r.itemId));
 
@@ -153,14 +196,19 @@ export const itemRepository = {
         .select({ id: items.id })
         .from(items)
         .where(
-          or(ilike(items.name, pattern), ilike(items.description, pattern))
+          and(
+            itemScope,
+            or(ilike(items.name, pattern), ilike(items.description, pattern)),
+          ),
         );
 
       // Items matching by parameter value (cast jsonb to text for ilike)
       const paramMatches = await db
         .select({ itemId: itemParameterValues.itemId })
         .from(itemParameterValues)
-        .where(sql`${itemParameterValues.value}::text ILIKE ${pattern}`);
+        .where(
+          and(ipvScope, sql`${itemParameterValues.value}::text ILIKE ${pattern}`),
+        );
 
       const searchIds = new Set([
         ...nameMatches.map((r) => r.id),
@@ -183,9 +231,9 @@ export const itemRepository = {
       itemRows = await db
         .select()
         .from(items)
-        .where(inArray(items.id, itemIds));
+        .where(and(itemScope, inArray(items.id, itemIds)));
     } else {
-      itemRows = await db.select().from(items);
+      itemRows = await db.select().from(items).where(itemScope);
     }
 
     if (itemRows.length === 0) return { items: [], total: 0 };
@@ -208,9 +256,9 @@ export const itemRepository = {
           .from(itemCategories)
           .innerJoin(
             categories,
-            eq(itemCategories.categoryId, categories.id)
+            eq(itemCategories.categoryId, categories.id),
           )
-          .where(inArray(itemCategories.itemId, allIds)),
+          .where(and(icScope, inArray(itemCategories.itemId, allIds))),
 
         // Applied aspects
         db
@@ -223,7 +271,7 @@ export const itemRepository = {
           })
           .from(itemAspects)
           .innerJoin(aspects, eq(itemAspects.aspectId, aspects.id))
-          .where(inArray(itemAspects.itemId, allIds)),
+          .where(and(iaScope, inArray(itemAspects.itemId, allIds))),
 
         // Parameter values with definitions
         db
@@ -242,12 +290,12 @@ export const itemRepository = {
             parameterDefinitions,
             eq(
               itemParameterValues.parameterDefinitionId,
-              parameterDefinitions.id
-            )
+              parameterDefinitions.id,
+            ),
           )
-          .where(inArray(itemParameterValues.itemId, allIds)),
+          .where(and(ipvScope, inArray(itemParameterValues.itemId, allIds))),
 
-        // Assignments with location paths
+        // Assignments with location paths — isolated, strictly scoped.
         db
           .select({
             itemId: assignments.itemId,
@@ -257,7 +305,13 @@ export const itemRepository = {
           })
           .from(assignments)
           .innerJoin(locations, eq(assignments.locationId, locations.id))
-          .where(inArray(assignments.itemId, allIds)),
+          .where(
+            and(
+              asScope,
+              locScope,
+              inArray(assignments.itemId, allIds),
+            ),
+          ),
       ]);
 
     // Step 4: Assemble rich items
@@ -276,7 +330,7 @@ export const itemRepository = {
           parameters: paramValueRows
             .filter(
               (pv) =>
-                pv.itemId === item.id && pv.itemAspectId === a.itemAspectId
+                pv.itemId === item.id && pv.itemAspectId === a.itemAspectId,
             )
             .map(({ itemId, ...rest }) => rest),
         })),
@@ -304,10 +358,10 @@ export const itemRepository = {
           ...b.standaloneParameters,
         ];
         const valA = allParamsA.find(
-          (p) => p.parameterDefinitionId === sortBy
+          (p) => p.parameterDefinitionId === sortBy,
         )?.value;
         const valB = allParamsB.find(
-          (p) => p.parameterDefinitionId === sortBy
+          (p) => p.parameterDefinitionId === sortBy,
         )?.value;
 
         if (valA == null && valB == null) return 0;
@@ -324,27 +378,26 @@ export const itemRepository = {
     return { items: richItems, total: richItems.length };
   },
 
-  // --- Category counts (respects active filters) ---
+  // --- Cross-item audit ---
 
   /**
-   * Return items that *might* be duplicates of an item described by the
-   * given standard+designation (plus their parameter values so the caller
-   * can refine per-row for set generation). Simple first cut: any item
-   * that has the same (standardId, designationId) applied.
-   */
-  /**
    * Cross-item audit: value outliers + free-text drift suggesting an
-   * enum promotion. Pulls all parameter values in one query then
-   * groups by parameterDefinitionId in Node.
+   * enum promotion. Pulls parameter values in scope then groups by
+   * parameterDefinitionId in Node.
    */
-  async auditParameterValues(): Promise<AuditCheck[]> {
+  async auditParameterValues({
+    orgId,
+  }: {
+    orgId: string;
+  }): Promise<AuditCheck[]> {
     const rows = await db
       .select({
         itemId: itemParameterValues.itemId,
         parameterDefinitionId: itemParameterValues.parameterDefinitionId,
         value: itemParameterValues.value,
       })
-      .from(itemParameterValues);
+      .from(itemParameterValues)
+      .where(additiveOrgFilter(itemParameterValues.ownerOrgId, orgId));
 
     // Group values per parameter.
     const byParam = new Map<string, Array<{ itemId: string; value: unknown }>>();
@@ -355,14 +408,15 @@ export const itemRepository = {
     }
 
     // Need param metadata (name + dataType) so checks can report and
-    // qualify their work.
+    // qualify their work. parameterDefinitions is also additive.
     const paramRows = await db
       .select({
         id: parameterDefinitions.id,
         name: parameterDefinitions.name,
         dataType: parameterDefinitions.dataType,
       })
-      .from(parameterDefinitions);
+      .from(parameterDefinitions)
+      .where(additiveOrgFilter(parameterDefinitions.ownerOrgId, orgId));
     const paramById = new Map(paramRows.map((p) => [p.id, p]));
 
     const outliers: Array<{ id: string; name: string }> = [];
@@ -390,7 +444,7 @@ export const itemRepository = {
         const distinct = new Set(
           values
             .map((v) => (typeof v.value === "string" ? v.value.trim() : null))
-            .filter((s): s is string => !!s)
+            .filter((s): s is string => !!s),
         );
         if (distinct.size > 0 && distinct.size <= 20 && values.length >= 5) {
           drift.push({ id: meta.id, name: meta.name });
@@ -420,10 +474,18 @@ export const itemRepository = {
     return out;
   },
 
+  /**
+   * Return items that *might* be duplicates of an item described by the
+   * given standard+designation (plus their parameter values so the caller
+   * can refine per-row for set generation). Simple first cut: any item
+   * that has the same (standardId, designationId) applied.
+   */
   async findSimilar({
+    orgId,
     standardId,
     designationId,
   }: {
+    orgId: string;
     standardId: string;
     designationId: string;
   }) {
@@ -436,9 +498,11 @@ export const itemRepository = {
       .innerJoin(itemStandards, eq(itemStandards.itemId, items.id))
       .where(
         and(
+          additiveOrgFilter(items.ownerOrgId, orgId),
+          additiveOrgFilter(itemStandards.ownerOrgId, orgId),
           eq(itemStandards.standardId, standardId),
-          eq(itemStandards.designationId, designationId)
-        )
+          eq(itemStandards.designationId, designationId),
+        ),
       );
 
     if (matches.length === 0) return [];
@@ -451,7 +515,12 @@ export const itemRepository = {
         value: itemParameterValues.value,
       })
       .from(itemParameterValues)
-      .where(inArray(itemParameterValues.itemId, ids));
+      .where(
+        and(
+          additiveOrgFilter(itemParameterValues.ownerOrgId, orgId),
+          inArray(itemParameterValues.itemId, ids),
+        ),
+      );
 
     const byItem = new Map<string, Record<string, unknown>>();
     for (const r of pvRows) {
@@ -478,10 +547,12 @@ export const itemRepository = {
    * item fits.
    */
   async suggestCategories({
+    orgId,
     aspectIds = [],
     standardIds = [],
     limit = 3,
   }: {
+    orgId: string;
     aspectIds?: string[];
     standardIds?: string[];
     limit?: number;
@@ -494,27 +565,42 @@ export const itemRepository = {
       const rows = await db
         .select({ itemId: itemAspects.itemId })
         .from(itemAspects)
-        .where(inArray(itemAspects.aspectId, aspectIds));
+        .where(
+          and(
+            additiveOrgFilter(itemAspects.ownerOrgId, orgId),
+            inArray(itemAspects.aspectId, aspectIds),
+          ),
+        );
       for (const r of rows) matchingItemIds.add(r.itemId);
     }
     if (standardIds.length > 0) {
       const rows = await db
         .select({ itemId: itemStandards.itemId })
         .from(itemStandards)
-        .where(inArray(itemStandards.standardId, standardIds));
+        .where(
+          and(
+            additiveOrgFilter(itemStandards.ownerOrgId, orgId),
+            inArray(itemStandards.standardId, standardIds),
+          ),
+        );
       for (const r of rows) matchingItemIds.add(r.itemId);
     }
 
     if (matchingItemIds.size === 0) return [];
 
-    // For each category, count matching items and total items.
+    // For each category, count matching items and total items (scoped).
     const matchingRows = await db
       .select({
         categoryId: itemCategories.categoryId,
         itemId: itemCategories.itemId,
       })
       .from(itemCategories)
-      .where(inArray(itemCategories.itemId, Array.from(matchingItemIds)));
+      .where(
+        and(
+          additiveOrgFilter(itemCategories.ownerOrgId, orgId),
+          inArray(itemCategories.itemId, Array.from(matchingItemIds)),
+        ),
+      );
 
     const matchByCat = new Map<string, number>();
     for (const r of matchingRows) {
@@ -528,7 +614,12 @@ export const itemRepository = {
         count: sql<number>`COUNT(*)::int`,
       })
       .from(itemCategories)
-      .where(inArray(itemCategories.categoryId, Array.from(matchByCat.keys())))
+      .where(
+        and(
+          additiveOrgFilter(itemCategories.ownerOrgId, orgId),
+          inArray(itemCategories.categoryId, Array.from(matchByCat.keys())),
+        ),
+      )
       .groupBy(itemCategories.categoryId);
     const totalByCat = new Map<string, number>();
     for (const r of totalRows) totalByCat.set(r.categoryId, Number(r.count));
@@ -541,7 +632,12 @@ export const itemRepository = {
         color: categories.color,
       })
       .from(categories)
-      .where(inArray(categories.id, Array.from(matchByCat.keys())));
+      .where(
+        and(
+          additiveOrgFilter(categories.ownerOrgId, orgId),
+          inArray(categories.id, Array.from(matchByCat.keys())),
+        ),
+      );
     const byId = new Map(catRows.map((c) => [c.id, c]));
 
     const scored = Array.from(matchByCat.entries()).map(
@@ -558,7 +654,7 @@ export const itemRepository = {
           total,
           score,
         };
-      }
+      },
     );
 
     scored.sort((a, b) => b.score - a.score || b.matched - a.matched);
@@ -566,24 +662,29 @@ export const itemRepository = {
   },
 
   async getCategoryCounts({
+    orgId,
     query,
     filters,
   }: {
+    orgId: string;
     query?: string;
     filters?: { parameterDefinitionId: string; value: unknown }[];
-  } = {}) {
+  }) {
     // Get the filtered item set first (reuse filtering logic)
     const { items: filteredItems } = await itemRepository.listRich({
+      orgId,
       query,
       filters,
     });
 
     const filteredIds = filteredItems.map((i) => i.id);
 
-    // Get all categories with counts
+    // Get all categories with counts (categories is additive — show
+    // global + org-private categories).
     const allCategories = await db
       .select()
       .from(categories)
+      .where(additiveOrgFilter(categories.ownerOrgId, orgId))
       .orderBy(categories.sortOrder);
 
     if (filteredIds.length === 0) {
@@ -596,7 +697,12 @@ export const itemRepository = {
         count: sql<number>`count(*)::int`,
       })
       .from(itemCategories)
-      .where(inArray(itemCategories.itemId, filteredIds))
+      .where(
+        and(
+          additiveOrgFilter(itemCategories.ownerOrgId, orgId),
+          inArray(itemCategories.itemId, filteredIds),
+        ),
+      )
       .groupBy(itemCategories.categoryId);
 
     const countMap = new Map(catCounts.map((c) => [c.categoryId, c.count]));
@@ -608,24 +714,32 @@ export const itemRepository = {
   },
 
   async update({
+    userId,
+    orgId,
     id,
     ...updates
   }: {
+    userId: string;
+    orgId: string;
     id: string;
     name?: string;
     description?: string;
     metadata?: Record<string, unknown>;
   }) {
-    const before = await itemRepository.findById({ id });
+    const before = await itemRepository.findById({ orgId, id });
     if (!before) throw new Error(`Item ${id} not found`);
 
     const [updated] = await db
       .update(items)
       .set({ ...updates, updatedAt: new Date() })
-      .where(eq(items.id, id))
+      .where(
+        and(additiveOrgFilter(items.ownerOrgId, orgId), eq(items.id, id)),
+      )
       .returning();
 
     await transactionRepository.log({
+      userId,
+      orgId,
       actionType: "item.update",
       entityType: "item",
       entityId: id,
@@ -636,13 +750,27 @@ export const itemRepository = {
     return updated;
   },
 
-  async remove({ id }: { id: string }) {
-    const before = await itemRepository.findById({ id });
+  async remove({
+    userId,
+    orgId,
+    id,
+  }: {
+    userId: string;
+    orgId: string;
+    id: string;
+  }) {
+    const before = await itemRepository.findById({ orgId, id });
     if (!before) throw new Error(`Item ${id} not found`);
 
-    await db.delete(items).where(eq(items.id, id));
+    await db
+      .delete(items)
+      .where(
+        and(additiveOrgFilter(items.ownerOrgId, orgId), eq(items.id, id)),
+      );
 
     await transactionRepository.log({
+      userId,
+      orgId,
       actionType: "item.delete",
       entityType: "item",
       entityId: id,
@@ -652,20 +780,37 @@ export const itemRepository = {
   },
 
   async addCoStorability({
+    userId,
+    orgId,
     itemAId,
     itemBId,
     reason,
   }: {
+    userId: string;
+    orgId: string;
     itemAId: string;
     itemBId: string;
     reason?: string;
   }) {
+    // Junction inherits parent item's scope. Require itemA to be
+    // visible; use its ownerOrgId so a co-storability of two globals
+    // is itself global.
+    const parent = await itemRepository.findById({ orgId, id: itemAId });
+    if (!parent) throw new Error(`Item ${itemAId} not found`);
+
     const [record] = await db
       .insert(coStorability)
-      .values({ itemAId, itemBId, reason })
+      .values({
+        ownerOrgId: parent.ownerOrgId,
+        itemAId,
+        itemBId,
+        reason,
+      })
       .returning();
 
     await transactionRepository.log({
+      userId,
+      orgId,
       actionType: "coStorability.create",
       entityType: "coStorability",
       entityId: record.id,
@@ -677,25 +822,32 @@ export const itemRepository = {
   },
 
   async removeCoStorability({
+    userId,
+    orgId,
     itemAId,
     itemBId,
   }: {
+    userId: string;
+    orgId: string;
     itemAId: string;
     itemBId: string;
   }) {
-    // Find the record in either direction
+    // Find the record in either direction, within scope.
     const [record] = await db
       .select()
       .from(coStorability)
       .where(
-        or(
-          and(
-            eq(coStorability.itemAId, itemAId),
-            eq(coStorability.itemBId, itemBId),
-          ),
-          and(
-            eq(coStorability.itemAId, itemBId),
-            eq(coStorability.itemBId, itemAId),
+        and(
+          additiveOrgFilter(coStorability.ownerOrgId, orgId),
+          or(
+            and(
+              eq(coStorability.itemAId, itemAId),
+              eq(coStorability.itemBId, itemBId),
+            ),
+            and(
+              eq(coStorability.itemAId, itemBId),
+              eq(coStorability.itemBId, itemAId),
+            ),
           ),
         ),
       );
@@ -705,6 +857,8 @@ export const itemRepository = {
     await db.delete(coStorability).where(eq(coStorability.id, record.id));
 
     await transactionRepository.log({
+      userId,
+      orgId,
       actionType: "coStorability.delete",
       entityType: "coStorability",
       entityId: record.id,
@@ -713,14 +867,23 @@ export const itemRepository = {
     });
   },
 
-  async getCoStorableItems({ itemId }: { itemId: string }) {
+  async getCoStorableItems({
+    orgId,
+    itemId,
+  }: {
+    orgId: string;
+    itemId: string;
+  }) {
     const records = await db
       .select()
       .from(coStorability)
       .where(
-        or(
-          eq(coStorability.itemAId, itemId),
-          eq(coStorability.itemBId, itemId),
+        and(
+          additiveOrgFilter(coStorability.ownerOrgId, orgId),
+          or(
+            eq(coStorability.itemAId, itemId),
+            eq(coStorability.itemBId, itemId),
+          ),
         ),
       );
 
@@ -731,9 +894,9 @@ export const itemRepository = {
 
     if (coStorableIds.length === 0) return [];
 
-    // Fetch all co-storable items
+    // Fetch all co-storable items (scoped).
     const results = await Promise.all(
-      coStorableIds.map((id) => itemRepository.findById({ id })),
+      coStorableIds.map((id) => itemRepository.findById({ orgId, id })),
     );
 
     return results.filter((item) => item !== null);
@@ -742,42 +905,53 @@ export const itemRepository = {
   // --- Category management ---
 
   async addCategory({
+    orgId,
     itemId,
     categoryId,
     isPrimary,
   }: {
+    orgId: string;
     itemId: string;
     categoryId: string;
     isPrimary?: boolean;
   }) {
-    const item = await itemRepository.findById({ id: itemId });
+    const item = await itemRepository.findById({ orgId, id: itemId });
     if (!item) throw new Error(`Item ${itemId} not found`);
 
-    // If setting as primary, unset any existing primary
+    // If setting as primary, unset any existing primary (within scope).
     if (isPrimary) {
       await db
         .update(itemCategories)
         .set({ isPrimary: false })
         .where(
           and(
+            additiveOrgFilter(itemCategories.ownerOrgId, orgId),
             eq(itemCategories.itemId, itemId),
-            eq(itemCategories.isPrimary, true)
-          )
+            eq(itemCategories.isPrimary, true),
+          ),
         );
     }
 
+    // Junction inherits the parent item's scope.
     const [ic] = await db
       .insert(itemCategories)
-      .values({ itemId, categoryId, isPrimary: isPrimary ?? false })
+      .values({
+        ownerOrgId: item.ownerOrgId,
+        itemId,
+        categoryId,
+        isPrimary: isPrimary ?? false,
+      })
       .returning();
 
     return ic;
   },
 
   async removeCategory({
+    orgId,
     itemId,
     categoryId,
   }: {
+    orgId: string;
     itemId: string;
     categoryId: string;
   }) {
@@ -785,9 +959,10 @@ export const itemRepository = {
       .delete(itemCategories)
       .where(
         and(
+          additiveOrgFilter(itemCategories.ownerOrgId, orgId),
           eq(itemCategories.itemId, itemId),
-          eq(itemCategories.categoryId, categoryId)
-        )
+          eq(itemCategories.categoryId, categoryId),
+        ),
       )
       .returning();
 
@@ -797,17 +972,21 @@ export const itemRepository = {
   },
 
   async setPrimaryCategory({
+    orgId,
     itemId,
     categoryId,
   }: {
+    orgId: string;
     itemId: string;
     categoryId: string;
   }) {
+    const scope = additiveOrgFilter(itemCategories.ownerOrgId, orgId);
+
     // Unset all primaries for this item
     await db
       .update(itemCategories)
       .set({ isPrimary: false })
-      .where(eq(itemCategories.itemId, itemId));
+      .where(and(scope, eq(itemCategories.itemId, itemId)));
 
     // Set the specified one as primary
     const [updated] = await db
@@ -815,9 +994,10 @@ export const itemRepository = {
       .set({ isPrimary: true })
       .where(
         and(
+          scope,
           eq(itemCategories.itemId, itemId),
-          eq(itemCategories.categoryId, categoryId)
-        )
+          eq(itemCategories.categoryId, categoryId),
+        ),
       )
       .returning();
 
@@ -828,7 +1008,7 @@ export const itemRepository = {
     return updated;
   },
 
-  async getCategories({ itemId }: { itemId: string }) {
+  async getCategories({ orgId, itemId }: { orgId: string; itemId: string }) {
     return db
       .select({
         categoryId: itemCategories.categoryId,
@@ -839,44 +1019,64 @@ export const itemRepository = {
       })
       .from(itemCategories)
       .innerJoin(categories, eq(itemCategories.categoryId, categories.id))
-      .where(eq(itemCategories.itemId, itemId));
+      .where(
+        and(
+          additiveOrgFilter(itemCategories.ownerOrgId, orgId),
+          eq(itemCategories.itemId, itemId),
+        ),
+      );
   },
 
   // --- Aspect management ---
 
   async applyAspect({
+    orgId,
     itemId,
     aspectId,
   }: {
+    orgId: string;
     itemId: string;
     aspectId: string;
   }) {
-    const item = await itemRepository.findById({ id: itemId });
+    const item = await itemRepository.findById({ orgId, id: itemId });
     if (!item) throw new Error(`Item ${itemId} not found`);
 
-    // Create the item-aspect link
+    const junctionOwner = item.ownerOrgId;
+
+    // Create the item-aspect link (inherits item scope).
     const [ia] = await db
       .insert(itemAspects)
-      .values({ itemId, aspectId })
+      .values({ ownerOrgId: junctionOwner, itemId, aspectId })
       .returning();
 
-    // Get the aspect's parameter definitions and create value slots
+    // Get the aspect's parameter definitions (additive) and create value slots
     const aspectParams = await db
       .select()
       .from(aspectParameters)
-      .where(eq(aspectParameters.aspectId, aspectId));
+      .where(
+        and(
+          additiveOrgFilter(aspectParameters.ownerOrgId, orgId),
+          eq(aspectParameters.aspectId, aspectId),
+        ),
+      );
 
     for (const ap of aspectParams) {
-      // Get the parameter definition for its global default
+      // Get the parameter definition for its global default.
       const [pd] = await db
         .select()
         .from(parameterDefinitions)
-        .where(eq(parameterDefinitions.id, ap.parameterDefinitionId));
+        .where(
+          and(
+            additiveOrgFilter(parameterDefinitions.ownerOrgId, orgId),
+            eq(parameterDefinitions.id, ap.parameterDefinitionId),
+          ),
+        );
 
       // Aspect-level default wins over parameter-level default
       const defaultVal = ap.defaultValue ?? pd?.defaultValue ?? null;
 
       await db.insert(itemParameterValues).values({
+        ownerOrgId: junctionOwner,
         itemId,
         parameterDefinitionId: ap.parameterDefinitionId,
         itemAspectId: ia.id,
@@ -888,9 +1088,11 @@ export const itemRepository = {
   },
 
   async removeAspect({
+    orgId,
     itemId,
     aspectId,
   }: {
+    orgId: string;
     itemId: string;
     aspectId: string;
   }) {
@@ -898,7 +1100,11 @@ export const itemRepository = {
     const [deleted] = await db
       .delete(itemAspects)
       .where(
-        and(eq(itemAspects.itemId, itemId), eq(itemAspects.aspectId, aspectId))
+        and(
+          additiveOrgFilter(itemAspects.ownerOrgId, orgId),
+          eq(itemAspects.itemId, itemId),
+          eq(itemAspects.aspectId, aspectId),
+        ),
       )
       .returning();
 
@@ -907,42 +1113,54 @@ export const itemRepository = {
     }
   },
 
-  async getAspects({ itemId }: { itemId: string }) {
+  async getAspects({ orgId, itemId }: { orgId: string; itemId: string }) {
     const rows = await db
       .select()
       .from(itemAspects)
-      .where(eq(itemAspects.itemId, itemId));
+      .where(
+        and(
+          additiveOrgFilter(itemAspects.ownerOrgId, orgId),
+          eq(itemAspects.itemId, itemId),
+        ),
+      );
     return rows;
   },
 
   // --- Parameter value management ---
 
   async setParameterValue({
+    orgId,
     itemId,
     parameterDefinitionId,
     itemAspectId,
     value,
   }: {
+    orgId: string;
     itemId: string;
     parameterDefinitionId: string;
     itemAspectId?: string | null;
     value: unknown;
   }) {
+    // Parent item determines junction scope on insert.
+    const parent = await itemRepository.findById({ orgId, id: itemId });
+    if (!parent) throw new Error(`Item ${itemId} not found`);
+
     // Try to update existing
     const existing = await db
       .select()
       .from(itemParameterValues)
       .where(
         and(
+          additiveOrgFilter(itemParameterValues.ownerOrgId, orgId),
           eq(itemParameterValues.itemId, itemId),
           eq(
             itemParameterValues.parameterDefinitionId,
-            parameterDefinitionId
+            parameterDefinitionId,
           ),
           itemAspectId
             ? eq(itemParameterValues.itemAspectId, itemAspectId)
-            : undefined
-        )
+            : undefined,
+        ),
       );
 
     if (existing.length > 0) {
@@ -954,10 +1172,11 @@ export const itemRepository = {
       return updated;
     }
 
-    // Create new (standalone parameter or ad-hoc)
+    // Create new (standalone parameter or ad-hoc); inherits item scope.
     const [created] = await db
       .insert(itemParameterValues)
       .values({
+        ownerOrgId: parent.ownerOrgId,
         itemId,
         parameterDefinitionId,
         itemAspectId: itemAspectId ?? null,
@@ -968,7 +1187,13 @@ export const itemRepository = {
     return created;
   },
 
-  async getParameterValues({ itemId }: { itemId: string }) {
+  async getParameterValues({
+    orgId,
+    itemId,
+  }: {
+    orgId: string;
+    itemId: string;
+  }) {
     return db
       .select({
         id: itemParameterValues.id,
@@ -984,9 +1209,14 @@ export const itemRepository = {
         parameterDefinitions,
         eq(
           itemParameterValues.parameterDefinitionId,
-          parameterDefinitions.id
-        )
+          parameterDefinitions.id,
+        ),
       )
-      .where(eq(itemParameterValues.itemId, itemId));
+      .where(
+        and(
+          additiveOrgFilter(itemParameterValues.ownerOrgId, orgId),
+          eq(itemParameterValues.itemId, itemId),
+        ),
+      );
   },
 };

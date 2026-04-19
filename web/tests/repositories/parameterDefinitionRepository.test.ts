@@ -1,10 +1,12 @@
 import { parameterDefinitionRepository } from "@/repositories/parameterDefinitionRepository";
 import { transactionRepository } from "@/repositories/transactionRepository";
+import { testCtx } from "../setup";
 
 describe("parameterDefinitionRepository", () => {
   describe("create", () => {
     it("creates a numeric parameter with unit", async () => {
       const pd = await parameterDefinitionRepository.create({
+        ...testCtx,
         name: "Thread diameter",
         dataType: "numeric",
         unit: "mm",
@@ -20,6 +22,7 @@ describe("parameterDefinitionRepository", () => {
 
     it("creates a boolean parameter", async () => {
       const pd = await parameterDefinitionRepository.create({
+        ...testCtx,
         name: "RoHS compliant",
         dataType: "boolean",
         defaultValue: true,
@@ -31,6 +34,7 @@ describe("parameterDefinitionRepository", () => {
 
     it("creates an enum parameter with enumValues", async () => {
       const pd = await parameterDefinitionRepository.create({
+        ...testCtx,
         name: "Drive style",
         dataType: "enum",
         constraints: {
@@ -47,6 +51,7 @@ describe("parameterDefinitionRepository", () => {
     it("rejects enum without enumValues", async () => {
       await expect(
         parameterDefinitionRepository.create({
+          ...testCtx,
           name: "Bad enum",
           dataType: "enum",
         })
@@ -55,6 +60,7 @@ describe("parameterDefinitionRepository", () => {
 
     it("creates numeric with range constraints", async () => {
       const pd = await parameterDefinitionRepository.create({
+        ...testCtx,
         name: "Thread pitch",
         dataType: "numeric",
         unit: "mm",
@@ -66,6 +72,7 @@ describe("parameterDefinitionRepository", () => {
 
     it("creates with default value", async () => {
       const pd = await parameterDefinitionRepository.create({
+        ...testCtx,
         name: "Thread direction",
         dataType: "text",
         defaultValue: "right",
@@ -76,12 +83,15 @@ describe("parameterDefinitionRepository", () => {
 
     it("logs a transaction", async () => {
       const pd = await parameterDefinitionRepository.create({
+        ...testCtx,
         name: "Length",
         dataType: "numeric",
         unit: "mm",
       });
 
-      const txns = await transactionRepository.listRecent();
+      const txns = await transactionRepository.listRecent({
+        orgId: testCtx.orgId,
+      });
       expect(txns).toHaveLength(1);
       expect(txns[0].actionType).toBe("parameterDefinition.create");
       expect(txns[0].entityId).toBe(pd.id);
@@ -89,11 +99,13 @@ describe("parameterDefinitionRepository", () => {
 
     it("rejects duplicate names", async () => {
       await parameterDefinitionRepository.create({
+        ...testCtx,
         name: "Length",
         dataType: "numeric",
       });
       await expect(
         parameterDefinitionRepository.create({
+          ...testCtx,
           name: "Length",
           dataType: "numeric",
         })
@@ -104,17 +116,22 @@ describe("parameterDefinitionRepository", () => {
   describe("findById", () => {
     it("returns the parameter definition by ID", async () => {
       const created = await parameterDefinitionRepository.create({
+        ...testCtx,
         name: "Length",
         dataType: "numeric",
         unit: "mm",
       });
-      const found = await parameterDefinitionRepository.findById({ id: created.id });
+      const found = await parameterDefinitionRepository.findById({
+        orgId: testCtx.orgId,
+        id: created.id,
+      });
       expect(found).not.toBeNull();
       expect(found!.name).toBe("Length");
     });
 
     it("returns null for nonexistent ID", async () => {
       const found = await parameterDefinitionRepository.findById({
+        orgId: testCtx.orgId,
         id: "00000000-0000-0000-0000-000000000000",
       });
       expect(found).toBeNull();
@@ -124,11 +141,13 @@ describe("parameterDefinitionRepository", () => {
   describe("findByName", () => {
     it("returns the parameter definition by name", async () => {
       await parameterDefinitionRepository.create({
+        ...testCtx,
         name: "Voltage rating",
         dataType: "numeric",
         unit: "V",
       });
       const found = await parameterDefinitionRepository.findByName({
+        orgId: testCtx.orgId,
         name: "Voltage rating",
       });
       expect(found).not.toBeNull();
@@ -136,18 +155,35 @@ describe("parameterDefinitionRepository", () => {
     });
 
     it("returns null for nonexistent name", async () => {
-      const found = await parameterDefinitionRepository.findByName({ name: "Nope" });
+      const found = await parameterDefinitionRepository.findByName({
+        orgId: testCtx.orgId,
+        name: "Nope",
+      });
       expect(found).toBeNull();
     });
   });
 
   describe("list", () => {
     it("returns all parameter definitions ordered by name", async () => {
-      await parameterDefinitionRepository.create({ name: "Voltage", dataType: "numeric" });
-      await parameterDefinitionRepository.create({ name: "Color", dataType: "text" });
-      await parameterDefinitionRepository.create({ name: "Length", dataType: "numeric" });
+      await parameterDefinitionRepository.create({
+        ...testCtx,
+        name: "Voltage",
+        dataType: "numeric",
+      });
+      await parameterDefinitionRepository.create({
+        ...testCtx,
+        name: "Color",
+        dataType: "text",
+      });
+      await parameterDefinitionRepository.create({
+        ...testCtx,
+        name: "Length",
+        dataType: "numeric",
+      });
 
-      const all = await parameterDefinitionRepository.list();
+      const all = await parameterDefinitionRepository.list({
+        orgId: testCtx.orgId,
+      });
       expect(all).toHaveLength(3);
       expect(all[0].name).toBe("Color");
       expect(all[1].name).toBe("Length");
@@ -155,7 +191,9 @@ describe("parameterDefinitionRepository", () => {
     });
 
     it("returns empty array when none exist", async () => {
-      const all = await parameterDefinitionRepository.list();
+      const all = await parameterDefinitionRepository.list({
+        orgId: testCtx.orgId,
+      });
       expect(all).toHaveLength(0);
     });
   });
@@ -163,12 +201,14 @@ describe("parameterDefinitionRepository", () => {
   describe("update", () => {
     it("updates fields and returns updated record", async () => {
       const created = await parameterDefinitionRepository.create({
+        ...testCtx,
         name: "Length",
         dataType: "numeric",
         unit: "mm",
       });
 
       const updated = await parameterDefinitionRepository.update({
+        ...testCtx,
         id: created.id,
         unit: "inches",
         defaultValue: 1.0,
@@ -181,6 +221,7 @@ describe("parameterDefinitionRepository", () => {
 
     it("validates enum constraints on update", async () => {
       const created = await parameterDefinitionRepository.create({
+        ...testCtx,
         name: "Drive style",
         dataType: "enum",
         constraints: { enumValues: ["Phillips", "Torx"] },
@@ -188,6 +229,7 @@ describe("parameterDefinitionRepository", () => {
 
       await expect(
         parameterDefinitionRepository.update({
+          ...testCtx,
           id: created.id,
           constraints: {},
         })
@@ -196,15 +238,19 @@ describe("parameterDefinitionRepository", () => {
 
     it("logs a transaction", async () => {
       const created = await parameterDefinitionRepository.create({
+        ...testCtx,
         name: "Length",
         dataType: "numeric",
       });
       await parameterDefinitionRepository.update({
+        ...testCtx,
         id: created.id,
         unit: "mm",
       });
 
-      const txns = await transactionRepository.listRecent();
+      const txns = await transactionRepository.listRecent({
+        orgId: testCtx.orgId,
+      });
       const updateTx = txns.find(
         (t) => t.actionType === "parameterDefinition.update"
       );
@@ -214,6 +260,7 @@ describe("parameterDefinitionRepository", () => {
     it("throws for nonexistent parameter definition", async () => {
       await expect(
         parameterDefinitionRepository.update({
+          ...testCtx,
           id: "00000000-0000-0000-0000-000000000000",
           unit: "mm",
         })
@@ -224,23 +271,36 @@ describe("parameterDefinitionRepository", () => {
   describe("remove", () => {
     it("deletes the parameter definition", async () => {
       const created = await parameterDefinitionRepository.create({
+        ...testCtx,
         name: "Length",
         dataType: "numeric",
       });
-      await parameterDefinitionRepository.remove({ id: created.id });
+      await parameterDefinitionRepository.remove({
+        ...testCtx,
+        id: created.id,
+      });
 
-      const found = await parameterDefinitionRepository.findById({ id: created.id });
+      const found = await parameterDefinitionRepository.findById({
+        orgId: testCtx.orgId,
+        id: created.id,
+      });
       expect(found).toBeNull();
     });
 
     it("logs a transaction", async () => {
       const created = await parameterDefinitionRepository.create({
+        ...testCtx,
         name: "Length",
         dataType: "numeric",
       });
-      await parameterDefinitionRepository.remove({ id: created.id });
+      await parameterDefinitionRepository.remove({
+        ...testCtx,
+        id: created.id,
+      });
 
-      const txns = await transactionRepository.listRecent();
+      const txns = await transactionRepository.listRecent({
+        orgId: testCtx.orgId,
+      });
       const deleteTx = txns.find(
         (t) => t.actionType === "parameterDefinition.delete"
       );
@@ -251,6 +311,7 @@ describe("parameterDefinitionRepository", () => {
     it("throws for nonexistent parameter definition", async () => {
       await expect(
         parameterDefinitionRepository.remove({
+          ...testCtx,
           id: "00000000-0000-0000-0000-000000000000",
         })
       ).rejects.toThrow("not found");
