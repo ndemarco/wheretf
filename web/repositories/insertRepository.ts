@@ -303,7 +303,12 @@ export const insertRepository = {
           interfaceTypeId: locationInterfacesAccepted.interfaceTypeId,
         })
         .from(locationInterfacesAccepted)
-        .where(inArray(locationInterfacesAccepted.locationId, recIds));
+        .where(
+          and(
+            eq(locationInterfacesAccepted.ownerOrgId, orgId),
+            inArray(locationInterfacesAccepted.locationId, recIds),
+          ),
+        );
       for (const r of accRows) {
         let s = acceptedByLoc.get(r.locationId);
         if (!s) {
