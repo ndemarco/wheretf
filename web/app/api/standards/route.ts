@@ -1,22 +1,22 @@
 import { NextRequest, NextResponse } from "next/server";
 import { standardRepository } from "@/repositories/standardRepository";
+import { requireContext, errorResponse } from "@/lib/auth/route";
 
 export async function GET() {
   try {
-    const items = await standardRepository.list();
+    const ctx = await requireContext();
+    const items = await standardRepository.list({ orgId: ctx.activeOrgId });
     return NextResponse.json({ standards: items });
-  } catch (error: unknown) {
-    return NextResponse.json(
-      { error: error instanceof Error ? error.message : "Unknown error" },
-      { status: 500 }
-    );
+  } catch (err) {
+    return errorResponse(err);
   }
 }
 
 export async function POST(request: NextRequest) {
   try {
+    const ctx = await requireContext();
     const body = await request.json();
-    const { name, description, domainTag, aspectIds } = body;
+    const { name, description, domainTag, asGlobal, aspectIds } = body;
 
     if (!name) {
       return NextResponse.json(
@@ -26,6 +26,9 @@ export async function POST(request: NextRequest) {
     }
 
     const standard = await standardRepository.create({
+      userId: ctx.userId,
+      orgId: ctx.activeOrgId,
+      asGlobal: Boolean(asGlobal),
       name,
       description,
       domainTag,
@@ -34,6 +37,8 @@ export async function POST(request: NextRequest) {
     if (Array.isArray(aspectIds) && aspectIds.length > 0) {
       for (const aspectId of aspectIds) {
         await standardRepository.addAspect({
+          userId: ctx.userId,
+          orgId: ctx.activeOrgId,
           standardId: standard.id,
           aspectId,
         });
@@ -41,10 +46,7 @@ export async function POST(request: NextRequest) {
     }
 
     return NextResponse.json({ standard }, { status: 201 });
-  } catch (error: unknown) {
-    return NextResponse.json(
-      { error: error instanceof Error ? error.message : "Unknown error" },
-      { status: 500 }
-    );
+  } catch (err) {
+    return errorResponse(err);
   }
 }

@@ -1,13 +1,18 @@
 import { NextRequest, NextResponse } from "next/server";
 import { assignmentRepository } from "@/repositories/assignmentRepository";
+import { requireContext, errorResponse } from "@/lib/auth/route";
 
 export async function GET(
   _request: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ) {
   try {
+    const ctx = await requireContext();
     const { id } = await params;
-    const assignment = await assignmentRepository.findById({ id });
+    const assignment = await assignmentRepository.findById({
+      orgId: ctx.activeOrgId,
+      id,
+    });
     if (!assignment) {
       return NextResponse.json(
         { error: "Assignment not found" },
@@ -16,10 +21,7 @@ export async function GET(
     }
     return NextResponse.json({ assignment });
   } catch (err) {
-    return NextResponse.json(
-      { error: err instanceof Error ? err.message : "Unexpected error" },
-      { status: 500 },
-    );
+    return errorResponse(err);
   }
 }
 
@@ -28,14 +30,15 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> },
 ) {
   try {
+    const ctx = await requireContext();
     const { id } = await params;
-    await assignmentRepository.remove({ id });
+    await assignmentRepository.remove({
+      userId: ctx.userId,
+      orgId: ctx.activeOrgId,
+      id,
+    });
     return NextResponse.json({ success: true });
   } catch (err) {
-    const message = err instanceof Error ? err.message : "Unexpected error";
-    if (message.includes("not found")) {
-      return NextResponse.json({ error: message }, { status: 404 });
-    }
-    return NextResponse.json({ error: message }, { status: 400 });
+    return errorResponse(err);
   }
 }

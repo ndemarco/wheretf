@@ -1,32 +1,35 @@
 import { NextRequest, NextResponse } from "next/server";
 import { templateRepository } from "@/repositories/templateRepository";
+import { requireContext, errorResponse } from "@/lib/auth/route";
 
 type RouteParams = { params: Promise<{ id: string }> };
 
 export async function POST(_request: NextRequest, { params }: RouteParams) {
   try {
+    const ctx = await requireContext();
     const { id } = await params;
-    const template = await templateRepository.hide({ id });
+    const template = await templateRepository.hide({
+      userId: ctx.userId,
+      orgId: ctx.activeOrgId,
+      id,
+    });
     return NextResponse.json({ template });
   } catch (err) {
-    const message = err instanceof Error ? err.message : "Unknown error";
-    if (message.includes("not found")) {
-      return NextResponse.json({ error: message }, { status: 404 });
-    }
-    return NextResponse.json({ error: message }, { status: 500 });
+    return errorResponse(err);
   }
 }
 
 export async function DELETE(_request: NextRequest, { params }: RouteParams) {
   try {
+    const ctx = await requireContext();
     const { id } = await params;
-    const template = await templateRepository.unhide({ id });
+    const template = await templateRepository.unhide({
+      userId: ctx.userId,
+      orgId: ctx.activeOrgId,
+      id,
+    });
     return NextResponse.json({ template });
   } catch (err) {
-    const message = err instanceof Error ? err.message : "Unknown error";
-    if (message.includes("not found")) {
-      return NextResponse.json({ error: message }, { status: 404 });
-    }
-    return NextResponse.json({ error: message }, { status: 500 });
+    return errorResponse(err);
   }
 }

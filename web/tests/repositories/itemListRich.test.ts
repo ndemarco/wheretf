@@ -5,6 +5,7 @@ import { aspectRepository } from "@/repositories/aspectRepository";
 import { moduleRepository } from "@/repositories/moduleRepository";
 import { locationRepository } from "@/repositories/locationRepository";
 import { assignmentRepository } from "@/repositories/assignmentRepository";
+import { testCtx } from "../setup";
 
 // Helper: create a full machine screw item with taxonomy
 async function seedScrew({
@@ -30,33 +31,39 @@ async function seedScrew({
   lengthDefId: string;
   fastenersId: string;
 }) {
-  const item = await itemRepository.create({ name });
+  const item = await itemRepository.create({ ...testCtx, name });
   await itemRepository.addCategory({
+    orgId: testCtx.orgId,
     itemId: item.id,
     categoryId: fastenersId,
     isPrimary: true,
   });
   const threadIa = await itemRepository.applyAspect({
+    orgId: testCtx.orgId,
     itemId: item.id,
     aspectId: threadAspectId,
   });
   const headIa = await itemRepository.applyAspect({
+    orgId: testCtx.orgId,
     itemId: item.id,
     aspectId: headAspectId,
   });
   await itemRepository.setParameterValue({
+    orgId: testCtx.orgId,
     itemId: item.id,
     parameterDefinitionId: threadDiameterDefId,
     itemAspectId: threadIa.id,
     value: threadDiameter,
   });
   await itemRepository.setParameterValue({
+    orgId: testCtx.orgId,
     itemId: item.id,
     parameterDefinitionId: headTypeDefId,
     itemAspectId: headIa.id,
     value: headType,
   });
   await itemRepository.setParameterValue({
+    orgId: testCtx.orgId,
     itemId: item.id,
     parameterDefinitionId: lengthDefId,
     value: length,
@@ -80,6 +87,7 @@ describe("itemRepository.listRich", () => {
   beforeEach(async () => {
     // Categories
     const fasteners = await categoryRepository.create({
+      ...testCtx,
       name: "Fasteners",
       icon: "screw",
       color: "#4488cc",
@@ -87,6 +95,7 @@ describe("itemRepository.listRich", () => {
     fastenersId = fasteners.id;
 
     const electronics = await categoryRepository.create({
+      ...testCtx,
       name: "Electronics",
       icon: "chip",
       color: "#44cc88",
@@ -95,18 +104,21 @@ describe("itemRepository.listRich", () => {
 
     // Parameter definitions
     const threadDiameterDef = await parameterDefinitionRepository.create({
+      ...testCtx,
       name: "Thread diameter",
       dataType: "text",
     });
     threadDiameterDefId = threadDiameterDef.id;
 
     const headTypeDef = await parameterDefinitionRepository.create({
+      ...testCtx,
       name: "Head type",
       dataType: "text",
     });
     headTypeDefId = headTypeDef.id;
 
     const lengthDef = await parameterDefinitionRepository.create({
+      ...testCtx,
       name: "Length",
       dataType: "numeric",
       unit: "mm",
@@ -114,42 +126,55 @@ describe("itemRepository.listRich", () => {
     lengthDefId = lengthDef.id;
 
     const resistanceDef = await parameterDefinitionRepository.create({
+      ...testCtx,
       name: "Resistance",
       dataType: "text",
     });
     resistanceDefId = resistanceDef.id;
 
     const packageCodeDef = await parameterDefinitionRepository.create({
+      ...testCtx,
       name: "Package code",
       dataType: "text",
     });
     packageCodeDefId = packageCodeDef.id;
 
     // Aspects
-    const threadAspect = await aspectRepository.create({ name: "Thread" });
+    const threadAspect = await aspectRepository.create({
+      ...testCtx,
+      name: "Thread",
+    });
     threadAspectId = threadAspect.id;
     await aspectRepository.addParameter({
+      ...testCtx,
       aspectId: threadAspectId,
       parameterDefinitionId: threadDiameterDefId,
       required: true,
     });
 
-    const headAspect = await aspectRepository.create({ name: "Head" });
+    const headAspect = await aspectRepository.create({
+      ...testCtx,
+      name: "Head",
+    });
     headAspectId = headAspect.id;
     await aspectRepository.addParameter({
+      ...testCtx,
       aspectId: headAspectId,
       parameterDefinitionId: headTypeDefId,
     });
 
     const electricalAspect = await aspectRepository.create({
+      ...testCtx,
       name: "Electrical",
     });
     electricalAspectId = electricalAspect.id;
     await aspectRepository.addParameter({
+      ...testCtx,
       aspectId: electricalAspectId,
       parameterDefinitionId: resistanceDefId,
     });
     await aspectRepository.addParameter({
+      ...testCtx,
       aspectId: electricalAspectId,
       parameterDefinitionId: packageCodeDefId,
     });
@@ -170,7 +195,7 @@ describe("itemRepository.listRich", () => {
         fastenersId,
       });
 
-      const result = await itemRepository.listRich();
+      const result = await itemRepository.listRich({ orgId: testCtx.orgId });
 
       expect(result.items).toHaveLength(1);
       expect(result.total).toBe(1);
@@ -189,7 +214,7 @@ describe("itemRepository.listRich", () => {
       expect(threadAspect).toBeDefined();
       expect(threadAspect!.parameters).toHaveLength(1);
       expect(threadAspect!.parameters[0].parameterName).toBe(
-        "Thread diameter"
+        "Thread diameter",
       );
       expect(threadAspect!.parameters[0].value).toBe("M3");
 
@@ -200,7 +225,7 @@ describe("itemRepository.listRich", () => {
     });
 
     it("returns empty result when no items exist", async () => {
-      const result = await itemRepository.listRich();
+      const result = await itemRepository.listRich({ orgId: testCtx.orgId });
       expect(result.items).toHaveLength(0);
       expect(result.total).toBe(0);
     });
@@ -234,6 +259,7 @@ describe("itemRepository.listRich", () => {
       });
 
       const result = await itemRepository.listRich({
+        orgId: testCtx.orgId,
         filters: [
           { parameterDefinitionId: threadDiameterDefId, value: "M3" },
         ],
@@ -270,6 +296,7 @@ describe("itemRepository.listRich", () => {
       });
 
       const result = await itemRepository.listRich({
+        orgId: testCtx.orgId,
         filters: [
           { parameterDefinitionId: threadDiameterDefId, value: "M3" },
           { parameterDefinitionId: headTypeDefId, value: "SHCS" },
@@ -295,6 +322,7 @@ describe("itemRepository.listRich", () => {
       });
 
       const result = await itemRepository.listRich({
+        orgId: testCtx.orgId,
         filters: [
           { parameterDefinitionId: threadDiameterDefId, value: "M5" },
         ],
@@ -320,14 +348,19 @@ describe("itemRepository.listRich", () => {
       });
 
       // Create a resistor with Electronics category
-      const resistor = await itemRepository.create({ name: "10kΩ Resistor" });
+      const resistor = await itemRepository.create({
+        ...testCtx,
+        name: "10kΩ Resistor",
+      });
       await itemRepository.addCategory({
+        orgId: testCtx.orgId,
         itemId: resistor.id,
         categoryId: electronicsId,
         isPrimary: true,
       });
 
       const result = await itemRepository.listRich({
+        orgId: testCtx.orgId,
         categoryId: fastenersId,
       });
 
@@ -363,7 +396,10 @@ describe("itemRepository.listRich", () => {
         fastenersId,
       });
 
-      const result = await itemRepository.listRich({ query: "M3" });
+      const result = await itemRepository.listRich({
+        orgId: testCtx.orgId,
+        query: "M3",
+      });
 
       expect(result.items).toHaveLength(1);
       expect(result.items[0].name).toBe("M3x10 SHCS");
@@ -371,11 +407,15 @@ describe("itemRepository.listRich", () => {
 
     it("searches by description", async () => {
       const item = await itemRepository.create({
+        ...testCtx,
         name: "Screw",
         description: "Stainless steel fastener",
       });
 
-      const result = await itemRepository.listRich({ query: "stainless" });
+      const result = await itemRepository.listRich({
+        orgId: testCtx.orgId,
+        query: "stainless",
+      });
 
       expect(result.items).toHaveLength(1);
       expect(result.items[0].name).toBe("Screw");
@@ -397,20 +437,26 @@ describe("itemRepository.listRich", () => {
 
       // Create a resistor with "10k" parameter value
       const resistor = await itemRepository.create({
+        ...testCtx,
         name: "SMD Resistor",
       });
       const ia = await itemRepository.applyAspect({
+        orgId: testCtx.orgId,
         itemId: resistor.id,
         aspectId: electricalAspectId,
       });
       await itemRepository.setParameterValue({
+        orgId: testCtx.orgId,
         itemId: resistor.id,
         parameterDefinitionId: resistanceDefId,
         itemAspectId: ia.id,
         value: "10kΩ",
       });
 
-      const result = await itemRepository.listRich({ query: "10k" });
+      const result = await itemRepository.listRich({
+        orgId: testCtx.orgId,
+        query: "10k",
+      });
 
       expect(result.items).toHaveLength(1);
       expect(result.items[0].name).toBe("SMD Resistor");
@@ -443,6 +489,7 @@ describe("itemRepository.listRich", () => {
       });
 
       const result = await itemRepository.listRich({
+        orgId: testCtx.orgId,
         query: "x16",
         filters: [
           { parameterDefinitionId: threadDiameterDefId, value: "M3" },
@@ -481,7 +528,10 @@ describe("itemRepository.listRich", () => {
         fastenersId,
       });
 
-      const result = await itemRepository.listRich({ sortBy: "name" });
+      const result = await itemRepository.listRich({
+        orgId: testCtx.orgId,
+        sortBy: "name",
+      });
 
       expect(result.items[0].name).toBe("M3x10 SHCS");
       expect(result.items[1].name).toBe("M4x12 SHCS");
@@ -514,6 +564,7 @@ describe("itemRepository.listRich", () => {
       });
 
       const result = await itemRepository.listRich({
+        orgId: testCtx.orgId,
         sortBy: "name",
         sortDirection: "desc",
       });
@@ -549,6 +600,7 @@ describe("itemRepository.listRich", () => {
       });
 
       const result = await itemRepository.listRich({
+        orgId: testCtx.orgId,
         sortBy: lengthDefId,
         sortDirection: "asc",
       });
@@ -572,9 +624,13 @@ describe("itemRepository.listRich", () => {
       });
 
       // Item without Length parameter
-      const bare = await itemRepository.create({ name: "Bare Item" });
+      const bare = await itemRepository.create({
+        ...testCtx,
+        name: "Bare Item",
+      });
 
       const result = await itemRepository.listRich({
+        orgId: testCtx.orgId,
         sortBy: lengthDefId,
       });
 
@@ -598,24 +654,31 @@ describe("itemRepository.listRich", () => {
         fastenersId,
       });
 
-      const mod = await moduleRepository.create({ name: "MUSE", primaryDimensionLabel: "Level", primaryDimensionCount: 4 });
+      const mod = await moduleRepository.create({
+        ...testCtx,
+        name: "MUSE",
+        primaryDimensionLabel: "Level",
+        primaryDimensionCount: 4,
+      });
       const loc = await locationRepository.create({
+        ...testCtx,
         moduleId: mod.id,
         label: "A3",
         pathSegments: ["MUSE", "Level 2", "A3"],
         locationType: "fixed",
       });
       await assignmentRepository.create({
+        ...testCtx,
         itemId: screw.id,
         locationId: loc.id,
         assignmentType: "placed",
       });
 
-      const result = await itemRepository.listRich();
+      const result = await itemRepository.listRich({ orgId: testCtx.orgId });
 
       expect(result.items[0].assignments).toHaveLength(1);
       expect(result.items[0].assignments[0].locationPath).toBe(
-        "MUSE:Level 2:A3"
+        "MUSE:Level 2:A3",
       );
       expect(result.items[0].assignments[0].assignmentType).toBe("placed");
     });
@@ -625,32 +688,39 @@ describe("itemRepository.listRich", () => {
 describe("itemRepository.getCategoryCounts", () => {
   it("returns category counts", async () => {
     const fasteners = await categoryRepository.create({
+      ...testCtx,
       name: "Fasteners",
       sortOrder: 0,
     });
     const electronics = await categoryRepository.create({
+      ...testCtx,
       name: "Electronics",
       sortOrder: 1,
     });
 
-    const item1 = await itemRepository.create({ name: "Screw" });
-    const item2 = await itemRepository.create({ name: "Bolt" });
-    const item3 = await itemRepository.create({ name: "Resistor" });
+    const item1 = await itemRepository.create({ ...testCtx, name: "Screw" });
+    const item2 = await itemRepository.create({ ...testCtx, name: "Bolt" });
+    const item3 = await itemRepository.create({ ...testCtx, name: "Resistor" });
 
     await itemRepository.addCategory({
+      orgId: testCtx.orgId,
       itemId: item1.id,
       categoryId: fasteners.id,
     });
     await itemRepository.addCategory({
+      orgId: testCtx.orgId,
       itemId: item2.id,
       categoryId: fasteners.id,
     });
     await itemRepository.addCategory({
+      orgId: testCtx.orgId,
       itemId: item3.id,
       categoryId: electronics.id,
     });
 
-    const counts = await itemRepository.getCategoryCounts();
+    const counts = await itemRepository.getCategoryCounts({
+      orgId: testCtx.orgId,
+    });
 
     expect(counts).toHaveLength(2);
     expect(counts[0].name).toBe("Fasteners");
@@ -660,20 +730,26 @@ describe("itemRepository.getCategoryCounts", () => {
   });
 
   it("returns zero counts when no items match filters", async () => {
-    const fasteners = await categoryRepository.create({ name: "Fasteners" });
-    const item = await itemRepository.create({ name: "Screw" });
+    const fasteners = await categoryRepository.create({
+      ...testCtx,
+      name: "Fasteners",
+    });
+    const item = await itemRepository.create({ ...testCtx, name: "Screw" });
     await itemRepository.addCategory({
+      orgId: testCtx.orgId,
       itemId: item.id,
       categoryId: fasteners.id,
     });
 
     const threadDef = await parameterDefinitionRepository.create({
+      ...testCtx,
       name: "Thread diameter",
       dataType: "text",
     });
 
     // Filter by a value no item has
     const counts = await itemRepository.getCategoryCounts({
+      orgId: testCtx.orgId,
       filters: [{ parameterDefinitionId: threadDef.id, value: "M99" }],
     });
 

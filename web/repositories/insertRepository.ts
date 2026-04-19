@@ -11,6 +11,7 @@ import {
   modules,
   assignments,
 } from "@/db/schema";
+import { isolatedOrgFilter } from "@/lib/auth/scope";
 import { transactionRepository } from "./transactionRepository";
 import { getGridLabel } from "@/lib/gridLabels";
 
@@ -41,13 +42,19 @@ type InsertParentLocation = {
  */
 async function reparentInsertCells(
   tx: Parameters<Parameters<typeof db.transaction>[0]>[0],
+  orgId: string,
   insertId: string,
   receptacle: InsertParentLocation
 ) {
   const cells = await tx
     .select()
     .from(locations)
-    .where(eq(locations.insertId, insertId));
+    .where(
+      and(
+        isolatedOrgFilter(locations.ownerOrgId, orgId),
+        eq(locations.insertId, insertId),
+      ),
+    );
 
   const receptaclePath = (receptacle.pathSegments as string[]) ?? [];
   const byId = new Map<string, (typeof cells)[number]>();
@@ -78,12 +85,20 @@ async function reparentInsertCells(
         pathSegments: newSegments,
         updatedAt: new Date(),
       })
-      .where(eq(locations.id, cell.id));
+      .where(
+        and(
+          isolatedOrgFilter(locations.ownerOrgId, orgId),
+          eq(locations.id, cell.id),
+        ),
+      );
   }
 }
 
+// inserts is an isolated table. Every method is org-scoped.
 export const insertRepository = {
   async create({
+    userId,
+    orgId,
     name,
     templateId,
     templateVersionId,
@@ -92,6 +107,8 @@ export const insertRepository = {
     overrides,
     metadata,
   }: {
+    userId: string;
+    orgId: string;
     name?: string;
     templateId?: string;
     templateVersionId?: string;
@@ -106,6 +123,7 @@ export const insertRepository = {
       const [ins] = await tx
         .insert(inserts)
         .values({
+          ownerOrgId: orgId,
           uid,
           name,
           templateId,
@@ -150,6 +168,7 @@ export const insertRepository = {
               );
               const cellLabel = `${rowLabel}${colLabel}`;
               await tx.insert(locations).values({
+                ownerOrgId: orgId,
                 moduleId: null,
                 parentId: null,
                 label: cellLabel,
@@ -170,6 +189,8 @@ export const insertRepository = {
     });
 
     await transactionRepository.log({
+      userId,
+      orgId,
       actionType: "insert.create",
       entityType: "insert",
       entityId: insert.id,
@@ -180,24 +201,45 @@ export const insertRepository = {
     return insert;
   },
 
-  async findById({ id }: { id: string }) {
+  async findById({ orgId, id }: { orgId: string; id: string }) {
     const [insert] = await db
       .select()
       .from(inserts)
-      .where(eq(inserts.id, id));
+      .where(
+        and(isolatedOrgFilter(inserts.ownerOrgId, orgId), eq(inserts.id, id)),
+      );
     return insert ?? null;
   },
 
-  async findByLocationId({ locationId }: { locationId: string }) {
+  async findByLocationId({
+    orgId,
+    locationId,
+  }: {
+    orgId: string;
+    locationId: string;
+  }) {
     const [insert] = await db
       .select()
       .from(inserts)
-      .where(eq(inserts.locationId, locationId));
+      .where(
+        and(
+          isolatedOrgFilter(inserts.ownerOrgId, orgId),
+          eq(inserts.locationId, locationId),
+        ),
+      );
     return insert ?? null;
   },
 
-  async listUnplaced() {
-    return db.select().from(inserts).where(isNull(inserts.locationId));
+  async listUnplaced({ orgId }: { orgId: string }) {
+    return db
+      .select()
+      .from(inserts)
+      .where(
+        and(
+          isolatedOrgFilter(inserts.ownerOrgId, orgId),
+          isNull(inserts.locationId),
+        ),
+      );
   },
 
   /**
@@ -208,8 +250,14 @@ export const insertRepository = {
    *   - interface type compatible (or either side unspecified)
    *   - not the current host (already there)
    */
-  async listCompatibleReceptacles({ id }: { id: string }) {
-    const insert = await insertRepository.findById({ id });
+  async listCompatibleReceptacles({
+    orgId,
+    id,
+  }: {
+    orgId: string;
+    id: string;
+  }) {
+    const insert = await insertRepository.findById({ orgId, id });
     if (!insert) throw new Error(`Insert ${id} not found`);
 
     // Inserts inherit provided interfaces from their template version
@@ -238,7 +286,12 @@ export const insertRepository = {
       })
       .from(locations)
       .leftJoin(modules, eq(locations.moduleId, modules.id))
-      .where(eq(locations.locationType, "receptacle"));
+      .where(
+        and(
+          isolatedOrgFilter(locations.ownerOrgId, orgId),
+          eq(locations.locationType, "receptacle"),
+        ),
+      );
 
     // Batch-load accepted interface sets for all candidate receptacles.
     const recIds = receptacles.map((r) => r.id);
@@ -265,7 +318,12 @@ export const insertRepository = {
     const occupants = await db
       .select({ locationId: inserts.locationId })
       .from(inserts)
-      .where(isNotNull(inserts.locationId));
+      .where(
+        and(
+          isolatedOrgFilter(inserts.ownerOrgId, orgId),
+          isNotNull(inserts.locationId),
+        ),
+      );
     const occupied = new Set(
       occupants.map((o) => o.locationId).filter(Boolean) as string[]
     );
@@ -294,17 +352,19 @@ export const insertRepository = {
    *   - placement: 'placed' | 'unplaced' | 'all' (default 'all')
    */
   async listWithDetails({
+    orgId,
     templateId,
     interfaceTypeId,
     placement = "all",
     moduleId,
   }: {
+    orgId: string;
     templateId?: string;
     interfaceTypeId?: string;
     placement?: "placed" | "unplaced" | "all";
     moduleId?: string;
-  } = {}) {
-    const conditions: SQL[] = [];
+  }) {
+    const conditions: SQL[] = [isolatedOrgFilter(inserts.ownerOrgId, orgId)];
 
     if (templateId) conditions.push(eq(inserts.templateId, templateId));
     if (placement === "placed") conditions.push(isNotNull(inserts.locationId));
@@ -322,9 +382,7 @@ export const insertRepository = {
       );
     }
 
-    const where = conditions.length
-      ? and(...conditions)
-      : undefined;
+    const where = and(...conditions);
 
     const rows = await db
       .select({
@@ -416,14 +474,29 @@ export const insertRepository = {
     }));
   },
 
-  async place({ id, locationId }: { id: string; locationId: string }) {
-    const insert = await insertRepository.findById({ id });
+  async place({
+    userId,
+    orgId,
+    id,
+    locationId,
+  }: {
+    userId: string;
+    orgId: string;
+    id: string;
+    locationId: string;
+  }) {
+    const insert = await insertRepository.findById({ orgId, id });
     if (!insert) throw new Error(`Insert ${id} not found`);
 
     const [location] = await db
       .select()
       .from(locations)
-      .where(eq(locations.id, locationId));
+      .where(
+        and(
+          isolatedOrgFilter(locations.ownerOrgId, orgId),
+          eq(locations.id, locationId),
+        ),
+      );
     if (!location) throw new Error(`Location ${locationId} not found`);
 
     if (location.locationType !== "receptacle") {
@@ -469,7 +542,12 @@ export const insertRepository = {
     const occupants = await db
       .select({ id: inserts.id })
       .from(inserts)
-      .where(eq(inserts.locationId, locationId));
+      .where(
+        and(
+          isolatedOrgFilter(inserts.ownerOrgId, orgId),
+          eq(inserts.locationId, locationId),
+        ),
+      );
     if (occupants.find((o) => o.id !== id)) {
       throw new Error(
         `Location ${locationId} already holds another insert`
@@ -480,15 +558,22 @@ export const insertRepository = {
       const [ins] = await tx
         .update(inserts)
         .set({ locationId, updatedAt: new Date() })
-        .where(eq(inserts.id, id))
+        .where(
+          and(
+            isolatedOrgFilter(inserts.ownerOrgId, orgId),
+            eq(inserts.id, id),
+          ),
+        )
         .returning();
 
-      await reparentInsertCells(tx, id, location);
+      await reparentInsertCells(tx, orgId, id, location);
 
       return ins;
     });
 
     await transactionRepository.log({
+      userId,
+      orgId,
       actionType: "insert.place",
       entityType: "insert",
       entityId: id,
@@ -499,15 +584,28 @@ export const insertRepository = {
     return updated;
   },
 
-  async removeFromLocation({ id }: { id: string }) {
-    const before = await insertRepository.findById({ id });
+  async removeFromLocation({
+    userId,
+    orgId,
+    id,
+  }: {
+    userId: string;
+    orgId: string;
+    id: string;
+  }) {
+    const before = await insertRepository.findById({ orgId, id });
     if (!before) throw new Error(`Insert ${id} not found`);
 
     const updated = await db.transaction(async (tx) => {
       const [ins] = await tx
         .update(inserts)
         .set({ locationId: null, updatedAt: new Date() })
-        .where(eq(inserts.id, id))
+        .where(
+          and(
+            isolatedOrgFilter(inserts.ownerOrgId, orgId),
+            eq(inserts.id, id),
+          ),
+        )
         .returning();
 
       // Cells travel with the insert. When unplaced, they stay bound
@@ -516,7 +614,12 @@ export const insertRepository = {
       const cells = await tx
         .select()
         .from(locations)
-        .where(eq(locations.insertId, id));
+        .where(
+          and(
+            isolatedOrgFilter(locations.ownerOrgId, orgId),
+            eq(locations.insertId, id),
+          ),
+        );
       for (const cell of cells) {
         const segments = [cell.label];
         await tx
@@ -528,13 +631,20 @@ export const insertRepository = {
             pathSegments: segments,
             updatedAt: new Date(),
           })
-          .where(eq(locations.id, cell.id));
+          .where(
+            and(
+              isolatedOrgFilter(locations.ownerOrgId, orgId),
+              eq(locations.id, cell.id),
+            ),
+          );
       }
 
       return ins;
     });
 
     await transactionRepository.log({
+      userId,
+      orgId,
       actionType: "insert.removeFromLocation",
       entityType: "insert",
       entityId: id,
@@ -546,9 +656,13 @@ export const insertRepository = {
   },
 
   async update({
+    userId,
+    orgId,
     id,
     ...updates
   }: {
+    userId: string;
+    orgId: string;
     id: string;
     name?: string;
     templateId?: string;
@@ -558,16 +672,20 @@ export const insertRepository = {
     overrides?: Record<string, unknown>;
     metadata?: Record<string, unknown>;
   }) {
-    const before = await insertRepository.findById({ id });
+    const before = await insertRepository.findById({ orgId, id });
     if (!before) throw new Error(`Insert ${id} not found`);
 
     const [updated] = await db
       .update(inserts)
       .set({ ...updates, updatedAt: new Date() })
-      .where(eq(inserts.id, id))
+      .where(
+        and(isolatedOrgFilter(inserts.ownerOrgId, orgId), eq(inserts.id, id)),
+      )
       .returning();
 
     await transactionRepository.log({
+      userId,
+      orgId,
       actionType: "insert.update",
       entityType: "insert",
       entityId: id,
@@ -578,13 +696,27 @@ export const insertRepository = {
     return updated;
   },
 
-  async remove({ id }: { id: string }) {
-    const before = await insertRepository.findById({ id });
+  async remove({
+    userId,
+    orgId,
+    id,
+  }: {
+    userId: string;
+    orgId: string;
+    id: string;
+  }) {
+    const before = await insertRepository.findById({ orgId, id });
     if (!before) throw new Error(`Insert ${id} not found`);
 
-    await db.delete(inserts).where(eq(inserts.id, id));
+    await db
+      .delete(inserts)
+      .where(
+        and(isolatedOrgFilter(inserts.ownerOrgId, orgId), eq(inserts.id, id)),
+      );
 
     await transactionRepository.log({
+      userId,
+      orgId,
       actionType: "insert.delete",
       entityType: "insert",
       entityId: id,

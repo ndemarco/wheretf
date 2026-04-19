@@ -1,11 +1,13 @@
 import { aspectRepository } from "@/repositories/aspectRepository";
 import { parameterDefinitionRepository } from "@/repositories/parameterDefinitionRepository";
 import { transactionRepository } from "@/repositories/transactionRepository";
+import { testCtx } from "../setup";
 
 describe("aspectRepository", () => {
   describe("create", () => {
     it("creates an aspect with name and description", async () => {
       const aspect = await aspectRepository.create({
+        ...testCtx,
         name: "Thread",
         description: "Threaded fastener properties",
       });
@@ -17,39 +19,54 @@ describe("aspectRepository", () => {
     });
 
     it("creates with minimal fields", async () => {
-      const aspect = await aspectRepository.create({ name: "Material" });
+      const aspect = await aspectRepository.create({
+        ...testCtx,
+        name: "Material",
+      });
 
       expect(aspect.name).toBe("Material");
       expect(aspect.description).toBeNull();
     });
 
     it("logs a transaction", async () => {
-      const aspect = await aspectRepository.create({ name: "Thread" });
+      const aspect = await aspectRepository.create({
+        ...testCtx,
+        name: "Thread",
+      });
 
-      const txns = await transactionRepository.listRecent();
+      const txns = await transactionRepository.listRecent({
+        orgId: testCtx.orgId,
+      });
       expect(txns).toHaveLength(1);
       expect(txns[0].actionType).toBe("aspect.create");
       expect(txns[0].entityId).toBe(aspect.id);
     });
 
     it("rejects duplicate names", async () => {
-      await aspectRepository.create({ name: "Thread" });
+      await aspectRepository.create({ ...testCtx, name: "Thread" });
       await expect(
-        aspectRepository.create({ name: "Thread" })
+        aspectRepository.create({ ...testCtx, name: "Thread" })
       ).rejects.toThrow();
     });
   });
 
   describe("findById", () => {
     it("returns the aspect by ID", async () => {
-      const created = await aspectRepository.create({ name: "Thread" });
-      const found = await aspectRepository.findById({ id: created.id });
+      const created = await aspectRepository.create({
+        ...testCtx,
+        name: "Thread",
+      });
+      const found = await aspectRepository.findById({
+        orgId: testCtx.orgId,
+        id: created.id,
+      });
       expect(found).not.toBeNull();
       expect(found!.name).toBe("Thread");
     });
 
     it("returns null for nonexistent ID", async () => {
       const found = await aspectRepository.findById({
+        orgId: testCtx.orgId,
         id: "00000000-0000-0000-0000-000000000000",
       });
       expect(found).toBeNull();
@@ -59,27 +76,34 @@ describe("aspectRepository", () => {
   describe("findByName", () => {
     it("returns the aspect by name", async () => {
       await aspectRepository.create({
+        ...testCtx,
         name: "Drive",
         description: "Fastener drive type",
       });
-      const found = await aspectRepository.findByName({ name: "Drive" });
+      const found = await aspectRepository.findByName({
+        orgId: testCtx.orgId,
+        name: "Drive",
+      });
       expect(found).not.toBeNull();
       expect(found!.description).toBe("Fastener drive type");
     });
 
     it("returns null for nonexistent name", async () => {
-      const found = await aspectRepository.findByName({ name: "Nope" });
+      const found = await aspectRepository.findByName({
+        orgId: testCtx.orgId,
+        name: "Nope",
+      });
       expect(found).toBeNull();
     });
   });
 
   describe("list", () => {
     it("returns all aspects ordered by name", async () => {
-      await aspectRepository.create({ name: "Thread" });
-      await aspectRepository.create({ name: "Drive" });
-      await aspectRepository.create({ name: "Material" });
+      await aspectRepository.create({ ...testCtx, name: "Thread" });
+      await aspectRepository.create({ ...testCtx, name: "Drive" });
+      await aspectRepository.create({ ...testCtx, name: "Material" });
 
-      const all = await aspectRepository.list();
+      const all = await aspectRepository.list({ orgId: testCtx.orgId });
       expect(all).toHaveLength(3);
       expect(all[0].name).toBe("Drive");
       expect(all[1].name).toBe("Material");
@@ -87,7 +111,7 @@ describe("aspectRepository", () => {
     });
 
     it("returns empty array when none exist", async () => {
-      const all = await aspectRepository.list();
+      const all = await aspectRepository.list({ orgId: testCtx.orgId });
       expect(all).toHaveLength(0);
     });
   });
@@ -95,11 +119,13 @@ describe("aspectRepository", () => {
   describe("update", () => {
     it("updates fields and returns updated record", async () => {
       const created = await aspectRepository.create({
+        ...testCtx,
         name: "Thread",
         description: "Original",
       });
 
       const updated = await aspectRepository.update({
+        ...testCtx,
         id: created.id,
         description: "Threaded fastener characteristics",
       });
@@ -109,10 +135,19 @@ describe("aspectRepository", () => {
     });
 
     it("logs a transaction", async () => {
-      const created = await aspectRepository.create({ name: "Thread" });
-      await aspectRepository.update({ id: created.id, description: "Updated" });
+      const created = await aspectRepository.create({
+        ...testCtx,
+        name: "Thread",
+      });
+      await aspectRepository.update({
+        ...testCtx,
+        id: created.id,
+        description: "Updated",
+      });
 
-      const txns = await transactionRepository.listRecent();
+      const txns = await transactionRepository.listRecent({
+        orgId: testCtx.orgId,
+      });
       const updateTx = txns.find((t) => t.actionType === "aspect.update");
       expect(updateTx).toBeDefined();
     });
@@ -120,6 +155,7 @@ describe("aspectRepository", () => {
     it("throws for nonexistent aspect", async () => {
       await expect(
         aspectRepository.update({
+          ...testCtx,
           id: "00000000-0000-0000-0000-000000000000",
           name: "Nope",
         })
@@ -129,38 +165,55 @@ describe("aspectRepository", () => {
 
   describe("remove", () => {
     it("deletes the aspect", async () => {
-      const created = await aspectRepository.create({ name: "Thread" });
-      await aspectRepository.remove({ id: created.id });
+      const created = await aspectRepository.create({
+        ...testCtx,
+        name: "Thread",
+      });
+      await aspectRepository.remove({ ...testCtx, id: created.id });
 
-      const found = await aspectRepository.findById({ id: created.id });
+      const found = await aspectRepository.findById({
+        orgId: testCtx.orgId,
+        id: created.id,
+      });
       expect(found).toBeNull();
     });
 
     it("cascades to aspect parameters", async () => {
-      const aspect = await aspectRepository.create({ name: "Thread" });
+      const aspect = await aspectRepository.create({
+        ...testCtx,
+        name: "Thread",
+      });
       const pd = await parameterDefinitionRepository.create({
+        ...testCtx,
         name: "Thread diameter",
         dataType: "numeric",
         unit: "mm",
       });
       await aspectRepository.addParameter({
+        ...testCtx,
         aspectId: aspect.id,
         parameterDefinitionId: pd.id,
       });
 
-      await aspectRepository.remove({ id: aspect.id });
+      await aspectRepository.remove({ ...testCtx, id: aspect.id });
 
       const params = await aspectRepository.getParameters({
+        orgId: testCtx.orgId,
         aspectId: aspect.id,
       });
       expect(params).toHaveLength(0);
     });
 
     it("logs a transaction", async () => {
-      const created = await aspectRepository.create({ name: "Thread" });
-      await aspectRepository.remove({ id: created.id });
+      const created = await aspectRepository.create({
+        ...testCtx,
+        name: "Thread",
+      });
+      await aspectRepository.remove({ ...testCtx, id: created.id });
 
-      const txns = await transactionRepository.listRecent();
+      const txns = await transactionRepository.listRecent({
+        orgId: testCtx.orgId,
+      });
       const deleteTx = txns.find((t) => t.actionType === "aspect.delete");
       expect(deleteTx).toBeDefined();
       expect(deleteTx!.afterState).toBeNull();
@@ -169,6 +222,7 @@ describe("aspectRepository", () => {
     it("throws for nonexistent aspect", async () => {
       await expect(
         aspectRepository.remove({
+          ...testCtx,
           id: "00000000-0000-0000-0000-000000000000",
         })
       ).rejects.toThrow("not found");
@@ -177,14 +231,19 @@ describe("aspectRepository", () => {
 
   describe("addParameter", () => {
     it("adds a parameter definition to an aspect", async () => {
-      const aspect = await aspectRepository.create({ name: "Thread" });
+      const aspect = await aspectRepository.create({
+        ...testCtx,
+        name: "Thread",
+      });
       const pd = await parameterDefinitionRepository.create({
+        ...testCtx,
         name: "Thread diameter",
         dataType: "numeric",
         unit: "mm",
       });
 
       const ap = await aspectRepository.addParameter({
+        ...testCtx,
         aspectId: aspect.id,
         parameterDefinitionId: pd.id,
         required: true,
@@ -198,14 +257,19 @@ describe("aspectRepository", () => {
     });
 
     it("adds with aspect-level default value", async () => {
-      const aspect = await aspectRepository.create({ name: "Thread" });
+      const aspect = await aspectRepository.create({
+        ...testCtx,
+        name: "Thread",
+      });
       const pd = await parameterDefinitionRepository.create({
+        ...testCtx,
         name: "Thread direction",
         dataType: "text",
         defaultValue: "right",
       });
 
       const ap = await aspectRepository.addParameter({
+        ...testCtx,
         aspectId: aspect.id,
         parameterDefinitionId: pd.id,
         defaultValue: "left",
@@ -216,12 +280,14 @@ describe("aspectRepository", () => {
 
     it("throws for nonexistent aspect", async () => {
       const pd = await parameterDefinitionRepository.create({
+        ...testCtx,
         name: "Length",
         dataType: "numeric",
       });
 
       await expect(
         aspectRepository.addParameter({
+          ...testCtx,
           aspectId: "00000000-0000-0000-0000-000000000000",
           parameterDefinitionId: pd.id,
         })
@@ -229,19 +295,25 @@ describe("aspectRepository", () => {
     });
 
     it("rejects duplicate parameter on same aspect", async () => {
-      const aspect = await aspectRepository.create({ name: "Thread" });
+      const aspect = await aspectRepository.create({
+        ...testCtx,
+        name: "Thread",
+      });
       const pd = await parameterDefinitionRepository.create({
+        ...testCtx,
         name: "Thread diameter",
         dataType: "numeric",
       });
 
       await aspectRepository.addParameter({
+        ...testCtx,
         aspectId: aspect.id,
         parameterDefinitionId: pd.id,
       });
 
       await expect(
         aspectRepository.addParameter({
+          ...testCtx,
           aspectId: aspect.id,
           parameterDefinitionId: pd.id,
         })
@@ -251,23 +323,30 @@ describe("aspectRepository", () => {
 
   describe("removeParameter", () => {
     it("removes a parameter from an aspect", async () => {
-      const aspect = await aspectRepository.create({ name: "Thread" });
+      const aspect = await aspectRepository.create({
+        ...testCtx,
+        name: "Thread",
+      });
       const pd = await parameterDefinitionRepository.create({
+        ...testCtx,
         name: "Thread diameter",
         dataType: "numeric",
       });
 
       await aspectRepository.addParameter({
+        ...testCtx,
         aspectId: aspect.id,
         parameterDefinitionId: pd.id,
       });
 
       await aspectRepository.removeParameter({
+        orgId: testCtx.orgId,
         aspectId: aspect.id,
         parameterDefinitionId: pd.id,
       });
 
       const params = await aspectRepository.getParameters({
+        orgId: testCtx.orgId,
         aspectId: aspect.id,
       });
       expect(params).toHaveLength(0);
@@ -276,6 +355,7 @@ describe("aspectRepository", () => {
     it("throws when parameter not on aspect", async () => {
       await expect(
         aspectRepository.removeParameter({
+          orgId: testCtx.orgId,
           aspectId: "00000000-0000-0000-0000-000000000000",
           parameterDefinitionId: "00000000-0000-0000-0000-000000000000",
         })
@@ -285,13 +365,18 @@ describe("aspectRepository", () => {
 
   describe("getParameters", () => {
     it("returns parameters with joined definition data", async () => {
-      const aspect = await aspectRepository.create({ name: "Thread" });
+      const aspect = await aspectRepository.create({
+        ...testCtx,
+        name: "Thread",
+      });
       const pd1 = await parameterDefinitionRepository.create({
+        ...testCtx,
         name: "Thread diameter",
         dataType: "numeric",
         unit: "mm",
       });
       const pd2 = await parameterDefinitionRepository.create({
+        ...testCtx,
         name: "Thread pitch",
         dataType: "numeric",
         unit: "mm",
@@ -299,12 +384,14 @@ describe("aspectRepository", () => {
       });
 
       await aspectRepository.addParameter({
+        ...testCtx,
         aspectId: aspect.id,
         parameterDefinitionId: pd1.id,
         required: true,
         sortOrder: 1,
       });
       await aspectRepository.addParameter({
+        ...testCtx,
         aspectId: aspect.id,
         parameterDefinitionId: pd2.id,
         required: false,
@@ -313,6 +400,7 @@ describe("aspectRepository", () => {
       });
 
       const params = await aspectRepository.getParameters({
+        orgId: testCtx.orgId,
         aspectId: aspect.id,
       });
 
@@ -328,28 +416,36 @@ describe("aspectRepository", () => {
     });
 
     it("returns ordered by sortOrder", async () => {
-      const aspect = await aspectRepository.create({ name: "Thread" });
+      const aspect = await aspectRepository.create({
+        ...testCtx,
+        name: "Thread",
+      });
       const pd1 = await parameterDefinitionRepository.create({
+        ...testCtx,
         name: "Alpha",
         dataType: "text",
       });
       const pd2 = await parameterDefinitionRepository.create({
+        ...testCtx,
         name: "Beta",
         dataType: "text",
       });
 
       await aspectRepository.addParameter({
+        ...testCtx,
         aspectId: aspect.id,
         parameterDefinitionId: pd2.id,
         sortOrder: 1,
       });
       await aspectRepository.addParameter({
+        ...testCtx,
         aspectId: aspect.id,
         parameterDefinitionId: pd1.id,
         sortOrder: 2,
       });
 
       const params = await aspectRepository.getParameters({
+        orgId: testCtx.orgId,
         aspectId: aspect.id,
       });
       expect(params[0].parameterName).toBe("Beta");
@@ -357,8 +453,12 @@ describe("aspectRepository", () => {
     });
 
     it("returns empty array for aspect with no parameters", async () => {
-      const aspect = await aspectRepository.create({ name: "Empty" });
+      const aspect = await aspectRepository.create({
+        ...testCtx,
+        name: "Empty",
+      });
       const params = await aspectRepository.getParameters({
+        orgId: testCtx.orgId,
         aspectId: aspect.id,
       });
       expect(params).toHaveLength(0);

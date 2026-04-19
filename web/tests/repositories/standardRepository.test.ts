@@ -3,10 +3,11 @@ import { aspectRepository } from "@/repositories/aspectRepository";
 import { parameterDefinitionRepository } from "@/repositories/parameterDefinitionRepository";
 import { itemRepository } from "@/repositories/itemRepository";
 import { transactionRepository } from "@/repositories/transactionRepository";
+import { testCtx } from "../setup";
 
 // Helper: create an aspect
 async function createAspect(name = "Machine Screw Threading") {
-  return aspectRepository.create({ name });
+  return aspectRepository.create({ ...testCtx, name });
 }
 
 // Helper: create a parameter definition
@@ -15,12 +16,18 @@ async function createParam(
   dataType: "numeric" | "text" | "boolean" | "enum" = "numeric",
   unit?: string
 ) {
-  return parameterDefinitionRepository.create({ name, dataType, unit });
+  return parameterDefinitionRepository.create({
+    ...testCtx,
+    name,
+    dataType,
+    unit,
+  });
 }
 
 // Helper: create a standard (no aspect — caller links via addAspect)
 async function createStandard(name = "UNC", domainTag?: string) {
   return standardRepository.create({
+    ...testCtx,
     name,
     description: `${name} standard`,
     domainTag,
@@ -34,7 +41,11 @@ async function createStandardForAspect(
   domainTag?: string
 ) {
   const standard = await createStandard(name, domainTag);
-  await standardRepository.addAspect({ standardId: standard.id, aspectId });
+  await standardRepository.addAspect({
+    ...testCtx,
+    standardId: standard.id,
+    aspectId,
+  });
   return standard;
 }
 
@@ -57,7 +68,9 @@ describe("standardRepository", () => {
     it("logs a transaction", async () => {
       const standard = await createStandard();
 
-      const txns = await transactionRepository.listRecent();
+      const txns = await transactionRepository.listRecent({
+        orgId: testCtx.orgId,
+      });
       const stdTxn = txns.find((t) => t.actionType === "standard.create");
       expect(stdTxn).toBeDefined();
       expect(stdTxn!.entityId).toBe(standard.id);
@@ -72,7 +85,10 @@ describe("standardRepository", () => {
   describe("findById", () => {
     it("returns the standard by ID", async () => {
       const created = await createStandard();
-      const found = await standardRepository.findById({ id: created.id });
+      const found = await standardRepository.findById({
+        orgId: testCtx.orgId,
+        id: created.id,
+      });
 
       expect(found).not.toBeNull();
       expect(found!.name).toBe("UNC");
@@ -80,6 +96,7 @@ describe("standardRepository", () => {
 
     it("returns null for nonexistent ID", async () => {
       const found = await standardRepository.findById({
+        orgId: testCtx.orgId,
         id: "00000000-0000-0000-0000-000000000000",
       });
       expect(found).toBeNull();
@@ -89,7 +106,10 @@ describe("standardRepository", () => {
   describe("findByName", () => {
     it("returns the standard by name", async () => {
       await createStandard();
-      const found = await standardRepository.findByName({ name: "UNC" });
+      const found = await standardRepository.findByName({
+        orgId: testCtx.orgId,
+        name: "UNC",
+      });
 
       expect(found).not.toBeNull();
       expect(found!.name).toBe("UNC");
@@ -102,7 +122,7 @@ describe("standardRepository", () => {
       const unc = await createStandardForAspect(aspect.id, "UNC");
       await createStandardForAspect(aspect.id, "UNF");
 
-      const list = await standardRepository.list();
+      const list = await standardRepository.list({ orgId: testCtx.orgId });
       expect(list).toHaveLength(2);
       const uncEntry = list.find((s) => s.id === unc.id);
       expect(Number(uncEntry!.aspectCount)).toBe(1);
@@ -110,12 +130,12 @@ describe("standardRepository", () => {
 
     it("returns 0 aspectCount for unlinked standard", async () => {
       await createStandard("Orphan");
-      const list = await standardRepository.list();
+      const list = await standardRepository.list({ orgId: testCtx.orgId });
       expect(Number(list[0].aspectCount)).toBe(0);
     });
 
     it("returns empty array when none exist", async () => {
-      const list = await standardRepository.list();
+      const list = await standardRepository.list({ orgId: testCtx.orgId });
       expect(list).toHaveLength(0);
     });
   });
@@ -129,6 +149,7 @@ describe("standardRepository", () => {
       await createStandardForAspect(drive.id, "Phillips");
 
       const list = await standardRepository.listByAspect({
+        orgId: testCtx.orgId,
         aspectId: threading.id,
       });
       expect(list).toHaveLength(2);
@@ -140,18 +161,22 @@ describe("standardRepository", () => {
       const drive = await createAspect("Fastener Drive");
       const crossAspect = await createStandard("ISO 4762");
       await standardRepository.addAspect({
+        ...testCtx,
         standardId: crossAspect.id,
         aspectId: threading.id,
       });
       await standardRepository.addAspect({
+        ...testCtx,
         standardId: crossAspect.id,
         aspectId: drive.id,
       });
 
       const forThreading = await standardRepository.listByAspect({
+        orgId: testCtx.orgId,
         aspectId: threading.id,
       });
       const forDrive = await standardRepository.listByAspect({
+        orgId: testCtx.orgId,
         aspectId: drive.id,
       });
 
@@ -166,6 +191,7 @@ describe("standardRepository", () => {
       const standard = await createStandard();
 
       const link = await standardRepository.addAspect({
+        ...testCtx,
         standardId: standard.id,
         aspectId: aspect.id,
       });
@@ -178,11 +204,14 @@ describe("standardRepository", () => {
       const aspect = await createAspect();
       const standard = await createStandard();
       await standardRepository.addAspect({
+        ...testCtx,
         standardId: standard.id,
         aspectId: aspect.id,
       });
 
-      const txns = await transactionRepository.listRecent();
+      const txns = await transactionRepository.listRecent({
+        orgId: testCtx.orgId,
+      });
       const txn = txns.find((t) => t.actionType === "aspect_standard.create");
       expect(txn).toBeDefined();
     });
@@ -191,11 +220,13 @@ describe("standardRepository", () => {
       const aspect = await createAspect();
       const standard = await createStandard();
       await standardRepository.addAspect({
+        ...testCtx,
         standardId: standard.id,
         aspectId: aspect.id,
       });
       await expect(
         standardRepository.addAspect({
+          ...testCtx,
           standardId: standard.id,
           aspectId: aspect.id,
         })
@@ -207,11 +238,13 @@ describe("standardRepository", () => {
       const standard = await createStandardForAspect(aspect.id);
 
       await standardRepository.removeAspect({
+        ...testCtx,
         standardId: standard.id,
         aspectId: aspect.id,
       });
 
       const list = await standardRepository.listByAspect({
+        orgId: testCtx.orgId,
         aspectId: aspect.id,
       });
       expect(list).toHaveLength(0);
@@ -222,6 +255,7 @@ describe("standardRepository", () => {
       const standard = await createStandard();
       await expect(
         standardRepository.removeAspect({
+          ...testCtx,
           standardId: standard.id,
           aspectId: aspect.id,
         })
@@ -233,11 +267,14 @@ describe("standardRepository", () => {
       const standard = await createStandardForAspect(aspect.id);
 
       await standardRepository.removeAspect({
+        ...testCtx,
         standardId: standard.id,
         aspectId: aspect.id,
       });
 
-      const txns = await transactionRepository.listRecent();
+      const txns = await transactionRepository.listRecent({
+        orgId: testCtx.orgId,
+      });
       const txn = txns.find((t) => t.actionType === "aspect_standard.delete");
       expect(txn).toBeDefined();
     });
@@ -247,22 +284,26 @@ describe("standardRepository", () => {
       const pitch = await createParam("pitch", "numeric", "mm");
       const majorDia = await createParam("major_dia", "numeric", "mm");
       await aspectRepository.addParameter({
+        ...testCtx,
         aspectId: aspect.id,
         parameterDefinitionId: pitch.id,
       });
       await aspectRepository.addParameter({
+        ...testCtx,
         aspectId: aspect.id,
         parameterDefinitionId: majorDia.id,
       });
 
       const standard = await createStandardForAspect(aspect.id, "UNC");
       await standardRepository.addParameter({
+        orgId: testCtx.orgId,
         standardId: standard.id,
         parameterDefinitionId: pitch.id,
         role: "key",
       });
 
       const aspects_ = await standardRepository.listAspectsForStandard({
+        orgId: testCtx.orgId,
         standardId: standard.id,
       });
 
@@ -277,15 +318,18 @@ describe("standardRepository", () => {
       const drive = await createAspect("Fastener Drive");
       const standard = await createStandard("ISO 4762");
       await standardRepository.addAspect({
+        ...testCtx,
         standardId: standard.id,
         aspectId: threading.id,
       });
       await standardRepository.addAspect({
+        ...testCtx,
         standardId: standard.id,
         aspectId: drive.id,
       });
 
       const aspectList = await standardRepository.listAspectsForStandard({
+        orgId: testCtx.orgId,
         standardId: standard.id,
       });
 
@@ -303,28 +347,32 @@ describe("standardRepository", () => {
       const pitch = await createParam("pitch", "numeric", "mm");
       const majorDia = await createParam("major_dia", "numeric", "mm");
       await aspectRepository.addParameter({
+        ...testCtx,
         aspectId: aspect.id,
         parameterDefinitionId: pitch.id,
       });
       await aspectRepository.addParameter({
+        ...testCtx,
         aspectId: aspect.id,
         parameterDefinitionId: majorDia.id,
       });
 
       const standard = await createStandardForAspect(aspect.id, "UNC");
       await standardRepository.addParameter({
+        orgId: testCtx.orgId,
         standardId: standard.id,
         parameterDefinitionId: pitch.id,
         role: "key",
       });
       await standardRepository.createDesignation({
+        orgId: testCtx.orgId,
         standardId: standard.id,
         designation: "#8-32",
         values: {},
       });
 
       const result = await standardRepository.listStandardsForAspectWithCoverage(
-        { aspectId: aspect.id }
+        { orgId: testCtx.orgId, aspectId: aspect.id }
       );
 
       expect(result).toHaveLength(1);
@@ -339,7 +387,7 @@ describe("standardRepository", () => {
     it("returns empty array for aspect with no linked standards", async () => {
       const aspect = await createAspect();
       const result = await standardRepository.listStandardsForAspectWithCoverage(
-        { aspectId: aspect.id }
+        { orgId: testCtx.orgId, aspectId: aspect.id }
       );
       expect(result).toHaveLength(0);
     });
@@ -350,6 +398,7 @@ describe("standardRepository", () => {
       const standard = await createStandard();
 
       const updated = await standardRepository.update({
+        ...testCtx,
         id: standard.id,
         description: "Unified National Coarse",
         domainTag: "Unified Thread Standard",
@@ -362,11 +411,14 @@ describe("standardRepository", () => {
     it("logs a transaction", async () => {
       const standard = await createStandard();
       await standardRepository.update({
+        ...testCtx,
         id: standard.id,
         description: "updated",
       });
 
-      const txns = await transactionRepository.listRecent();
+      const txns = await transactionRepository.listRecent({
+        orgId: testCtx.orgId,
+      });
       const updateTxn = txns.find((t) => t.actionType === "standard.update");
       expect(updateTxn).toBeDefined();
     });
@@ -374,6 +426,7 @@ describe("standardRepository", () => {
     it("throws for nonexistent standard", async () => {
       await expect(
         standardRepository.update({
+          ...testCtx,
           id: "00000000-0000-0000-0000-000000000000",
           name: "nope",
         })
@@ -384,17 +437,22 @@ describe("standardRepository", () => {
   describe("remove", () => {
     it("deletes the standard", async () => {
       const standard = await createStandard();
-      await standardRepository.remove({ id: standard.id });
+      await standardRepository.remove({ ...testCtx, id: standard.id });
 
-      const found = await standardRepository.findById({ id: standard.id });
+      const found = await standardRepository.findById({
+        orgId: testCtx.orgId,
+        id: standard.id,
+      });
       expect(found).toBeNull();
     });
 
     it("logs a transaction", async () => {
       const standard = await createStandard();
-      await standardRepository.remove({ id: standard.id });
+      await standardRepository.remove({ ...testCtx, id: standard.id });
 
-      const txns = await transactionRepository.listRecent();
+      const txns = await transactionRepository.listRecent({
+        orgId: testCtx.orgId,
+      });
       const deleteTxn = txns.find((t) => t.actionType === "standard.delete");
       expect(deleteTxn).toBeDefined();
       expect(deleteTxn!.entityId).toBe(standard.id);
@@ -403,6 +461,7 @@ describe("standardRepository", () => {
     it("throws for nonexistent standard", async () => {
       await expect(
         standardRepository.remove({
+          ...testCtx,
           id: "00000000-0000-0000-0000-000000000000",
         })
       ).rejects.toThrow();
@@ -413,6 +472,7 @@ describe("standardRepository", () => {
     it("returns 0 when no items use the standard", async () => {
       const standard = await createStandard();
       const count = await standardRepository.countItemsUsing({
+        orgId: testCtx.orgId,
         standardId: standard.id,
       });
       expect(count).toBe(0);
@@ -421,19 +481,22 @@ describe("standardRepository", () => {
     it("counts items with the standard applied", async () => {
       const aspect = await createAspect();
       const standard = await createStandardForAspect(aspect.id);
-      const item1 = await itemRepository.create({ name: "Screw A" });
-      const item2 = await itemRepository.create({ name: "Screw B" });
+      const item1 = await itemRepository.create({ ...testCtx, name: "Screw A" });
+      const item2 = await itemRepository.create({ ...testCtx, name: "Screw B" });
 
       await standardRepository.applyToItem({
+        ...testCtx,
         itemId: item1.id,
         standardId: standard.id,
       });
       await standardRepository.applyToItem({
+        ...testCtx,
         itemId: item2.id,
         standardId: standard.id,
       });
 
       const count = await standardRepository.countItemsUsing({
+        orgId: testCtx.orgId,
         standardId: standard.id,
       });
       expect(count).toBe(2);
@@ -448,6 +511,7 @@ describe("standardRepository", () => {
       const pitch = await createParam("pitch", "numeric", "mm");
 
       const sp = await standardRepository.addParameter({
+        orgId: testCtx.orgId,
         standardId: standard.id,
         parameterDefinitionId: pitch.id,
         role: "key",
@@ -463,12 +527,14 @@ describe("standardRepository", () => {
       const majorDia = await createParam("major_dia", "numeric", "mm");
 
       await standardRepository.addParameter({
+        orgId: testCtx.orgId,
         standardId: standard.id,
         parameterDefinitionId: pitch.id,
         role: "key",
         sortOrder: 0,
       });
       await standardRepository.addParameter({
+        orgId: testCtx.orgId,
         standardId: standard.id,
         parameterDefinitionId: majorDia.id,
         role: "derived",
@@ -476,6 +542,7 @@ describe("standardRepository", () => {
       });
 
       const params = await standardRepository.getParameters({
+        orgId: testCtx.orgId,
         standardId: standard.id,
       });
       expect(params).toHaveLength(2);
@@ -491,17 +558,20 @@ describe("standardRepository", () => {
       const pitch = await createParam("pitch", "numeric", "mm");
 
       await standardRepository.addParameter({
+        orgId: testCtx.orgId,
         standardId: standard.id,
         parameterDefinitionId: pitch.id,
         role: "key",
       });
 
       await standardRepository.removeParameter({
+        orgId: testCtx.orgId,
         standardId: standard.id,
         parameterDefinitionId: pitch.id,
       });
 
       const params = await standardRepository.getParameters({
+        orgId: testCtx.orgId,
         standardId: standard.id,
       });
       expect(params).toHaveLength(0);
@@ -512,6 +582,7 @@ describe("standardRepository", () => {
       const pitch = await createParam("pitch", "numeric", "mm");
 
       await standardRepository.addParameter({
+        orgId: testCtx.orgId,
         standardId: standard.id,
         parameterDefinitionId: pitch.id,
         role: "key",
@@ -519,6 +590,7 @@ describe("standardRepository", () => {
 
       await expect(
         standardRepository.addParameter({
+          orgId: testCtx.orgId,
           standardId: standard.id,
           parameterDefinitionId: pitch.id,
           role: "derived",
@@ -535,6 +607,7 @@ describe("standardRepository", () => {
       const pitch = await createParam("pitch", "numeric", "mm");
 
       const designation = await standardRepository.createDesignation({
+        orgId: testCtx.orgId,
         standardId: standard.id,
         designation: "#8-32",
         values: {
@@ -557,6 +630,7 @@ describe("standardRepository", () => {
 
       for (const d of ["#4-40", "#6-32", "#8-32", "#10-24", "#10-32"]) {
         await standardRepository.createDesignation({
+          orgId: testCtx.orgId,
           standardId: standard.id,
           designation: d,
           values: {},
@@ -564,6 +638,7 @@ describe("standardRepository", () => {
       }
 
       const page1 = await standardRepository.listDesignations({
+        orgId: testCtx.orgId,
         standardId: standard.id,
         limit: 3,
         offset: 0,
@@ -571,6 +646,7 @@ describe("standardRepository", () => {
       expect(page1).toHaveLength(3);
 
       const page2 = await standardRepository.listDesignations({
+        orgId: testCtx.orgId,
         standardId: standard.id,
         limit: 3,
         offset: 3,
@@ -582,17 +658,20 @@ describe("standardRepository", () => {
       const standard = await createStandard();
 
       await standardRepository.createDesignation({
+        orgId: testCtx.orgId,
         standardId: standard.id,
         designation: "#8-32",
         values: {},
       });
       await standardRepository.createDesignation({
+        orgId: testCtx.orgId,
         standardId: standard.id,
         designation: "#10-24",
         values: {},
       });
 
       const count = await standardRepository.countDesignations({
+        orgId: testCtx.orgId,
         standardId: standard.id,
       });
       expect(count).toBe(2);
@@ -601,12 +680,14 @@ describe("standardRepository", () => {
     it("updates designation values", async () => {
       const standard = await createStandard();
       const designation = await standardRepository.createDesignation({
+        orgId: testCtx.orgId,
         standardId: standard.id,
         designation: "#8-32",
         values: { old: true },
       });
 
       const updated = await standardRepository.updateDesignation({
+        orgId: testCtx.orgId,
         id: designation.id,
         values: { new: true },
       });
@@ -617,14 +698,19 @@ describe("standardRepository", () => {
     it("deletes a designation", async () => {
       const standard = await createStandard();
       const designation = await standardRepository.createDesignation({
+        orgId: testCtx.orgId,
         standardId: standard.id,
         designation: "#8-32",
         values: {},
       });
 
-      await standardRepository.removeDesignation({ id: designation.id });
+      await standardRepository.removeDesignation({
+        orgId: testCtx.orgId,
+        id: designation.id,
+      });
 
       const found = await standardRepository.findDesignationById({
+        orgId: testCtx.orgId,
         id: designation.id,
       });
       expect(found).toBeNull();
@@ -634,6 +720,7 @@ describe("standardRepository", () => {
       const standard = await createStandard();
 
       await standardRepository.createDesignation({
+        orgId: testCtx.orgId,
         standardId: standard.id,
         designation: "#8-32",
         values: {},
@@ -641,6 +728,7 @@ describe("standardRepository", () => {
 
       await expect(
         standardRepository.createDesignation({
+          orgId: testCtx.orgId,
           standardId: standard.id,
           designation: "#8-32",
           values: {},
@@ -653,11 +741,13 @@ describe("standardRepository", () => {
       const std2 = await createStandard("Pozidriv");
 
       const d1 = await standardRepository.createDesignation({
+        orgId: testCtx.orgId,
         standardId: std1.id,
         designation: "#2",
         values: { system: "Phillips" },
       });
       const d2 = await standardRepository.createDesignation({
+        orgId: testCtx.orgId,
         standardId: std2.id,
         designation: "#2",
         values: { system: "Pozidriv" },
@@ -675,9 +765,10 @@ describe("standardRepository", () => {
     it("applies a standard to an item", async () => {
       const aspect = await createAspect();
       const standard = await createStandardForAspect(aspect.id);
-      const item = await itemRepository.create({ name: "M3 Screw" });
+      const item = await itemRepository.create({ ...testCtx, name: "M3 Screw" });
 
       const is = await standardRepository.applyToItem({
+        ...testCtx,
         itemId: item.id,
         standardId: standard.id,
       });
@@ -692,13 +783,18 @@ describe("standardRepository", () => {
       const aspect = await createAspect();
       const standard = await createStandardForAspect(aspect.id);
       const designation = await standardRepository.createDesignation({
+        orgId: testCtx.orgId,
         standardId: standard.id,
         designation: "#8-32",
         values: { pitch: 0.794 },
       });
-      const item = await itemRepository.create({ name: "#8-32 Screw" });
+      const item = await itemRepository.create({
+        ...testCtx,
+        name: "#8-32 Screw",
+      });
 
       const is = await standardRepository.applyToItem({
+        ...testCtx,
         itemId: item.id,
         standardId: standard.id,
         designationId: designation.id,
@@ -710,14 +806,17 @@ describe("standardRepository", () => {
     it("logs a transaction", async () => {
       const aspect = await createAspect();
       const standard = await createStandardForAspect(aspect.id);
-      const item = await itemRepository.create({ name: "Screw" });
+      const item = await itemRepository.create({ ...testCtx, name: "Screw" });
 
       await standardRepository.applyToItem({
+        ...testCtx,
         itemId: item.id,
         standardId: standard.id,
       });
 
-      const txns = await transactionRepository.listRecent();
+      const txns = await transactionRepository.listRecent({
+        orgId: testCtx.orgId,
+      });
       const isTxn = txns.find(
         (t) => t.actionType === "item_standard.create"
       );
@@ -727,15 +826,17 @@ describe("standardRepository", () => {
     it("rejects duplicate standard on same item", async () => {
       const aspect = await createAspect();
       const standard = await createStandardForAspect(aspect.id);
-      const item = await itemRepository.create({ name: "Screw" });
+      const item = await itemRepository.create({ ...testCtx, name: "Screw" });
 
       await standardRepository.applyToItem({
+        ...testCtx,
         itemId: item.id,
         standardId: standard.id,
       });
 
       await expect(
         standardRepository.applyToItem({
+          ...testCtx,
           itemId: item.id,
           standardId: standard.id,
         })
@@ -746,24 +847,28 @@ describe("standardRepository", () => {
       const aspect = await createAspect();
       const standard = await createStandardForAspect(aspect.id);
       const d1 = await standardRepository.createDesignation({
+        orgId: testCtx.orgId,
         standardId: standard.id,
         designation: "#8-32",
         values: {},
       });
       const d2 = await standardRepository.createDesignation({
+        orgId: testCtx.orgId,
         standardId: standard.id,
         designation: "#10-24",
         values: {},
       });
-      const item = await itemRepository.create({ name: "Screw" });
+      const item = await itemRepository.create({ ...testCtx, name: "Screw" });
 
       await standardRepository.applyToItem({
+        ...testCtx,
         itemId: item.id,
         standardId: standard.id,
         designationId: d1.id,
       });
 
       const updated = await standardRepository.setDesignation({
+        orgId: testCtx.orgId,
         itemId: item.id,
         standardId: standard.id,
         designationId: d2.id,
@@ -776,14 +881,16 @@ describe("standardRepository", () => {
     it("marks an item-standard as custom", async () => {
       const aspect = await createAspect();
       const standard = await createStandardForAspect(aspect.id);
-      const item = await itemRepository.create({ name: "Screw" });
+      const item = await itemRepository.create({ ...testCtx, name: "Screw" });
 
       await standardRepository.applyToItem({
+        ...testCtx,
         itemId: item.id,
         standardId: standard.id,
       });
 
       const updated = await standardRepository.markCustom({
+        orgId: testCtx.orgId,
         itemId: item.id,
         standardId: standard.id,
       });
@@ -796,21 +903,27 @@ describe("standardRepository", () => {
       const standard = await createStandardForAspect(aspect.id);
       const pitch = await createParam("pitch", "numeric", "mm");
       const designation = await standardRepository.createDesignation({
+        orgId: testCtx.orgId,
         standardId: standard.id,
         designation: "#8-32",
         values: {
           [pitch.id]: { value: 0.794, source_value: "32", source_unit: "TPI" },
         },
       });
-      const item = await itemRepository.create({ name: "#8-32 Screw" });
+      const item = await itemRepository.create({
+        ...testCtx,
+        name: "#8-32 Screw",
+      });
 
       await standardRepository.applyToItem({
+        ...testCtx,
         itemId: item.id,
         standardId: standard.id,
         designationId: designation.id,
       });
 
       const itemStds = await standardRepository.getItemStandards({
+        orgId: testCtx.orgId,
         itemId: item.id,
       });
 
@@ -828,19 +941,22 @@ describe("standardRepository", () => {
     it("removes a standard from an item", async () => {
       const aspect = await createAspect();
       const standard = await createStandardForAspect(aspect.id);
-      const item = await itemRepository.create({ name: "Screw" });
+      const item = await itemRepository.create({ ...testCtx, name: "Screw" });
 
       await standardRepository.applyToItem({
+        ...testCtx,
         itemId: item.id,
         standardId: standard.id,
       });
 
       await standardRepository.removeFromItem({
+        ...testCtx,
         itemId: item.id,
         standardId: standard.id,
       });
 
       const itemStds = await standardRepository.getItemStandards({
+        orgId: testCtx.orgId,
         itemId: item.id,
       });
       expect(itemStds).toHaveLength(0);
@@ -852,6 +968,7 @@ describe("standardRepository", () => {
       const pitch = await createParam("pitch", "numeric", "mm");
       const majorDia = await createParam("major_diameter", "numeric", "mm");
       const designation = await standardRepository.createDesignation({
+        orgId: testCtx.orgId,
         standardId: standard.id,
         designation: "M3x0.5",
         values: {
@@ -859,15 +976,20 @@ describe("standardRepository", () => {
           [majorDia.id]: 3,
         },
       });
-      const item = await itemRepository.create({ name: "M3x0.5 screw" });
+      const item = await itemRepository.create({
+        ...testCtx,
+        name: "M3x0.5 screw",
+      });
 
       await standardRepository.applyToItem({
+        ...testCtx,
         itemId: item.id,
         standardId: standard.id,
         designationId: designation.id,
       });
 
       const paramValues = await itemRepository.getParameterValues({
+        orgId: testCtx.orgId,
         itemId: item.id,
       });
       const byParam = new Map(
@@ -882,29 +1004,34 @@ describe("standardRepository", () => {
       const standard = await createStandardForAspect(aspect.id);
       const pitch = await createParam("pitch", "numeric", "mm");
       const d1 = await standardRepository.createDesignation({
+        orgId: testCtx.orgId,
         standardId: standard.id,
         designation: "M3x0.5",
         values: { [pitch.id]: { value: 0.5 } },
       });
       const d2 = await standardRepository.createDesignation({
+        orgId: testCtx.orgId,
         standardId: standard.id,
         designation: "M4x0.7",
         values: { [pitch.id]: { value: 0.7 } },
       });
-      const item = await itemRepository.create({ name: "Screw" });
+      const item = await itemRepository.create({ ...testCtx, name: "Screw" });
 
       await standardRepository.applyToItem({
+        ...testCtx,
         itemId: item.id,
         standardId: standard.id,
         designationId: d1.id,
       });
       await standardRepository.setDesignation({
+        orgId: testCtx.orgId,
         itemId: item.id,
         standardId: standard.id,
         designationId: d2.id,
       });
 
       const values = await itemRepository.getParameterValues({
+        orgId: testCtx.orgId,
         itemId: item.id,
       });
       const pitchRow = values.find((v) => v.parameterDefinitionId === pitch.id);
@@ -915,19 +1042,22 @@ describe("standardRepository", () => {
       const aspect = await createAspect();
       const standard = await createStandardForAspect(aspect.id);
       const designation = await standardRepository.createDesignation({
+        orgId: testCtx.orgId,
         standardId: standard.id,
         designation: "legacy",
         values: { pitch: 0.5, "not-a-uuid": "x" },
       });
-      const item = await itemRepository.create({ name: "Legacy" });
+      const item = await itemRepository.create({ ...testCtx, name: "Legacy" });
 
       await standardRepository.applyToItem({
+        ...testCtx,
         itemId: item.id,
         standardId: standard.id,
         designationId: designation.id,
       });
 
       const values = await itemRepository.getParameterValues({
+        orgId: testCtx.orgId,
         itemId: item.id,
       });
       expect(values).toHaveLength(0);
@@ -936,22 +1066,26 @@ describe("standardRepository", () => {
     it("filters designations by q substring (case-insensitive)", async () => {
       const standard = await createStandard();
       await standardRepository.createDesignation({
+        orgId: testCtx.orgId,
         standardId: standard.id,
         designation: "M3x0.5",
         values: {},
       });
       await standardRepository.createDesignation({
+        orgId: testCtx.orgId,
         standardId: standard.id,
         designation: "M4x0.7",
         values: {},
       });
       await standardRepository.createDesignation({
+        orgId: testCtx.orgId,
         standardId: standard.id,
         designation: "#8-32",
         values: {},
       });
 
       const hits = await standardRepository.listDesignations({
+        orgId: testCtx.orgId,
         standardId: standard.id,
         q: "m3",
       });
@@ -962,18 +1096,22 @@ describe("standardRepository", () => {
     it("logs a transaction on removal", async () => {
       const aspect = await createAspect();
       const standard = await createStandardForAspect(aspect.id);
-      const item = await itemRepository.create({ name: "Screw" });
+      const item = await itemRepository.create({ ...testCtx, name: "Screw" });
 
       await standardRepository.applyToItem({
+        ...testCtx,
         itemId: item.id,
         standardId: standard.id,
       });
       await standardRepository.removeFromItem({
+        ...testCtx,
         itemId: item.id,
         standardId: standard.id,
       });
 
-      const txns = await transactionRepository.listRecent();
+      const txns = await transactionRepository.listRecent({
+        orgId: testCtx.orgId,
+      });
       const deleteTxn = txns.find(
         (t) => t.actionType === "item_standard.delete"
       );
@@ -987,14 +1125,16 @@ describe("standardRepository", () => {
     it("deleting a standard cascades to its designations", async () => {
       const standard = await createStandard();
       const designation = await standardRepository.createDesignation({
+        orgId: testCtx.orgId,
         standardId: standard.id,
         designation: "#8-32",
         values: {},
       });
 
-      await standardRepository.remove({ id: standard.id });
+      await standardRepository.remove({ ...testCtx, id: standard.id });
 
       const found = await standardRepository.findDesignationById({
+        orgId: testCtx.orgId,
         id: designation.id,
       });
       expect(found).toBeNull();
@@ -1003,16 +1143,18 @@ describe("standardRepository", () => {
     it("deleting a standard cascades to item_standards", async () => {
       const aspect = await createAspect();
       const standard = await createStandardForAspect(aspect.id);
-      const item = await itemRepository.create({ name: "Screw" });
+      const item = await itemRepository.create({ ...testCtx, name: "Screw" });
 
       await standardRepository.applyToItem({
+        ...testCtx,
         itemId: item.id,
         standardId: standard.id,
       });
 
-      await standardRepository.remove({ id: standard.id });
+      await standardRepository.remove({ ...testCtx, id: standard.id });
 
       const itemStds = await standardRepository.getItemStandards({
+        orgId: testCtx.orgId,
         itemId: item.id,
       });
       expect(itemStds).toHaveLength(0);
@@ -1022,21 +1164,27 @@ describe("standardRepository", () => {
       const aspect = await createAspect();
       const standard = await createStandardForAspect(aspect.id);
       const designation = await standardRepository.createDesignation({
+        orgId: testCtx.orgId,
         standardId: standard.id,
         designation: "#8-32",
         values: {},
       });
-      const item = await itemRepository.create({ name: "Screw" });
+      const item = await itemRepository.create({ ...testCtx, name: "Screw" });
 
       await standardRepository.applyToItem({
+        ...testCtx,
         itemId: item.id,
         standardId: standard.id,
         designationId: designation.id,
       });
 
-      await standardRepository.removeDesignation({ id: designation.id });
+      await standardRepository.removeDesignation({
+        orgId: testCtx.orgId,
+        id: designation.id,
+      });
 
       const itemStds = await standardRepository.getItemStandards({
+        orgId: testCtx.orgId,
         itemId: item.id,
       });
       expect(itemStds).toHaveLength(1);
@@ -1048,14 +1196,18 @@ describe("standardRepository", () => {
       const aspect = await createAspect();
       const standard = await createStandardForAspect(aspect.id);
 
-      await aspectRepository.remove({ id: aspect.id });
+      await aspectRepository.remove({ ...testCtx, id: aspect.id });
 
       // Standard still exists
-      const found = await standardRepository.findById({ id: standard.id });
+      const found = await standardRepository.findById({
+        orgId: testCtx.orgId,
+        id: standard.id,
+      });
       expect(found).not.toBeNull();
 
       // But it's no longer linked to the aspect
       const list = await standardRepository.listByAspect({
+        orgId: testCtx.orgId,
         aspectId: aspect.id,
       });
       expect(list).toHaveLength(0);
@@ -1065,9 +1217,10 @@ describe("standardRepository", () => {
       const aspect = await createAspect();
       const standard = await createStandardForAspect(aspect.id);
 
-      await standardRepository.remove({ id: standard.id });
+      await standardRepository.remove({ ...testCtx, id: standard.id });
 
       const list = await standardRepository.listByAspect({
+        orgId: testCtx.orgId,
         aspectId: aspect.id,
       });
       expect(list).toHaveLength(0);

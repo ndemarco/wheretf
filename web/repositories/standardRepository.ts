@@ -12,26 +12,39 @@ import {
   aspects,
   aspectParameters,
 } from "@/db/schema";
+import { additiveOrgFilter } from "@/lib/auth/scope";
 import { transactionRepository } from "./transactionRepository";
 
+// standards + related junctions are additive. NULL = global taxonomy;
+// set = org-private. Junction inserts inherit ownerOrgId from the
+// parent standard (or provided orgId if no parent lookup).
 export const standardRepository = {
   // --- Standard CRUD ---
 
   async create({
+    userId,
+    orgId,
+    asGlobal,
     name,
     description,
     domainTag,
   }: {
+    userId: string;
+    orgId: string;
+    asGlobal?: boolean;
     name: string;
     description?: string;
     domainTag?: string;
   }) {
+    const ownerOrgId = asGlobal ? null : orgId;
     const [standard] = await db
       .insert(standards)
-      .values({ name, description, domainTag })
+      .values({ ownerOrgId, name, description, domainTag })
       .returning();
 
     await transactionRepository.log({
+      userId,
+      orgId,
       actionType: "standard.create",
       entityType: "standard",
       entityId: standard.id,
@@ -42,26 +55,27 @@ export const standardRepository = {
     return standard;
   },
 
-  async findById({ id }: { id: string }) {
+  async findById({ orgId, id }: { orgId: string; id: string }) {
     const [standard] = await db
       .select()
       .from(standards)
-      .where(eq(standards.id, id));
+      .where(and(additiveOrgFilter(standards.ownerOrgId, orgId), eq(standards.id, id)));
     return standard ?? null;
   },
 
-  async findByName({ name }: { name: string }) {
+  async findByName({ orgId, name }: { orgId: string; name: string }) {
     const [standard] = await db
       .select()
       .from(standards)
-      .where(eq(standards.name, name));
+      .where(and(additiveOrgFilter(standards.ownerOrgId, orgId), eq(standards.name, name)));
     return standard ?? null;
   },
 
-  async list() {
+  async list({ orgId }: { orgId: string }) {
     return db
       .select({
         id: standards.id,
+        ownerOrgId: standards.ownerOrgId,
         name: standards.name,
         description: standards.description,
         domainTag: standards.domainTag,
@@ -70,13 +84,21 @@ export const standardRepository = {
         aspectCount: sql<number>`(
           SELECT COUNT(*) FROM aspect_standards
           WHERE aspect_standards.standard_id = standards.id
+            AND (aspect_standards.owner_org_id IS NULL OR aspect_standards.owner_org_id = ${orgId})
         )`.as("aspect_count"),
       })
       .from(standards)
+      .where(additiveOrgFilter(standards.ownerOrgId, orgId))
       .orderBy(standards.name);
   },
 
-  async listByAspect({ aspectId }: { aspectId: string }) {
+  async listByAspect({
+    orgId,
+    aspectId,
+  }: {
+    orgId: string;
+    aspectId: string;
+  }) {
     return db
       .select({
         id: standards.id,
@@ -88,29 +110,41 @@ export const standardRepository = {
       })
       .from(standards)
       .innerJoin(aspectStandards, eq(aspectStandards.standardId, standards.id))
-      .where(eq(aspectStandards.aspectId, aspectId))
+      .where(
+        and(
+          additiveOrgFilter(standards.ownerOrgId, orgId),
+          additiveOrgFilter(aspectStandards.ownerOrgId, orgId),
+          eq(aspectStandards.aspectId, aspectId),
+        ),
+      )
       .orderBy(standards.name);
   },
 
   async update({
+    userId,
+    orgId,
     id,
     ...updates
   }: {
+    userId: string;
+    orgId: string;
     id: string;
     name?: string;
     description?: string;
     domainTag?: string;
   }) {
-    const before = await standardRepository.findById({ id });
+    const before = await standardRepository.findById({ orgId, id });
     if (!before) throw new Error(`Standard ${id} not found`);
 
     const [updated] = await db
       .update(standards)
       .set({ ...updates, updatedAt: new Date() })
-      .where(eq(standards.id, id))
+      .where(and(additiveOrgFilter(standards.ownerOrgId, orgId), eq(standards.id, id)))
       .returning();
 
     await transactionRepository.log({
+      userId,
+      orgId,
       actionType: "standard.update",
       entityType: "standard",
       entityId: id,
@@ -121,13 +155,25 @@ export const standardRepository = {
     return updated;
   },
 
-  async remove({ id }: { id: string }) {
-    const before = await standardRepository.findById({ id });
+  async remove({
+    userId,
+    orgId,
+    id,
+  }: {
+    userId: string;
+    orgId: string;
+    id: string;
+  }) {
+    const before = await standardRepository.findById({ orgId, id });
     if (!before) throw new Error(`Standard ${id} not found`);
 
-    await db.delete(standards).where(eq(standards.id, id));
+    await db
+      .delete(standards)
+      .where(and(additiveOrgFilter(standards.ownerOrgId, orgId), eq(standards.id, id)));
 
     await transactionRepository.log({
+      userId,
+      orgId,
       actionType: "standard.delete",
       entityType: "standard",
       entityId: id,
@@ -136,23 +182,31 @@ export const standardRepository = {
     });
   },
 
-  async countItemsUsing({ standardId }: { standardId: string }) {
+  async countItemsUsing({
+    orgId,
+    standardId,
+  }: {
+    orgId: string;
+    standardId: string;
+  }) {
     const [result] = await db
       .select({ count: count() })
       .from(itemStandards)
-      .where(eq(itemStandards.standardId, standardId));
+      .where(
+        and(
+          additiveOrgFilter(itemStandards.ownerOrgId, orgId),
+          eq(itemStandards.standardId, standardId),
+        ),
+      );
     return result?.count ?? 0;
   },
 
-  /**
-   * Items that have this standard applied. Includes the chosen
-   * designation label (if any) so the caller can render
-   * "M3 screw — M3×0.5" in a usage panel.
-   */
   async listItemsUsing({
+    orgId,
     standardId,
     limit = 50,
   }: {
+    orgId: string;
     standardId: string;
     limit?: number;
   }) {
@@ -169,19 +223,27 @@ export const standardRepository = {
       .innerJoin(items, eq(items.id, itemStandards.itemId))
       .leftJoin(
         standardDesignations,
-        eq(itemStandards.designationId, standardDesignations.id)
+        eq(itemStandards.designationId, standardDesignations.id),
       )
-      .where(eq(itemStandards.standardId, standardId))
+      .where(
+        and(
+          additiveOrgFilter(itemStandards.ownerOrgId, orgId),
+          additiveOrgFilter(items.ownerOrgId, orgId),
+          eq(itemStandards.standardId, standardId),
+        ),
+      )
       .orderBy(sql`${itemStandards.createdAt} DESC`)
       .limit(limit);
     return rows;
   },
 
-  /**
-   * Histogram of designation usage: which designations under this standard
-   * are most applied to items, and how many items each covers.
-   */
-  async designationUsage({ standardId }: { standardId: string }) {
+  async designationUsage({
+    orgId,
+    standardId,
+  }: {
+    orgId: string;
+    standardId: string;
+  }) {
     const rows = await db
       .select({
         designationId: itemStandards.designationId,
@@ -191,9 +253,14 @@ export const standardRepository = {
       .from(itemStandards)
       .leftJoin(
         standardDesignations,
-        eq(itemStandards.designationId, standardDesignations.id)
+        eq(itemStandards.designationId, standardDesignations.id),
       )
-      .where(eq(itemStandards.standardId, standardId))
+      .where(
+        and(
+          additiveOrgFilter(itemStandards.ownerOrgId, orgId),
+          eq(itemStandards.standardId, standardId),
+        ),
+      )
       .groupBy(itemStandards.designationId, standardDesignations.designation)
       .orderBy(sql`count(${itemStandards.id}) DESC`);
     return rows;
@@ -202,18 +269,27 @@ export const standardRepository = {
   // --- Aspect-standard associations ---
 
   async addAspect({
+    userId,
+    orgId,
     standardId,
     aspectId,
   }: {
+    userId: string;
+    orgId: string;
     standardId: string;
     aspectId: string;
   }) {
+    const parent = await standardRepository.findById({ orgId, id: standardId });
+    if (!parent) throw new Error(`Standard ${standardId} not found`);
+
     const [as_] = await db
       .insert(aspectStandards)
-      .values({ standardId, aspectId })
+      .values({ ownerOrgId: parent.ownerOrgId, standardId, aspectId })
       .returning();
 
     await transactionRepository.log({
+      userId,
+      orgId,
       actionType: "aspect_standard.create",
       entityType: "aspect_standard",
       entityId: as_.id,
@@ -225,9 +301,13 @@ export const standardRepository = {
   },
 
   async removeAspect({
+    userId,
+    orgId,
     standardId,
     aspectId,
   }: {
+    userId: string;
+    orgId: string;
     standardId: string;
     aspectId: string;
   }) {
@@ -235,19 +315,22 @@ export const standardRepository = {
       .delete(aspectStandards)
       .where(
         and(
+          additiveOrgFilter(aspectStandards.ownerOrgId, orgId),
           eq(aspectStandards.standardId, standardId),
-          eq(aspectStandards.aspectId, aspectId)
-        )
+          eq(aspectStandards.aspectId, aspectId),
+        ),
       )
       .returning();
 
     if (!deleted) {
       throw new Error(
-        `Standard ${standardId} not linked to aspect ${aspectId}`
+        `Standard ${standardId} not linked to aspect ${aspectId}`,
       );
     }
 
     await transactionRepository.log({
+      userId,
+      orgId,
       actionType: "aspect_standard.delete",
       entityType: "aspect_standard",
       entityId: deleted.id,
@@ -256,7 +339,13 @@ export const standardRepository = {
     });
   },
 
-  async listAspectsForStandard({ standardId }: { standardId: string }) {
+  async listAspectsForStandard({
+    orgId,
+    standardId,
+  }: {
+    orgId: string;
+    standardId: string;
+  }) {
     return db
       .select({
         aspectId: aspects.id,
@@ -264,6 +353,7 @@ export const standardRepository = {
         parameterCount: sql<number>`(
           SELECT COUNT(*) FROM aspect_parameters
           WHERE aspect_parameters.aspect_id = ${aspects.id}
+            AND (aspect_parameters.owner_org_id IS NULL OR aspect_parameters.owner_org_id = ${orgId})
         )`.as("parameter_count"),
         coveredCount: sql<number>`(
           SELECT COUNT(*) FROM aspect_parameters
@@ -272,17 +362,27 @@ export const standardRepository = {
                = standard_parameters.parameter_definition_id
           WHERE aspect_parameters.aspect_id = ${aspects.id}
             AND standard_parameters.standard_id = ${standardId}
+            AND (aspect_parameters.owner_org_id IS NULL OR aspect_parameters.owner_org_id = ${orgId})
+            AND (standard_parameters.owner_org_id IS NULL OR standard_parameters.owner_org_id = ${orgId})
         )`.as("covered_count"),
       })
       .from(aspectStandards)
       .innerJoin(aspects, eq(aspectStandards.aspectId, aspects.id))
-      .where(eq(aspectStandards.standardId, standardId))
+      .where(
+        and(
+          additiveOrgFilter(aspectStandards.ownerOrgId, orgId),
+          additiveOrgFilter(aspects.ownerOrgId, orgId),
+          eq(aspectStandards.standardId, standardId),
+        ),
+      )
       .orderBy(aspects.name);
   },
 
   async listStandardsForAspectWithCoverage({
+    orgId,
     aspectId,
   }: {
+    orgId: string;
     aspectId: string;
   }) {
     return db
@@ -293,10 +393,12 @@ export const standardRepository = {
         designationCount: sql<number>`(
           SELECT COUNT(*) FROM standard_designations
           WHERE standard_designations.standard_id = ${standards.id}
+            AND (standard_designations.owner_org_id IS NULL OR standard_designations.owner_org_id = ${orgId})
         )`.as("designation_count"),
         parameterCount: sql<number>`(
           SELECT COUNT(*) FROM aspect_parameters
           WHERE aspect_parameters.aspect_id = ${aspectId}
+            AND (aspect_parameters.owner_org_id IS NULL OR aspect_parameters.owner_org_id = ${orgId})
         )`.as("parameter_count"),
         coveredCount: sql<number>`(
           SELECT COUNT(*) FROM aspect_parameters
@@ -305,6 +407,8 @@ export const standardRepository = {
                = standard_parameters.parameter_definition_id
           WHERE aspect_parameters.aspect_id = ${aspectId}
             AND standard_parameters.standard_id = ${standards.id}
+            AND (aspect_parameters.owner_org_id IS NULL OR aspect_parameters.owner_org_id = ${orgId})
+            AND (standard_parameters.owner_org_id IS NULL OR standard_parameters.owner_org_id = ${orgId})
         )`.as("covered_count"),
         coveredParamIds: sql<string[]>`(
           SELECT array_agg(aspect_parameters.parameter_definition_id)
@@ -314,30 +418,44 @@ export const standardRepository = {
                = standard_parameters.parameter_definition_id
           WHERE aspect_parameters.aspect_id = ${aspectId}
             AND standard_parameters.standard_id = ${standards.id}
+            AND (aspect_parameters.owner_org_id IS NULL OR aspect_parameters.owner_org_id = ${orgId})
+            AND (standard_parameters.owner_org_id IS NULL OR standard_parameters.owner_org_id = ${orgId})
         )`.as("covered_param_ids"),
       })
       .from(aspectStandards)
       .innerJoin(standards, eq(aspectStandards.standardId, standards.id))
-      .where(eq(aspectStandards.aspectId, aspectId))
+      .where(
+        and(
+          additiveOrgFilter(aspectStandards.ownerOrgId, orgId),
+          additiveOrgFilter(standards.ownerOrgId, orgId),
+          eq(aspectStandards.aspectId, aspectId),
+        ),
+      )
       .orderBy(standards.name);
   },
 
   // --- Standard parameters ---
 
   async addParameter({
+    orgId,
     standardId,
     parameterDefinitionId,
     role,
     sortOrder,
   }: {
+    orgId: string;
     standardId: string;
     parameterDefinitionId: string;
     role: string;
     sortOrder?: number;
   }) {
+    const parent = await standardRepository.findById({ orgId, id: standardId });
+    if (!parent) throw new Error(`Standard ${standardId} not found`);
+
     const [sp] = await db
       .insert(standardParameters)
       .values({
+        ownerOrgId: parent.ownerOrgId,
         standardId,
         parameterDefinitionId,
         role,
@@ -349,9 +467,11 @@ export const standardRepository = {
   },
 
   async removeParameter({
+    orgId,
     standardId,
     parameterDefinitionId,
   }: {
+    orgId: string;
     standardId: string;
     parameterDefinitionId: string;
   }) {
@@ -359,20 +479,27 @@ export const standardRepository = {
       .delete(standardParameters)
       .where(
         and(
+          additiveOrgFilter(standardParameters.ownerOrgId, orgId),
           eq(standardParameters.standardId, standardId),
-          eq(standardParameters.parameterDefinitionId, parameterDefinitionId)
-        )
+          eq(standardParameters.parameterDefinitionId, parameterDefinitionId),
+        ),
       )
       .returning();
 
     if (!deleted) {
       throw new Error(
-        `Parameter ${parameterDefinitionId} not found on standard ${standardId}`
+        `Parameter ${parameterDefinitionId} not found on standard ${standardId}`,
       );
     }
   },
 
-  async getParameters({ standardId }: { standardId: string }) {
+  async getParameters({
+    orgId,
+    standardId,
+  }: {
+    orgId: string;
+    standardId: string;
+  }) {
     return db
       .select({
         id: standardParameters.id,
@@ -386,53 +513,86 @@ export const standardRepository = {
       .from(standardParameters)
       .innerJoin(
         parameterDefinitions,
-        eq(standardParameters.parameterDefinitionId, parameterDefinitions.id)
+        eq(standardParameters.parameterDefinitionId, parameterDefinitions.id),
       )
-      .where(eq(standardParameters.standardId, standardId))
+      .where(
+        and(
+          additiveOrgFilter(standardParameters.ownerOrgId, orgId),
+          additiveOrgFilter(parameterDefinitions.ownerOrgId, orgId),
+          eq(standardParameters.standardId, standardId),
+        ),
+      )
       .orderBy(standardParameters.sortOrder);
   },
 
   // --- Designations ---
 
   async createDesignation({
+    orgId,
     standardId,
     designation,
     values,
     metadata,
   }: {
+    orgId: string;
     standardId: string;
     designation: string;
     values: Record<string, unknown>;
     metadata?: unknown;
   }) {
+    const parent = await standardRepository.findById({ orgId, id: standardId });
+    if (!parent) throw new Error(`Standard ${standardId} not found`);
+
     const [entry] = await db
       .insert(standardDesignations)
-      .values({ standardId, designation, values, metadata })
+      .values({
+        ownerOrgId: parent.ownerOrgId,
+        standardId,
+        designation,
+        values,
+        metadata,
+      })
       .returning();
 
     return entry;
   },
 
-  async findDesignationById({ id }: { id: string }) {
+  async findDesignationById({
+    orgId,
+    id,
+  }: {
+    orgId: string;
+    id: string;
+  }) {
     const [entry] = await db
       .select()
       .from(standardDesignations)
-      .where(eq(standardDesignations.id, id));
+      .where(
+        and(
+          additiveOrgFilter(standardDesignations.ownerOrgId, orgId),
+          eq(standardDesignations.id, id),
+        ),
+      );
     return entry ?? null;
   },
 
   async listDesignations({
+    orgId,
     standardId,
     q,
     limit,
     offset,
   }: {
+    orgId: string;
     standardId: string;
     q?: string;
     limit?: number;
     offset?: number;
   }) {
-    const filters = [eq(standardDesignations.standardId, standardId)];
+    const filters = [
+      additiveOrgFilter(standardDesignations.ownerOrgId, orgId),
+      eq(standardDesignations.standardId, standardId),
+    ];
     if (q && q.trim().length > 0) {
       filters.push(ilike(standardDesignations.designation, `%${q.trim()}%`));
     }
@@ -450,18 +610,31 @@ export const standardRepository = {
     return query;
   },
 
-  async countDesignations({ standardId }: { standardId: string }) {
+  async countDesignations({
+    orgId,
+    standardId,
+  }: {
+    orgId: string;
+    standardId: string;
+  }) {
     const [result] = await db
       .select({ count: count() })
       .from(standardDesignations)
-      .where(eq(standardDesignations.standardId, standardId));
+      .where(
+        and(
+          additiveOrgFilter(standardDesignations.ownerOrgId, orgId),
+          eq(standardDesignations.standardId, standardId),
+        ),
+      );
     return result?.count ?? 0;
   },
 
   async updateDesignation({
+    orgId,
     id,
     ...updates
   }: {
+    orgId: string;
     id: string;
     designation?: string;
     values?: Record<string, unknown>;
@@ -470,17 +643,33 @@ export const standardRepository = {
     const [updated] = await db
       .update(standardDesignations)
       .set(updates)
-      .where(eq(standardDesignations.id, id))
+      .where(
+        and(
+          additiveOrgFilter(standardDesignations.ownerOrgId, orgId),
+          eq(standardDesignations.id, id),
+        ),
+      )
       .returning();
 
     if (!updated) throw new Error(`Designation ${id} not found`);
     return updated;
   },
 
-  async removeDesignation({ id }: { id: string }) {
+  async removeDesignation({
+    orgId,
+    id,
+  }: {
+    orgId: string;
+    id: string;
+  }) {
     const [deleted] = await db
       .delete(standardDesignations)
-      .where(eq(standardDesignations.id, id))
+      .where(
+        and(
+          additiveOrgFilter(standardDesignations.ownerOrgId, orgId),
+          eq(standardDesignations.id, id),
+        ),
+      )
       .returning();
 
     if (!deleted) throw new Error(`Designation ${id} not found`);
@@ -488,27 +677,34 @@ export const standardRepository = {
 
   // --- Item-standard associations ---
 
-  /**
-   * Auto-fill item's parameter values from a designation.
-   *
-   * Designation values JSONB is keyed by parameter_definition_id. Each entry
-   * may be a scalar or a compound `{value, source_value?, source_unit?}`.
-   * For each entry we upsert itemParameterValues — matched on (itemId,
-   * parameterDefinitionId), ignoring itemAspectId so an existing
-   * aspect-scoped row gets overwritten rather than duplicated.
-   */
   async applyDesignationValues({
+    orgId,
     itemId,
     designationId,
   }: {
+    orgId: string;
     itemId: string;
     designationId: string;
   }) {
     const [designation] = await db
       .select()
       .from(standardDesignations)
-      .where(eq(standardDesignations.id, designationId));
+      .where(
+        and(
+          additiveOrgFilter(standardDesignations.ownerOrgId, orgId),
+          eq(standardDesignations.id, designationId),
+        ),
+      );
     if (!designation) return;
+
+    const [item] = await db
+      .select({ ownerOrgId: items.ownerOrgId })
+      .from(items)
+      .where(
+        and(additiveOrgFilter(items.ownerOrgId, orgId), eq(items.id, itemId)),
+      );
+    if (!item) return;
+    const valuesOwnerOrgId = item.ownerOrgId;
 
     const values = (designation.values ?? {}) as Record<string, unknown>;
     const allKeys = Object.keys(values);
@@ -516,16 +712,18 @@ export const standardRepository = {
     const keys = allKeys.filter((k) => uuidLike.test(k));
     if (keys.length === 0) return;
 
-    // Skip keys that aren't real parameterDefinition IDs. Older tests /
-    // fixtures may store human-readable keys ("pitch") that would fail the
-    // FK; and even well-formed UUIDs may point at defs that don't exist.
     const validKeys = new Set(
       (
         await db
           .select({ id: parameterDefinitions.id })
           .from(parameterDefinitions)
-          .where(inArray(parameterDefinitions.id, keys))
-      ).map((r) => r.id)
+          .where(
+            and(
+              additiveOrgFilter(parameterDefinitions.ownerOrgId, orgId),
+              inArray(parameterDefinitions.id, keys),
+            ),
+          )
+      ).map((r) => r.id),
     );
 
     for (const [paramDefId, raw] of Object.entries(values)) {
@@ -540,9 +738,10 @@ export const standardRepository = {
         .from(itemParameterValues)
         .where(
           and(
+            additiveOrgFilter(itemParameterValues.ownerOrgId, orgId),
             eq(itemParameterValues.itemId, itemId),
-            eq(itemParameterValues.parameterDefinitionId, paramDefId)
-          )
+            eq(itemParameterValues.parameterDefinitionId, paramDefId),
+          ),
         );
 
       if (existing.length > 0) {
@@ -552,6 +751,7 @@ export const standardRepository = {
           .where(eq(itemParameterValues.id, existing[0].id));
       } else {
         await db.insert(itemParameterValues).values({
+          ownerOrgId: valuesOwnerOrgId,
           itemId,
           parameterDefinitionId: paramDefId,
           itemAspectId: null,
@@ -562,17 +762,30 @@ export const standardRepository = {
   },
 
   async applyToItem({
+    userId,
+    orgId,
     itemId,
     standardId,
     designationId,
   }: {
+    userId: string;
+    orgId: string;
     itemId: string;
     standardId: string;
     designationId?: string;
   }) {
+    const [item] = await db
+      .select({ ownerOrgId: items.ownerOrgId })
+      .from(items)
+      .where(
+        and(additiveOrgFilter(items.ownerOrgId, orgId), eq(items.id, itemId)),
+      );
+    if (!item) throw new Error(`Item ${itemId} not found`);
+
     const [is] = await db
       .insert(itemStandards)
       .values({
+        ownerOrgId: item.ownerOrgId,
         itemId,
         standardId,
         designationId: designationId ?? null,
@@ -582,12 +795,15 @@ export const standardRepository = {
 
     if (designationId) {
       await standardRepository.applyDesignationValues({
+        orgId,
         itemId,
         designationId,
       });
     }
 
     await transactionRepository.log({
+      userId,
+      orgId,
       actionType: "item_standard.create",
       entityType: "item_standard",
       entityId: is.id,
@@ -599,9 +815,13 @@ export const standardRepository = {
   },
 
   async removeFromItem({
+    userId,
+    orgId,
     itemId,
     standardId,
   }: {
+    userId: string;
+    orgId: string;
     itemId: string;
     standardId: string;
   }) {
@@ -609,19 +829,20 @@ export const standardRepository = {
       .delete(itemStandards)
       .where(
         and(
+          additiveOrgFilter(itemStandards.ownerOrgId, orgId),
           eq(itemStandards.itemId, itemId),
-          eq(itemStandards.standardId, standardId)
-        )
+          eq(itemStandards.standardId, standardId),
+        ),
       )
       .returning();
 
     if (!deleted) {
-      throw new Error(
-        `Standard ${standardId} not applied to item ${itemId}`
-      );
+      throw new Error(`Standard ${standardId} not applied to item ${itemId}`);
     }
 
     await transactionRepository.log({
+      userId,
+      orgId,
       actionType: "item_standard.delete",
       entityType: "item_standard",
       entityId: deleted.id,
@@ -631,10 +852,12 @@ export const standardRepository = {
   },
 
   async setDesignation({
+    orgId,
     itemId,
     standardId,
     designationId,
   }: {
+    orgId: string;
     itemId: string;
     standardId: string;
     designationId: string | null;
@@ -644,20 +867,20 @@ export const standardRepository = {
       .set({ designationId, isCustom: false })
       .where(
         and(
+          additiveOrgFilter(itemStandards.ownerOrgId, orgId),
           eq(itemStandards.itemId, itemId),
-          eq(itemStandards.standardId, standardId)
-        )
+          eq(itemStandards.standardId, standardId),
+        ),
       )
       .returning();
 
     if (!updated) {
-      throw new Error(
-        `Standard ${standardId} not applied to item ${itemId}`
-      );
+      throw new Error(`Standard ${standardId} not applied to item ${itemId}`);
     }
 
     if (designationId) {
       await standardRepository.applyDesignationValues({
+        orgId,
         itemId,
         designationId,
       });
@@ -667,9 +890,11 @@ export const standardRepository = {
   },
 
   async markCustom({
+    orgId,
     itemId,
     standardId,
   }: {
+    orgId: string;
     itemId: string;
     standardId: string;
   }) {
@@ -678,22 +903,27 @@ export const standardRepository = {
       .set({ isCustom: true })
       .where(
         and(
+          additiveOrgFilter(itemStandards.ownerOrgId, orgId),
           eq(itemStandards.itemId, itemId),
-          eq(itemStandards.standardId, standardId)
-        )
+          eq(itemStandards.standardId, standardId),
+        ),
       )
       .returning();
 
     if (!updated) {
-      throw new Error(
-        `Standard ${standardId} not applied to item ${itemId}`
-      );
+      throw new Error(`Standard ${standardId} not applied to item ${itemId}`);
     }
 
     return updated;
   },
 
-  async getItemStandards({ itemId }: { itemId: string }) {
+  async getItemStandards({
+    orgId,
+    itemId,
+  }: {
+    orgId: string;
+    itemId: string;
+  }) {
     return db
       .select({
         id: itemStandards.id,
@@ -709,8 +939,14 @@ export const standardRepository = {
       .innerJoin(standards, eq(itemStandards.standardId, standards.id))
       .leftJoin(
         standardDesignations,
-        eq(itemStandards.designationId, standardDesignations.id)
+        eq(itemStandards.designationId, standardDesignations.id),
       )
-      .where(eq(itemStandards.itemId, itemId));
+      .where(
+        and(
+          additiveOrgFilter(itemStandards.ownerOrgId, orgId),
+          additiveOrgFilter(standards.ownerOrgId, orgId),
+          eq(itemStandards.itemId, itemId),
+        ),
+      );
   },
 };

@@ -1,10 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { locationRepository } from "@/repositories/locationRepository";
+import { requireContext } from "@/lib/auth/route";
 
 type RouteParams = { params: Promise<{ id: string }> };
 
 export async function POST(request: NextRequest, { params }: RouteParams) {
   try {
+    const ctx = await requireContext();
     const { id } = await params;
     const body = await request.json();
     const { labels, source } = body ?? {};
@@ -15,6 +17,8 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       );
     }
     const children = await locationRepository.divide({
+      userId: ctx.userId,
+      orgId: ctx.activeOrgId,
       parentId: id,
       labels,
       source,
@@ -40,8 +44,13 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
 
 export async function DELETE(_request: NextRequest, { params }: RouteParams) {
   try {
+    const ctx = await requireContext();
     const { id } = await params;
-    const result = await locationRepository.undivide({ parentId: id });
+    const result = await locationRepository.undivide({
+      userId: ctx.userId,
+      orgId: ctx.activeOrgId,
+      parentId: id,
+    });
     return NextResponse.json({ undivide: result });
   } catch (err) {
     const message = err instanceof Error ? err.message : "Unexpected error";

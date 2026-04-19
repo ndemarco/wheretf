@@ -2,11 +2,13 @@ import { templateRepository } from "@/repositories/templateRepository";
 import { transactionRepository } from "@/repositories/transactionRepository";
 import { moduleRepository } from "@/repositories/moduleRepository";
 import { locationRepository } from "@/repositories/locationRepository";
+import { testCtx } from "../setup";
 
 describe("templateRepository", () => {
   describe("create", () => {
     it("creates a template and returns it", async () => {
       const template = await templateRepository.create({
+        ...testCtx,
         name: "Plano 3600",
         description: "Standard tackle box",
       });
@@ -19,10 +21,12 @@ describe("templateRepository", () => {
 
     it("auto-creates version 1", async () => {
       const template = await templateRepository.create({
+        ...testCtx,
         name: "Plano 3600",
       });
 
       const version = await templateRepository.getVersion({
+        orgId: testCtx.orgId,
         templateId: template.id,
         version: 1,
       });
@@ -40,10 +44,11 @@ describe("templateRepository", () => {
 
     it("logs a transaction", async () => {
       const template = await templateRepository.create({
+        ...testCtx,
         name: "Plano 3600",
       });
 
-      const txns = await transactionRepository.listRecent();
+      const txns = await transactionRepository.listRecent({ orgId: testCtx.orgId });
       expect(txns).toHaveLength(1);
       expect(txns[0].actionType).toBe("template.create");
       expect(txns[0].entityType).toBe("template");
@@ -53,21 +58,29 @@ describe("templateRepository", () => {
 
     it("stores metadata as JSON", async () => {
       const template = await templateRepository.create({
+        ...testCtx,
         name: "Plano 3600",
         metadata: { manufacturer: "Plano", sku: "3600" },
       });
 
-      const found = await templateRepository.findById({ id: template.id });
+      const found = await templateRepository.findById({
+        orgId: testCtx.orgId,
+        id: template.id,
+      });
       expect(found?.metadata).toEqual({ manufacturer: "Plano", sku: "3600" });
     });
 
     it("defaults scope to shared", async () => {
-      const template = await templateRepository.create({ name: "Plano 3600" });
+      const template = await templateRepository.create({
+        ...testCtx,
+        name: "Plano 3600",
+      });
       expect(template.scope).toBe("shared");
     });
 
     it("accepts scope=single_instance for ad-hoc templates", async () => {
       const template = await templateRepository.create({
+        ...testCtx,
         name: "ad-hoc shelf",
         scope: "single_instance",
       });
@@ -76,6 +89,7 @@ describe("templateRepository", () => {
 
     it("stores continuous-dimension capacity on the version", async () => {
       const template = await templateRepository.create({
+        ...testCtx,
         name: "Akro-Mils 30636",
         isContinuous: true,
         widthMm: 914.4, // 36 in
@@ -85,6 +99,7 @@ describe("templateRepository", () => {
       });
 
       const version = await templateRepository.getVersion({
+        orgId: testCtx.orgId,
         templateId: template.id,
         version: 1,
       });
@@ -98,6 +113,7 @@ describe("templateRepository", () => {
 
     it("stores bufferMm on insert templates", async () => {
       const template = await templateRepository.create({
+        ...testCtx,
         name: "Akro-Mils 30220",
         isContinuous: true,
         widthMm: 104.775, // 4⅛ in
@@ -105,6 +121,7 @@ describe("templateRepository", () => {
       });
 
       const version = await templateRepository.getVersion({
+        orgId: testCtx.orgId,
         templateId: template.id,
         version: 1,
       });
@@ -116,16 +133,21 @@ describe("templateRepository", () => {
   describe("findById", () => {
     it("returns the template by ID", async () => {
       const created = await templateRepository.create({
+        ...testCtx,
         name: "Plano 3600",
       });
 
-      const found = await templateRepository.findById({ id: created.id });
+      const found = await templateRepository.findById({
+        orgId: testCtx.orgId,
+        id: created.id,
+      });
       expect(found).not.toBeNull();
       expect(found!.name).toBe("Plano 3600");
     });
 
     it("returns null for nonexistent ID", async () => {
       const found = await templateRepository.findById({
+        orgId: testCtx.orgId,
         id: "00000000-0000-0000-0000-000000000000",
       });
       expect(found).toBeNull();
@@ -135,11 +157,13 @@ describe("templateRepository", () => {
   describe("findByName", () => {
     it("returns the template by name", async () => {
       await templateRepository.create({
+        ...testCtx,
         name: "Gridfinity 42mm",
         description: "Standard gridfinity baseplate",
       });
 
       const found = await templateRepository.findByName({
+        orgId: testCtx.orgId,
         name: "Gridfinity 42mm",
       });
       expect(found).not.toBeNull();
@@ -147,76 +171,97 @@ describe("templateRepository", () => {
     });
 
     it("returns null for nonexistent name", async () => {
-      const found = await templateRepository.findByName({ name: "GHOST" });
+      const found = await templateRepository.findByName({
+        orgId: testCtx.orgId,
+        name: "GHOST",
+      });
       expect(found).toBeNull();
     });
   });
 
   describe("list", () => {
     it("returns all templates", async () => {
-      await templateRepository.create({ name: "Plano 3600" });
-      await templateRepository.create({ name: "Gridfinity 42mm" });
+      await templateRepository.create({ ...testCtx, name: "Plano 3600" });
+      await templateRepository.create({ ...testCtx, name: "Gridfinity 42mm" });
 
-      const all = await templateRepository.list();
+      const all = await templateRepository.list({ orgId: testCtx.orgId });
       expect(all).toHaveLength(2);
     });
 
     it("returns empty array when no templates exist", async () => {
-      const all = await templateRepository.list();
+      const all = await templateRepository.list({ orgId: testCtx.orgId });
       expect(all).toHaveLength(0);
     });
 
     it("excludes hidden templates by default", async () => {
-      const a = await templateRepository.create({ name: "Shown" });
-      await templateRepository.create({ name: "Hidden" }).then((t) =>
-        templateRepository.hide({ id: t.id })
-      );
-      const all = await templateRepository.list();
+      const a = await templateRepository.create({ ...testCtx, name: "Shown" });
+      await templateRepository
+        .create({ ...testCtx, name: "Hidden" })
+        .then((t) => templateRepository.hide({ ...testCtx, id: t.id }));
+      const all = await templateRepository.list({ orgId: testCtx.orgId });
       expect(all).toHaveLength(1);
       expect(all[0].id).toBe(a.id);
     });
 
     it("includes hidden when includeHidden=true", async () => {
-      await templateRepository.create({ name: "Shown" });
-      await templateRepository.create({ name: "Hidden" }).then((t) =>
-        templateRepository.hide({ id: t.id })
-      );
-      const all = await templateRepository.list({ includeHidden: true });
+      await templateRepository.create({ ...testCtx, name: "Shown" });
+      await templateRepository
+        .create({ ...testCtx, name: "Hidden" })
+        .then((t) => templateRepository.hide({ ...testCtx, id: t.id }));
+      const all = await templateRepository.list({
+        orgId: testCtx.orgId,
+        includeHidden: true,
+      });
       expect(all).toHaveLength(2);
     });
   });
 
   describe("hide / unhide / getReferenceCount", () => {
     it("hides and unhides a template", async () => {
-      const t = await templateRepository.create({ name: "Plano 3600" });
+      const t = await templateRepository.create({
+        ...testCtx,
+        name: "Plano 3600",
+      });
       expect(t.isHidden).toBe(false);
 
-      const hidden = await templateRepository.hide({ id: t.id });
+      const hidden = await templateRepository.hide({ ...testCtx, id: t.id });
       expect(hidden.isHidden).toBe(true);
 
-      const shown = await templateRepository.unhide({ id: t.id });
+      const shown = await templateRepository.unhide({ ...testCtx, id: t.id });
       expect(shown.isHidden).toBe(false);
     });
 
     it("counts zero references for unused templates", async () => {
-      const t = await templateRepository.create({ name: "Plano 3600" });
-      const refs = await templateRepository.getReferenceCount({ id: t.id });
+      const t = await templateRepository.create({
+        ...testCtx,
+        name: "Plano 3600",
+      });
+      const refs = await templateRepository.getReferenceCount({
+        orgId: testCtx.orgId,
+        id: t.id,
+      });
       expect(refs.insertCount).toBe(0);
       expect(refs.locationCount).toBe(0);
     });
 
     it("counts location references through any version", async () => {
-      const t = await templateRepository.create({ name: "Plano 3600" });
+      const t = await templateRepository.create({
+        ...testCtx,
+        name: "Plano 3600",
+      });
       const mod = await moduleRepository.create({
+        ...testCtx,
         name: "MUSE",
         primaryDimensionLabel: "level",
         primaryDimensionCount: 1,
       });
       const v1 = await templateRepository.getVersion({
+        orgId: testCtx.orgId,
         templateId: t.id,
         version: 1,
       });
       await locationRepository.create({
+        ...testCtx,
         moduleId: mod.id,
         label: "1",
         pathSegments: ["MUSE", "1"],
@@ -224,7 +269,10 @@ describe("templateRepository", () => {
         templateVersionId: v1!.id,
       });
 
-      const refs = await templateRepository.getReferenceCount({ id: t.id });
+      const refs = await templateRepository.getReferenceCount({
+        orgId: testCtx.orgId,
+        id: t.id,
+      });
       expect(refs.locationCount).toBe(1);
       expect(refs.insertCount).toBe(0);
     });
@@ -233,10 +281,12 @@ describe("templateRepository", () => {
   describe("update", () => {
     it("updates fields and returns the updated template", async () => {
       const created = await templateRepository.create({
+        ...testCtx,
         name: "Plano 3600",
       });
 
       const updated = await templateRepository.update({
+        ...testCtx,
         id: created.id,
         description: "Updated description",
       });
@@ -247,15 +297,17 @@ describe("templateRepository", () => {
 
     it("logs a transaction with before and after state", async () => {
       const created = await templateRepository.create({
+        ...testCtx,
         name: "Plano 3600",
       });
 
       await templateRepository.update({
+        ...testCtx,
         id: created.id,
         description: "Updated",
       });
 
-      const txns = await transactionRepository.listRecent();
+      const txns = await transactionRepository.listRecent({ orgId: testCtx.orgId });
       const updateTx = txns.find((t) => t.actionType === "template.update");
       expect(updateTx).toBeDefined();
       expect(updateTx!.beforeState).toBeTruthy();
@@ -265,6 +317,7 @@ describe("templateRepository", () => {
     it("throws for nonexistent template", async () => {
       await expect(
         templateRepository.update({
+          ...testCtx,
           id: "00000000-0000-0000-0000-000000000000",
           name: "GHOST",
         })
@@ -275,29 +328,36 @@ describe("templateRepository", () => {
   describe("remove", () => {
     it("deletes the template", async () => {
       const created = await templateRepository.create({
+        ...testCtx,
         name: "Plano 3600",
       });
 
-      await templateRepository.remove({ id: created.id });
+      await templateRepository.remove({ ...testCtx, id: created.id });
 
-      const found = await templateRepository.findById({ id: created.id });
+      const found = await templateRepository.findById({
+        orgId: testCtx.orgId,
+        id: created.id,
+      });
       expect(found).toBeNull();
     });
 
     it("deletes associated versions", async () => {
       const created = await templateRepository.create({
+        ...testCtx,
         name: "Plano 3600",
       });
 
       await templateRepository.publishVersion({
+        ...testCtx,
         templateId: created.id,
         rows: 4,
         columns: 6,
       });
 
-      await templateRepository.remove({ id: created.id });
+      await templateRepository.remove({ ...testCtx, id: created.id });
 
       const versions = await templateRepository.listVersions({
+        orgId: testCtx.orgId,
         templateId: created.id,
       });
       expect(versions).toHaveLength(0);
@@ -305,12 +365,13 @@ describe("templateRepository", () => {
 
     it("logs a transaction", async () => {
       const created = await templateRepository.create({
+        ...testCtx,
         name: "Plano 3600",
       });
 
-      await templateRepository.remove({ id: created.id });
+      await templateRepository.remove({ ...testCtx, id: created.id });
 
-      const txns = await transactionRepository.listRecent();
+      const txns = await transactionRepository.listRecent({ orgId: testCtx.orgId });
       const deleteTx = txns.find((t) => t.actionType === "template.delete");
       expect(deleteTx).toBeDefined();
       expect(deleteTx!.afterState).toBeNull();
@@ -319,6 +380,7 @@ describe("templateRepository", () => {
     it("throws for nonexistent template", async () => {
       await expect(
         templateRepository.remove({
+          ...testCtx,
           id: "00000000-0000-0000-0000-000000000000",
         })
       ).rejects.toThrow("not found");
@@ -328,10 +390,12 @@ describe("templateRepository", () => {
   describe("publishVersion", () => {
     it("creates a new version with incremented version number", async () => {
       const template = await templateRepository.create({
+        ...testCtx,
         name: "Plano 3600",
       });
 
       const v2 = await templateRepository.publishVersion({
+        ...testCtx,
         templateId: template.id,
         rows: 4,
         columns: 6,
@@ -345,31 +409,39 @@ describe("templateRepository", () => {
 
     it("updates template currentVersion", async () => {
       const template = await templateRepository.create({
+        ...testCtx,
         name: "Plano 3600",
       });
 
       await templateRepository.publishVersion({
+        ...testCtx,
         templateId: template.id,
         rows: 4,
         columns: 6,
       });
 
-      const updated = await templateRepository.findById({ id: template.id });
+      const updated = await templateRepository.findById({
+        orgId: testCtx.orgId,
+        id: template.id,
+      });
       expect(updated!.currentVersion).toBe(2);
     });
 
     it("preserves old version when new version is published", async () => {
       const template = await templateRepository.create({
+        ...testCtx,
         name: "Plano 3600",
       });
 
       await templateRepository.publishVersion({
+        ...testCtx,
         templateId: template.id,
         rows: 4,
         columns: 6,
       });
 
       const v1 = await templateRepository.getVersion({
+        orgId: testCtx.orgId,
         templateId: template.id,
         version: 1,
       });
@@ -379,10 +451,12 @@ describe("templateRepository", () => {
 
     it("supports parametric templates", async () => {
       const template = await templateRepository.create({
+        ...testCtx,
         name: "Gridfinity Base",
       });
 
       const v2 = await templateRepository.publishVersion({
+        ...testCtx,
         templateId: template.id,
         isParametric: true,
         minRows: 1,
@@ -398,16 +472,18 @@ describe("templateRepository", () => {
 
     it("logs a transaction", async () => {
       const template = await templateRepository.create({
+        ...testCtx,
         name: "Plano 3600",
       });
 
       await templateRepository.publishVersion({
+        ...testCtx,
         templateId: template.id,
         rows: 4,
         columns: 6,
       });
 
-      const txns = await transactionRepository.listRecent();
+      const txns = await transactionRepository.listRecent({ orgId: testCtx.orgId });
       const pubTx = txns.find(
         (t) => t.actionType === "template.publishVersion"
       );
@@ -418,6 +494,7 @@ describe("templateRepository", () => {
     it("throws for nonexistent template", async () => {
       await expect(
         templateRepository.publishVersion({
+          ...testCtx,
           templateId: "00000000-0000-0000-0000-000000000000",
           rows: 4,
           columns: 6,
@@ -429,10 +506,12 @@ describe("templateRepository", () => {
   describe("getVersion", () => {
     it("returns a specific version", async () => {
       const template = await templateRepository.create({
+        ...testCtx,
         name: "Plano 3600",
       });
 
       const v1 = await templateRepository.getVersion({
+        orgId: testCtx.orgId,
         templateId: template.id,
         version: 1,
       });
@@ -444,10 +523,12 @@ describe("templateRepository", () => {
 
     it("returns null for nonexistent version", async () => {
       const template = await templateRepository.create({
+        ...testCtx,
         name: "Plano 3600",
       });
 
       const v99 = await templateRepository.getVersion({
+        orgId: testCtx.orgId,
         templateId: template.id,
         version: 99,
       });
@@ -459,22 +540,26 @@ describe("templateRepository", () => {
   describe("listVersions", () => {
     it("lists all versions for a template", async () => {
       const template = await templateRepository.create({
+        ...testCtx,
         name: "Plano 3600",
       });
 
       await templateRepository.publishVersion({
+        ...testCtx,
         templateId: template.id,
         rows: 4,
         columns: 6,
       });
 
       await templateRepository.publishVersion({
+        ...testCtx,
         templateId: template.id,
         rows: 5,
         columns: 7,
       });
 
       const versions = await templateRepository.listVersions({
+        orgId: testCtx.orgId,
         templateId: template.id,
       });
       expect(versions).toHaveLength(3); // v1 (auto) + v2 + v3
@@ -482,6 +567,7 @@ describe("templateRepository", () => {
 
     it("returns empty array for template with no versions (nonexistent template)", async () => {
       const versions = await templateRepository.listVersions({
+        orgId: testCtx.orgId,
         templateId: "00000000-0000-0000-0000-000000000000",
       });
       expect(versions).toHaveLength(0);

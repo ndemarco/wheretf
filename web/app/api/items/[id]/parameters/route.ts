@@ -1,19 +1,21 @@
 import { NextRequest, NextResponse } from "next/server";
 import { itemRepository } from "@/repositories/itemRepository";
+import { requireContext, errorResponse } from "@/lib/auth/route";
 
 export async function GET(
   _request: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ) {
   try {
+    const ctx = await requireContext();
     const { id } = await params;
-    const parameters = await itemRepository.getParameterValues({ itemId: id });
+    const parameters = await itemRepository.getParameterValues({
+      orgId: ctx.activeOrgId,
+      itemId: id,
+    });
     return NextResponse.json({ parameters });
   } catch (err) {
-    return NextResponse.json(
-      { error: err instanceof Error ? err.message : "Unexpected error" },
-      { status: 500 },
-    );
+    return errorResponse(err);
   }
 }
 
@@ -22,17 +24,18 @@ export async function POST(
   { params }: { params: Promise<{ id: string }> },
 ) {
   try {
+    const ctx = await requireContext();
     const { id } = await params;
     const body = await request.json();
     const parameter = await itemRepository.setParameterValue({
+      orgId: ctx.activeOrgId,
       itemId: id,
-      ...body,
+      parameterDefinitionId: body.parameterDefinitionId,
+      itemAspectId: body.itemAspectId,
+      value: body.value,
     });
     return NextResponse.json({ parameter }, { status: 201 });
   } catch (err) {
-    return NextResponse.json(
-      { error: err instanceof Error ? err.message : "Unexpected error" },
-      { status: 400 },
-    );
+    return errorResponse(err);
   }
 }

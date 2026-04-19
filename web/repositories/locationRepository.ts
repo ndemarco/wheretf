@@ -1,4 +1,4 @@
-import { asc, eq, inArray, sql } from "drizzle-orm";
+import { and, asc, eq, inArray, sql } from "drizzle-orm";
 import { db } from "@/db/connection";
 import {
   locations,
@@ -8,12 +8,21 @@ import {
   templateVersions,
   assignments,
 } from "@/db/schema";
+import { isolatedOrgFilter } from "@/lib/auth/scope";
 import { transactionRepository } from "./transactionRepository";
 
-async function createSingleInstanceTemplateVersion(pathSegments: string[]) {
+// locations and location_interfaces_accepted are isolated tables.
+// Every method is org-scoped. The ad-hoc template+version created by
+// `create` is written with ownerOrgId = orgId (org-private, not global).
+
+async function createSingleInstanceTemplateVersion(
+  orgId: string,
+  pathSegments: string[],
+) {
   const [template] = await db
     .insert(templates)
     .values({
+      ownerOrgId: orgId,
       name: `ad-hoc: ${pathSegments.join(":")}`,
       scope: "single_instance",
       currentVersion: 1,
@@ -24,6 +33,7 @@ async function createSingleInstanceTemplateVersion(pathSegments: string[]) {
   const [version] = await db
     .insert(templateVersions)
     .values({
+      ownerOrgId: orgId,
       templateId: template.id,
       version: 1,
     })
@@ -34,6 +44,8 @@ async function createSingleInstanceTemplateVersion(pathSegments: string[]) {
 
 export const locationRepository = {
   async create({
+    userId,
+    orgId,
     moduleId,
     parentId,
     label,
@@ -46,6 +58,8 @@ export const locationRepository = {
     gridColumn,
     metadata,
   }: {
+    userId: string;
+    orgId: string;
     moduleId?: string | null;
     parentId?: string;
     label: string;
@@ -63,12 +77,13 @@ export const locationRepository = {
 
     const resolvedTemplateVersionId =
       templateVersionId ??
-      (await createSingleInstanceTemplateVersion(pathSegments));
+      (await createSingleInstanceTemplateVersion(orgId, pathSegments));
 
     const location = await db.transaction(async (tx) => {
       const [loc] = await tx
         .insert(locations)
         .values({
+          ownerOrgId: orgId,
           moduleId,
           parentId,
           label,
@@ -86,6 +101,7 @@ export const locationRepository = {
       if (interfacesAcceptedIds?.length) {
         await tx.insert(locationInterfacesAccepted).values(
           interfacesAcceptedIds.map((interfaceTypeId) => ({
+            ownerOrgId: orgId,
             locationId: loc.id,
             interfaceTypeId,
           })),
@@ -96,6 +112,8 @@ export const locationRepository = {
     });
 
     await transactionRepository.log({
+      userId,
+      orgId,
       actionType: "location.create",
       entityType: "location",
       entityId: location.id,
@@ -107,7 +125,13 @@ export const locationRepository = {
   },
 
   /** Interface types this receptacle accepts. */
-  async getAcceptedInterfaces({ locationId }: { locationId: string }) {
+  async getAcceptedInterfaces({
+    orgId,
+    locationId,
+  }: {
+    orgId: string;
+    locationId: string;
+  }) {
     return db
       .select({
         id: interfaceTypes.id,
@@ -122,13 +146,20 @@ export const locationRepository = {
         interfaceTypes,
         eq(locationInterfacesAccepted.interfaceTypeId, interfaceTypes.id),
       )
-      .where(eq(locationInterfacesAccepted.locationId, locationId));
+      .where(
+        and(
+          isolatedOrgFilter(locationInterfacesAccepted.ownerOrgId, orgId),
+          eq(locationInterfacesAccepted.locationId, locationId),
+        ),
+      );
   },
 
   /** Batched version of getAcceptedInterfaces — returns a map keyed by locationId. */
   async getAcceptedInterfacesByLocationIds({
+    orgId,
     locationIds,
   }: {
+    orgId: string;
     locationIds: string[];
   }) {
     const map = new Map<
@@ -158,7 +189,12 @@ export const locationRepository = {
         interfaceTypes,
         eq(locationInterfacesAccepted.interfaceTypeId, interfaceTypes.id),
       )
-      .where(inArray(locationInterfacesAccepted.locationId, locationIds));
+      .where(
+        and(
+          isolatedOrgFilter(locationInterfacesAccepted.ownerOrgId, orgId),
+          inArray(locationInterfacesAccepted.locationId, locationIds),
+        ),
+      );
     for (const r of rows) {
       const { locationId, ...iface } = r;
       let list = map.get(locationId);
@@ -173,19 +209,29 @@ export const locationRepository = {
 
   /** Replace the accepted-interface set on a receptacle. */
   async setAcceptedInterfaces({
+    userId,
+    orgId,
     locationId,
     interfaceTypeIds,
   }: {
+    userId: string;
+    orgId: string;
     locationId: string;
     interfaceTypeIds: string[];
   }) {
     await db.transaction(async (tx) => {
       await tx
         .delete(locationInterfacesAccepted)
-        .where(eq(locationInterfacesAccepted.locationId, locationId));
+        .where(
+          and(
+            isolatedOrgFilter(locationInterfacesAccepted.ownerOrgId, orgId),
+            eq(locationInterfacesAccepted.locationId, locationId),
+          ),
+        );
       if (interfaceTypeIds.length > 0) {
         await tx.insert(locationInterfacesAccepted).values(
           interfaceTypeIds.map((interfaceTypeId) => ({
+            ownerOrgId: orgId,
             locationId,
             interfaceTypeId,
           })),
@@ -194,6 +240,8 @@ export const locationRepository = {
     });
 
     await transactionRepository.log({
+      userId,
+      orgId,
       actionType: "location.setAcceptedInterfaces",
       entityType: "location",
       entityId: locationId,
@@ -202,49 +250,101 @@ export const locationRepository = {
     });
   },
 
-  async findById({ id }: { id: string }) {
+  async findById({ orgId, id }: { orgId: string; id: string }) {
     const [location] = await db
       .select()
       .from(locations)
-      .where(eq(locations.id, id));
+      .where(
+        and(isolatedOrgFilter(locations.ownerOrgId, orgId), eq(locations.id, id)),
+      );
     return location ?? null;
   },
 
-  async findByPath({ moduleId, path }: { moduleId: string; path: string }) {
+  async findByPath({
+    orgId,
+    moduleId,
+    path,
+  }: {
+    orgId: string;
+    moduleId: string;
+    path: string;
+  }) {
     const results = await db
       .select()
       .from(locations)
-      .where(eq(locations.moduleId, moduleId));
+      .where(
+        and(
+          isolatedOrgFilter(locations.ownerOrgId, orgId),
+          eq(locations.moduleId, moduleId),
+        ),
+      );
     const match = results.find((l) => l.path === path);
     return match ?? null;
   },
 
-  async findByModuleId({ moduleId }: { moduleId: string }) {
+  async findByModuleId({
+    orgId,
+    moduleId,
+  }: {
+    orgId: string;
+    moduleId: string;
+  }) {
     return db
       .select()
       .from(locations)
-      .where(eq(locations.moduleId, moduleId))
+      .where(
+        and(
+          isolatedOrgFilter(locations.ownerOrgId, orgId),
+          eq(locations.moduleId, moduleId),
+        ),
+      )
       .orderBy(asc(locations.createdAt));
   },
 
-  async findByInsertId({ insertId }: { insertId: string }) {
+  async findByInsertId({
+    orgId,
+    insertId,
+  }: {
+    orgId: string;
+    insertId: string;
+  }) {
     return db
       .select()
       .from(locations)
-      .where(eq(locations.insertId, insertId));
+      .where(
+        and(
+          isolatedOrgFilter(locations.ownerOrgId, orgId),
+          eq(locations.insertId, insertId),
+        ),
+      );
   },
 
-  async findChildren({ parentId }: { parentId: string }) {
+  async findChildren({
+    orgId,
+    parentId,
+  }: {
+    orgId: string;
+    parentId: string;
+  }) {
     return db
       .select()
       .from(locations)
-      .where(eq(locations.parentId, parentId));
+      .where(
+        and(
+          isolatedOrgFilter(locations.ownerOrgId, orgId),
+          eq(locations.parentId, parentId),
+        ),
+      );
   },
 
   async update({
+    userId,
+    orgId,
     id,
     ...updates
   }: {
+    userId: string;
+    orgId: string;
     id: string;
     label?: string;
     locationType?: string;
@@ -253,16 +353,20 @@ export const locationRepository = {
     gridColumn?: number;
     metadata?: Record<string, unknown>;
   }) {
-    const before = await locationRepository.findById({ id });
+    const before = await locationRepository.findById({ orgId, id });
     if (!before) throw new Error(`Location ${id} not found`);
 
     const [updated] = await db
       .update(locations)
       .set({ ...updates, updatedAt: new Date() })
-      .where(eq(locations.id, id))
+      .where(
+        and(isolatedOrgFilter(locations.ownerOrgId, orgId), eq(locations.id, id)),
+      )
       .returning();
 
     await transactionRepository.log({
+      userId,
+      orgId,
       actionType: "location.update",
       entityType: "location",
       entityId: id,
@@ -273,13 +377,27 @@ export const locationRepository = {
     return updated;
   },
 
-  async remove({ id }: { id: string }) {
-    const before = await locationRepository.findById({ id });
+  async remove({
+    userId,
+    orgId,
+    id,
+  }: {
+    userId: string;
+    orgId: string;
+    id: string;
+  }) {
+    const before = await locationRepository.findById({ orgId, id });
     if (!before) throw new Error(`Location ${id} not found`);
 
-    await db.delete(locations).where(eq(locations.id, id));
+    await db
+      .delete(locations)
+      .where(
+        and(isolatedOrgFilter(locations.ownerOrgId, orgId), eq(locations.id, id)),
+      );
 
     await transactionRepository.log({
+      userId,
+      orgId,
       actionType: "location.delete",
       entityType: "location",
       entityId: id,
@@ -288,15 +406,30 @@ export const locationRepository = {
     });
   },
 
-  async disable({ id, reason }: { id: string; reason?: string }) {
-    const before = await locationRepository.findById({ id });
+  async disable({
+    userId,
+    orgId,
+    id,
+    reason,
+  }: {
+    userId: string;
+    orgId: string;
+    id: string;
+    reason?: string;
+  }) {
+    const before = await locationRepository.findById({ orgId, id });
     if (!before) throw new Error(`Location ${id} not found`);
 
     // Per spec: existing assignments must be resolved before disabling.
     const [row] = await db
       .select({ c: sql<number>`COUNT(*)` })
       .from(assignments)
-      .where(eq(assignments.locationId, id));
+      .where(
+        and(
+          isolatedOrgFilter(assignments.ownerOrgId, orgId),
+          eq(assignments.locationId, id),
+        ),
+      );
     if (Number(row?.c ?? 0) > 0) {
       throw new Error(
         "Cannot disable a location with active assignments. Unassign items first."
@@ -310,10 +443,14 @@ export const locationRepository = {
         disableReason: reason ?? null,
         updatedAt: new Date(),
       })
-      .where(eq(locations.id, id))
+      .where(
+        and(isolatedOrgFilter(locations.ownerOrgId, orgId), eq(locations.id, id)),
+      )
       .returning();
 
     await transactionRepository.log({
+      userId,
+      orgId,
       actionType: "location.disable",
       entityType: "location",
       entityId: id,
@@ -325,19 +462,23 @@ export const locationRepository = {
   },
 
   async restrict({
+    userId,
+    orgId,
     id,
     maxWidthMm,
     maxHeightMm,
     maxDepthMm,
     reason,
   }: {
+    userId: string;
+    orgId: string;
     id: string;
     maxWidthMm?: number | null;
     maxHeightMm?: number | null;
     maxDepthMm?: number | null;
     reason?: string | null;
   }) {
-    const before = await locationRepository.findById({ id });
+    const before = await locationRepository.findById({ orgId, id });
     if (!before) throw new Error(`Location ${id} not found`);
 
     // NOTE: spec requires refusing the clamp when existing assignments
@@ -354,10 +495,14 @@ export const locationRepository = {
         restrictReason: reason ?? null,
         updatedAt: new Date(),
       })
-      .where(eq(locations.id, id))
+      .where(
+        and(isolatedOrgFilter(locations.ownerOrgId, orgId), eq(locations.id, id)),
+      )
       .returning();
 
     await transactionRepository.log({
+      userId,
+      orgId,
       actionType: "location.restrict",
       entityType: "location",
       entityId: id,
@@ -368,8 +513,18 @@ export const locationRepository = {
     return updated;
   },
 
-  async clearRestrict({ id }: { id: string }) {
+  async clearRestrict({
+    userId,
+    orgId,
+    id,
+  }: {
+    userId: string;
+    orgId: string;
+    id: string;
+  }) {
     return locationRepository.restrict({
+      userId,
+      orgId,
       id,
       maxWidthMm: null,
       maxHeightMm: null,
@@ -378,8 +533,16 @@ export const locationRepository = {
     });
   },
 
-  async enable({ id }: { id: string }) {
-    const before = await locationRepository.findById({ id });
+  async enable({
+    userId,
+    orgId,
+    id,
+  }: {
+    userId: string;
+    orgId: string;
+    id: string;
+  }) {
+    const before = await locationRepository.findById({ orgId, id });
     if (!before) throw new Error(`Location ${id} not found`);
 
     const [updated] = await db
@@ -389,10 +552,14 @@ export const locationRepository = {
         disableReason: null,
         updatedAt: new Date(),
       })
-      .where(eq(locations.id, id))
+      .where(
+        and(isolatedOrgFilter(locations.ownerOrgId, orgId), eq(locations.id, id)),
+      )
       .returning();
 
     await transactionRepository.log({
+      userId,
+      orgId,
       actionType: "location.enable",
       entityType: "location",
       entityId: id,
@@ -414,9 +581,13 @@ export const locationRepository = {
    *   - template's dividersFixed constraints not violated (if applicable)
    */
   async merge({
+    userId,
+    orgId,
     originId,
     aliasIds,
   }: {
+    userId: string;
+    orgId: string;
     originId: string;
     aliasIds: string[];
   }) {
@@ -428,7 +599,12 @@ export const locationRepository = {
     const rows = await db
       .select()
       .from(locations)
-      .where(inArray(locations.id, allIds));
+      .where(
+        and(
+          isolatedOrgFilter(locations.ownerOrgId, orgId),
+          inArray(locations.id, allIds),
+        ),
+      );
 
     if (rows.length !== allIds.length) {
       throw new Error("One or more cells not found");
@@ -450,7 +626,12 @@ export const locationRepository = {
     const [asgRow] = await db
       .select({ c: sql<number>`COUNT(*)` })
       .from(assignments)
-      .where(inArray(assignments.locationId, allIds));
+      .where(
+        and(
+          isolatedOrgFilter(assignments.ownerOrgId, orgId),
+          inArray(assignments.locationId, allIds),
+        ),
+      );
     if (Number(asgRow?.c ?? 0) > 0) {
       throw new Error(
         "Cannot merge cells with active assignments. Unassign items first."
@@ -531,11 +712,18 @@ export const locationRepository = {
         await tx
           .update(locations)
           .set({ mergedIntoId: originId, updatedAt: new Date() })
-          .where(eq(locations.id, r.id));
+          .where(
+            and(
+              isolatedOrgFilter(locations.ownerOrgId, orgId),
+              eq(locations.id, r.id),
+            ),
+          );
       }
     });
 
     await transactionRepository.log({
+      userId,
+      orgId,
       actionType: "location.merge",
       entityType: "location",
       entityId: originId,
@@ -553,15 +741,19 @@ export const locationRepository = {
    * Parent becomes non-leaf (no longer valid assignment target).
    */
   async divide({
+    userId,
+    orgId,
     parentId,
     labels,
     source,
   }: {
+    userId: string;
+    orgId: string;
     parentId: string;
     labels: string[];
     source?: string; // 'ad_hoc' | 'template_option:<id>' | 'insert_template:<id>'
   }) {
-    const parent = await locationRepository.findById({ id: parentId });
+    const parent = await locationRepository.findById({ orgId, id: parentId });
     if (!parent) throw new Error(`Location ${parentId} not found`);
 
     if (labels.length < 2) {
@@ -579,7 +771,12 @@ export const locationRepository = {
     const [asgRow] = await db
       .select({ c: sql<number>`COUNT(*)` })
       .from(assignments)
-      .where(eq(assignments.locationId, parentId));
+      .where(
+        and(
+          isolatedOrgFilter(assignments.ownerOrgId, orgId),
+          eq(assignments.locationId, parentId),
+        ),
+      );
     if (Number(asgRow?.c ?? 0) > 0) {
       throw new Error(
         "Cannot divide a location with active assignments. Unassign items first."
@@ -590,7 +787,12 @@ export const locationRepository = {
     const existingChildren = await db
       .select({ id: locations.id })
       .from(locations)
-      .where(eq(locations.parentId, parentId));
+      .where(
+        and(
+          isolatedOrgFilter(locations.ownerOrgId, orgId),
+          eq(locations.parentId, parentId),
+        ),
+      );
     if (existingChildren.length > 0) {
       throw new Error("Location is already divided");
     }
@@ -606,6 +808,7 @@ export const locationRepository = {
         const [row] = await tx
           .insert(locations)
           .values({
+            ownerOrgId: orgId,
             moduleId: parent.moduleId,
             parentId,
             label,
@@ -626,12 +829,19 @@ export const locationRepository = {
           subdivisionSource: source ?? "ad_hoc",
           updatedAt: new Date(),
         })
-        .where(eq(locations.id, parentId));
+        .where(
+          and(
+            isolatedOrgFilter(locations.ownerOrgId, orgId),
+            eq(locations.id, parentId),
+          ),
+        );
 
       return created;
     });
 
     await transactionRepository.log({
+      userId,
+      orgId,
       actionType: "location.divide",
       entityType: "location",
       entityId: parentId,
@@ -646,14 +856,27 @@ export const locationRepository = {
    * Collapse a divided parent back to a leaf. Refuses if any child
    * has assignments or has been divided itself.
    */
-  async undivide({ parentId }: { parentId: string }) {
-    const parent = await locationRepository.findById({ id: parentId });
+  async undivide({
+    userId,
+    orgId,
+    parentId,
+  }: {
+    userId: string;
+    orgId: string;
+    parentId: string;
+  }) {
+    const parent = await locationRepository.findById({ orgId, id: parentId });
     if (!parent) throw new Error(`Location ${parentId} not found`);
 
     const children = await db
       .select()
       .from(locations)
-      .where(eq(locations.parentId, parentId));
+      .where(
+        and(
+          isolatedOrgFilter(locations.ownerOrgId, orgId),
+          eq(locations.parentId, parentId),
+        ),
+      );
     if (children.length === 0) {
       throw new Error("Location is not divided");
     }
@@ -663,7 +886,12 @@ export const locationRepository = {
     const [asgRow] = await db
       .select({ c: sql<number>`COUNT(*)` })
       .from(assignments)
-      .where(inArray(assignments.locationId, childIds));
+      .where(
+        and(
+          isolatedOrgFilter(assignments.ownerOrgId, orgId),
+          inArray(assignments.locationId, childIds),
+        ),
+      );
     if (Number(asgRow?.c ?? 0) > 0) {
       throw new Error(
         "Cannot undivide: children have active assignments. Unassign first."
@@ -673,7 +901,12 @@ export const locationRepository = {
     const [grandRow] = await db
       .select({ c: sql<number>`COUNT(*)` })
       .from(locations)
-      .where(inArray(locations.parentId, childIds));
+      .where(
+        and(
+          isolatedOrgFilter(locations.ownerOrgId, orgId),
+          inArray(locations.parentId, childIds),
+        ),
+      );
     if (Number(grandRow?.c ?? 0) > 0) {
       throw new Error(
         "Cannot undivide: children have been subdivided themselves. Undivide them first."
@@ -681,7 +914,14 @@ export const locationRepository = {
     }
 
     await db.transaction(async (tx) => {
-      await tx.delete(locations).where(eq(locations.parentId, parentId));
+      await tx
+        .delete(locations)
+        .where(
+          and(
+            isolatedOrgFilter(locations.ownerOrgId, orgId),
+            eq(locations.parentId, parentId),
+          ),
+        );
       await tx
         .update(locations)
         .set({
@@ -689,10 +929,17 @@ export const locationRepository = {
           subdivisionSource: null,
           updatedAt: new Date(),
         })
-        .where(eq(locations.id, parentId));
+        .where(
+          and(
+            isolatedOrgFilter(locations.ownerOrgId, orgId),
+            eq(locations.id, parentId),
+          ),
+        );
     });
 
     await transactionRepository.log({
+      userId,
+      orgId,
       actionType: "location.undivide",
       entityType: "location",
       entityId: parentId,
@@ -703,11 +950,24 @@ export const locationRepository = {
     return { parentId, removed: childIds.length };
   },
 
-  async unmerge({ originId }: { originId: string }) {
+  async unmerge({
+    userId,
+    orgId,
+    originId,
+  }: {
+    userId: string;
+    orgId: string;
+    originId: string;
+  }) {
     const aliases = await db
       .select()
       .from(locations)
-      .where(eq(locations.mergedIntoId, originId));
+      .where(
+        and(
+          isolatedOrgFilter(locations.ownerOrgId, orgId),
+          eq(locations.mergedIntoId, originId),
+        ),
+      );
     if (aliases.length === 0) {
       throw new Error("No merged cells for this origin");
     }
@@ -715,9 +975,16 @@ export const locationRepository = {
     await db
       .update(locations)
       .set({ mergedIntoId: null, updatedAt: new Date() })
-      .where(eq(locations.mergedIntoId, originId));
+      .where(
+        and(
+          isolatedOrgFilter(locations.ownerOrgId, orgId),
+          eq(locations.mergedIntoId, originId),
+        ),
+      );
 
     await transactionRepository.log({
+      userId,
+      orgId,
       actionType: "location.unmerge",
       entityType: "location",
       entityId: originId,
@@ -729,22 +996,30 @@ export const locationRepository = {
   },
 
   async setMergeAlias({
+    userId,
+    orgId,
     id,
     mergedIntoId,
   }: {
+    userId: string;
+    orgId: string;
     id: string;
     mergedIntoId: string;
   }) {
-    const before = await locationRepository.findById({ id });
+    const before = await locationRepository.findById({ orgId, id });
     if (!before) throw new Error(`Location ${id} not found`);
 
     const [updated] = await db
       .update(locations)
       .set({ mergedIntoId, updatedAt: new Date() })
-      .where(eq(locations.id, id))
+      .where(
+        and(isolatedOrgFilter(locations.ownerOrgId, orgId), eq(locations.id, id)),
+      )
       .returning();
 
     await transactionRepository.log({
+      userId,
+      orgId,
       actionType: "location.setMergeAlias",
       entityType: "location",
       entityId: id,
@@ -755,17 +1030,29 @@ export const locationRepository = {
     return updated;
   },
 
-  async clearMergeAlias({ id }: { id: string }) {
-    const before = await locationRepository.findById({ id });
+  async clearMergeAlias({
+    userId,
+    orgId,
+    id,
+  }: {
+    userId: string;
+    orgId: string;
+    id: string;
+  }) {
+    const before = await locationRepository.findById({ orgId, id });
     if (!before) throw new Error(`Location ${id} not found`);
 
     const [updated] = await db
       .update(locations)
       .set({ mergedIntoId: null, updatedAt: new Date() })
-      .where(eq(locations.id, id))
+      .where(
+        and(isolatedOrgFilter(locations.ownerOrgId, orgId), eq(locations.id, id)),
+      )
       .returning();
 
     await transactionRepository.log({
+      userId,
+      orgId,
       actionType: "location.clearMergeAlias",
       entityType: "location",
       entityId: id,

@@ -1,13 +1,18 @@
 import { NextRequest, NextResponse } from "next/server";
 import { insertRepository } from "@/repositories/insertRepository";
+import { requireContext, errorResponse } from "@/lib/auth/route";
 
 export async function GET(
   _request: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ) {
   try {
+    const ctx = await requireContext();
     const { id } = await params;
-    const insert = await insertRepository.findById({ id });
+    const insert = await insertRepository.findById({
+      orgId: ctx.activeOrgId,
+      id,
+    });
     if (!insert) {
       return NextResponse.json(
         { error: "Insert not found" },
@@ -16,10 +21,7 @@ export async function GET(
     }
     return NextResponse.json({ insert });
   } catch (err) {
-    return NextResponse.json(
-      { error: err instanceof Error ? err.message : "Unexpected error" },
-      { status: 500 },
-    );
+    return errorResponse(err);
   }
 }
 
@@ -28,16 +30,18 @@ export async function PATCH(
   { params }: { params: Promise<{ id: string }> },
 ) {
   try {
+    const ctx = await requireContext();
     const { id } = await params;
     const body = await request.json();
-    const insert = await insertRepository.update({ id, ...body });
+    const insert = await insertRepository.update({
+      userId: ctx.userId,
+      orgId: ctx.activeOrgId,
+      id,
+      ...body,
+    });
     return NextResponse.json({ insert });
   } catch (err) {
-    const message = err instanceof Error ? err.message : "Unexpected error";
-    if (message.includes("not found")) {
-      return NextResponse.json({ error: message }, { status: 404 });
-    }
-    return NextResponse.json({ error: message }, { status: 400 });
+    return errorResponse(err);
   }
 }
 
@@ -46,14 +50,15 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> },
 ) {
   try {
+    const ctx = await requireContext();
     const { id } = await params;
-    await insertRepository.remove({ id });
+    await insertRepository.remove({
+      userId: ctx.userId,
+      orgId: ctx.activeOrgId,
+      id,
+    });
     return NextResponse.json({ success: true });
   } catch (err) {
-    const message = err instanceof Error ? err.message : "Unexpected error";
-    if (message.includes("not found")) {
-      return NextResponse.json({ error: message }, { status: 404 });
-    }
-    return NextResponse.json({ error: message }, { status: 400 });
+    return errorResponse(err);
   }
 }

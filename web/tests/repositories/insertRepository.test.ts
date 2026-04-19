@@ -4,9 +4,11 @@ import { locationRepository } from "@/repositories/locationRepository";
 import { moduleRepository } from "@/repositories/moduleRepository";
 import { templateRepository } from "@/repositories/templateRepository";
 import { transactionRepository } from "@/repositories/transactionRepository";
+import { testCtx } from "../setup";
 
 async function createTestModule() {
   return moduleRepository.create({
+    ...testCtx,
     name: "MUSE",
     primaryDimensionLabel: "level",
     primaryDimensionCount: 11,
@@ -18,6 +20,7 @@ async function createReceptacleLocation(
   interfacesAcceptedIds?: string[]
 ) {
   return locationRepository.create({
+    ...testCtx,
     moduleId,
     label: "A1",
     pathSegments: ["MUSE", "3", "A1"],
@@ -29,14 +32,16 @@ async function createReceptacleLocation(
 async function createTemplateProviding(identifiers: string[]) {
   const ifaces = await Promise.all(
     identifiers.map((id) =>
-      interfaceTypeRepository.create({ identifier: id }),
+      interfaceTypeRepository.create({ ...testCtx, identifier: id }),
     ),
   );
   const template = await templateRepository.create({
+    ...testCtx,
     name: `tmpl-${identifiers.join("-")}-${Math.random()}`,
     interfacesProvidedIds: ifaces.map((i) => i.id),
   });
   const version = await templateRepository.getVersion({
+    orgId: testCtx.orgId,
     templateId: template.id,
     version: 1,
   });
@@ -47,16 +52,19 @@ describe("insertRepository", () => {
   describe("create", () => {
     it("creates an unplaced insert", async () => {
       const insert = await insertRepository.create({
+        ...testCtx,
         name: "Resistor tray",
       });
 
       expect(insert.id).toBeDefined();
       expect(insert.name).toBe("Resistor tray");
       expect(insert.locationId).toBeNull();
+      expect(insert.ownerOrgId).toBe(testCtx.orgId);
     });
 
     it("creates an insert with parametric dimensions", async () => {
       const insert = await insertRepository.create({
+        ...testCtx,
         name: "Grid bin",
         rows: 2,
         columns: 3,
@@ -68,43 +76,57 @@ describe("insertRepository", () => {
 
     it("stores metadata and overrides as JSON", async () => {
       const insert = await insertRepository.create({
+        ...testCtx,
         name: "Custom tray",
         overrides: { removedDividers: [1, 3] },
         metadata: { color: "blue" },
       });
 
-      const found = await insertRepository.findById({ id: insert.id });
+      const found = await insertRepository.findById({
+        orgId: testCtx.orgId,
+        id: insert.id,
+      });
       expect(found?.overrides).toEqual({ removedDividers: [1, 3] });
       expect(found?.metadata).toEqual({ color: "blue" });
     });
 
     it("logs a transaction", async () => {
       const insert = await insertRepository.create({
+        ...testCtx,
         name: "Test insert",
       });
 
-      const txns = await transactionRepository.listRecent();
+      const txns = await transactionRepository.listRecent({
+        orgId: testCtx.orgId,
+      });
       const createTx = txns.find((t) => t.actionType === "insert.create");
       expect(createTx).toBeDefined();
       expect(createTx!.entityType).toBe("insert");
       expect(createTx!.entityId).toBe(insert.id);
       expect(createTx!.beforeState).toBeNull();
+      expect(createTx!.actorUserId).toBe(testCtx.userId);
+      expect(createTx!.ownerOrgId).toBe(testCtx.orgId);
     });
   });
 
   describe("findById", () => {
     it("returns the insert by ID", async () => {
       const created = await insertRepository.create({
+        ...testCtx,
         name: "Test insert",
       });
 
-      const found = await insertRepository.findById({ id: created.id });
+      const found = await insertRepository.findById({
+        orgId: testCtx.orgId,
+        id: created.id,
+      });
       expect(found).not.toBeNull();
       expect(found!.name).toBe("Test insert");
     });
 
     it("returns null for nonexistent ID", async () => {
       const found = await insertRepository.findById({
+        orgId: testCtx.orgId,
         id: "00000000-0000-0000-0000-000000000000",
       });
       expect(found).toBeNull();
@@ -115,9 +137,13 @@ describe("insertRepository", () => {
     it("places an insert into a receptacle location", async () => {
       const module = await createTestModule();
       const location = await createReceptacleLocation(module.id);
-      const insert = await insertRepository.create({ name: "Tray" });
+      const insert = await insertRepository.create({
+        ...testCtx,
+        name: "Tray",
+      });
 
       const placed = await insertRepository.place({
+        ...testCtx,
         id: insert.id,
         locationId: location.id,
       });
@@ -132,12 +158,14 @@ describe("insertRepository", () => {
       ]);
       const location = await createReceptacleLocation(module.id, [ifaces[0].id]);
       const insert = await insertRepository.create({
+        ...testCtx,
         name: "Tray",
         templateId: template.id,
         templateVersionId: version.id,
       });
 
       const placed = await insertRepository.place({
+        ...testCtx,
         id: insert.id,
         locationId: location.id,
       });
@@ -148,12 +176,17 @@ describe("insertRepository", () => {
     it("succeeds when insert has no interface type (template provides none)", async () => {
       const module = await createTestModule();
       const plano = await interfaceTypeRepository.create({
+        ...testCtx,
         identifier: "plano-3600",
       });
       const location = await createReceptacleLocation(module.id, [plano.id]);
-      const insert = await insertRepository.create({ name: "Generic tray" });
+      const insert = await insertRepository.create({
+        ...testCtx,
+        name: "Generic tray",
+      });
 
       const placed = await insertRepository.place({
+        ...testCtx,
         id: insert.id,
         locationId: location.id,
       });
@@ -168,12 +201,14 @@ describe("insertRepository", () => {
       ]);
       const location = await createReceptacleLocation(module.id);
       const insert = await insertRepository.create({
+        ...testCtx,
         name: "Tray",
         templateId: template.id,
         templateVersionId: version.id,
       });
 
       const placed = await insertRepository.place({
+        ...testCtx,
         id: insert.id,
         locationId: location.id,
       });
@@ -184,6 +219,7 @@ describe("insertRepository", () => {
     it("fails when interface types do not match", async () => {
       const module = await createTestModule();
       const plano = await interfaceTypeRepository.create({
+        ...testCtx,
         identifier: "plano-3600",
       });
       const { template, version } = await createTemplateProviding([
@@ -191,6 +227,7 @@ describe("insertRepository", () => {
       ]);
       const location = await createReceptacleLocation(module.id, [plano.id]);
       const insert = await insertRepository.create({
+        ...testCtx,
         name: "Tray",
         templateId: template.id,
         templateVersionId: version.id,
@@ -198,6 +235,7 @@ describe("insertRepository", () => {
 
       await expect(
         insertRepository.place({
+          ...testCtx,
           id: insert.id,
           locationId: location.id,
         })
@@ -207,15 +245,20 @@ describe("insertRepository", () => {
     it("fails when location is not a receptacle", async () => {
       const module = await createTestModule();
       const location = await locationRepository.create({
+        ...testCtx,
         moduleId: module.id,
         label: "3",
         pathSegments: ["MUSE", "3"],
         locationType: "fixed",
       });
-      const insert = await insertRepository.create({ name: "Tray" });
+      const insert = await insertRepository.create({
+        ...testCtx,
+        name: "Tray",
+      });
 
       await expect(
         insertRepository.place({
+          ...testCtx,
           id: insert.id,
           locationId: location.id,
         })
@@ -223,10 +266,14 @@ describe("insertRepository", () => {
     });
 
     it("fails when location does not exist", async () => {
-      const insert = await insertRepository.create({ name: "Tray" });
+      const insert = await insertRepository.create({
+        ...testCtx,
+        name: "Tray",
+      });
 
       await expect(
         insertRepository.place({
+          ...testCtx,
           id: insert.id,
           locationId: "00000000-0000-0000-0000-000000000000",
         })
@@ -239,6 +286,7 @@ describe("insertRepository", () => {
 
       await expect(
         insertRepository.place({
+          ...testCtx,
           id: "00000000-0000-0000-0000-000000000000",
           locationId: location.id,
         })
@@ -248,14 +296,20 @@ describe("insertRepository", () => {
     it("logs a transaction", async () => {
       const module = await createTestModule();
       const location = await createReceptacleLocation(module.id);
-      const insert = await insertRepository.create({ name: "Tray" });
+      const insert = await insertRepository.create({
+        ...testCtx,
+        name: "Tray",
+      });
 
       await insertRepository.place({
+        ...testCtx,
         id: insert.id,
         locationId: location.id,
       });
 
-      const txns = await transactionRepository.listRecent();
+      const txns = await transactionRepository.listRecent({
+        orgId: testCtx.orgId,
+      });
       const placeTx = txns.find((t) => t.actionType === "insert.place");
       expect(placeTx).toBeDefined();
       expect(placeTx!.entityId).toBe(insert.id);
@@ -266,13 +320,18 @@ describe("insertRepository", () => {
     it("unplaces an insert", async () => {
       const module = await createTestModule();
       const location = await createReceptacleLocation(module.id);
-      const insert = await insertRepository.create({ name: "Tray" });
+      const insert = await insertRepository.create({
+        ...testCtx,
+        name: "Tray",
+      });
       await insertRepository.place({
+        ...testCtx,
         id: insert.id,
         locationId: location.id,
       });
 
       const unplaced = await insertRepository.removeFromLocation({
+        ...testCtx,
         id: insert.id,
       });
 
@@ -282,15 +341,24 @@ describe("insertRepository", () => {
     it("logs a transaction", async () => {
       const module = await createTestModule();
       const location = await createReceptacleLocation(module.id);
-      const insert = await insertRepository.create({ name: "Tray" });
+      const insert = await insertRepository.create({
+        ...testCtx,
+        name: "Tray",
+      });
       await insertRepository.place({
+        ...testCtx,
         id: insert.id,
         locationId: location.id,
       });
 
-      await insertRepository.removeFromLocation({ id: insert.id });
+      await insertRepository.removeFromLocation({
+        ...testCtx,
+        id: insert.id,
+      });
 
-      const txns = await transactionRepository.listRecent();
+      const txns = await transactionRepository.listRecent({
+        orgId: testCtx.orgId,
+      });
       const removeTx = txns.find(
         (t) => t.actionType === "insert.removeFromLocation"
       );
@@ -302,13 +370,18 @@ describe("insertRepository", () => {
     it("returns the insert at a location", async () => {
       const module = await createTestModule();
       const location = await createReceptacleLocation(module.id);
-      const insert = await insertRepository.create({ name: "Tray" });
+      const insert = await insertRepository.create({
+        ...testCtx,
+        name: "Tray",
+      });
       await insertRepository.place({
+        ...testCtx,
         id: insert.id,
         locationId: location.id,
       });
 
       const found = await insertRepository.findByLocationId({
+        orgId: testCtx.orgId,
         locationId: location.id,
       });
       expect(found).not.toBeNull();
@@ -320,6 +393,7 @@ describe("insertRepository", () => {
       const location = await createReceptacleLocation(module.id);
 
       const found = await insertRepository.findByLocationId({
+        orgId: testCtx.orgId,
         locationId: location.id,
       });
       expect(found).toBeNull();
@@ -331,15 +405,27 @@ describe("insertRepository", () => {
       const module = await createTestModule();
       const location = await createReceptacleLocation(module.id);
 
-      const placed = await insertRepository.create({ name: "Placed tray" });
+      const placed = await insertRepository.create({
+        ...testCtx,
+        name: "Placed tray",
+      });
       await insertRepository.place({
+        ...testCtx,
         id: placed.id,
         locationId: location.id,
       });
-      await insertRepository.create({ name: "Unplaced tray 1" });
-      await insertRepository.create({ name: "Unplaced tray 2" });
+      await insertRepository.create({
+        ...testCtx,
+        name: "Unplaced tray 1",
+      });
+      await insertRepository.create({
+        ...testCtx,
+        name: "Unplaced tray 2",
+      });
 
-      const unplaced = await insertRepository.listUnplaced();
+      const unplaced = await insertRepository.listUnplaced({
+        orgId: testCtx.orgId,
+      });
       expect(unplaced).toHaveLength(2);
       expect(unplaced.every((i) => i.locationId === null)).toBe(true);
     });
@@ -347,13 +433,19 @@ describe("insertRepository", () => {
     it("returns empty array when all inserts are placed", async () => {
       const module = await createTestModule();
       const location = await createReceptacleLocation(module.id);
-      const insert = await insertRepository.create({ name: "Tray" });
+      const insert = await insertRepository.create({
+        ...testCtx,
+        name: "Tray",
+      });
       await insertRepository.place({
+        ...testCtx,
         id: insert.id,
         locationId: location.id,
       });
 
-      const unplaced = await insertRepository.listUnplaced();
+      const unplaced = await insertRepository.listUnplaced({
+        orgId: testCtx.orgId,
+      });
       expect(unplaced).toHaveLength(0);
     });
   });
@@ -361,10 +453,12 @@ describe("insertRepository", () => {
   describe("update", () => {
     it("updates fields and returns the updated insert", async () => {
       const created = await insertRepository.create({
+        ...testCtx,
         name: "Old name",
       });
 
       const updated = await insertRepository.update({
+        ...testCtx,
         id: created.id,
         name: "New name",
       });
@@ -374,15 +468,19 @@ describe("insertRepository", () => {
 
     it("logs a transaction with before and after state", async () => {
       const created = await insertRepository.create({
+        ...testCtx,
         name: "Test insert",
       });
 
       await insertRepository.update({
+        ...testCtx,
         id: created.id,
         name: "Updated",
       });
 
-      const txns = await transactionRepository.listRecent();
+      const txns = await transactionRepository.listRecent({
+        orgId: testCtx.orgId,
+      });
       const updateTx = txns.find((t) => t.actionType === "insert.update");
       expect(updateTx).toBeDefined();
       expect(updateTx!.beforeState).toBeTruthy();
@@ -392,6 +490,7 @@ describe("insertRepository", () => {
     it("throws for nonexistent insert", async () => {
       await expect(
         insertRepository.update({
+          ...testCtx,
           id: "00000000-0000-0000-0000-000000000000",
           name: "GHOST",
         })
@@ -402,23 +501,30 @@ describe("insertRepository", () => {
   describe("remove", () => {
     it("deletes the insert", async () => {
       const created = await insertRepository.create({
+        ...testCtx,
         name: "Test insert",
       });
 
-      await insertRepository.remove({ id: created.id });
+      await insertRepository.remove({ ...testCtx, id: created.id });
 
-      const found = await insertRepository.findById({ id: created.id });
+      const found = await insertRepository.findById({
+        orgId: testCtx.orgId,
+        id: created.id,
+      });
       expect(found).toBeNull();
     });
 
     it("logs a transaction", async () => {
       const created = await insertRepository.create({
+        ...testCtx,
         name: "Test insert",
       });
 
-      await insertRepository.remove({ id: created.id });
+      await insertRepository.remove({ ...testCtx, id: created.id });
 
-      const txns = await transactionRepository.listRecent();
+      const txns = await transactionRepository.listRecent({
+        orgId: testCtx.orgId,
+      });
       const deleteTx = txns.find((t) => t.actionType === "insert.delete");
       expect(deleteTx).toBeDefined();
       expect(deleteTx!.afterState).toBeNull();
@@ -427,6 +533,7 @@ describe("insertRepository", () => {
     it("throws for nonexistent insert", async () => {
       await expect(
         insertRepository.remove({
+          ...testCtx,
           id: "00000000-0000-0000-0000-000000000000",
         })
       ).rejects.toThrow("not found");
@@ -436,28 +543,39 @@ describe("insertRepository", () => {
   describe("cells travel with insert (IN-3 structural correctness)", () => {
     it("re-parents cells when insert moves; overrides persist", async () => {
       const mod = await moduleRepository.create({
+        ...testCtx,
         name: "MUSE",
         primaryDimensionLabel: "level",
         primaryDimensionCount: 11,
       });
       const levelA = await locationRepository.create({
+        ...testCtx,
         moduleId: mod.id,
         label: "1",
         pathSegments: ["MUSE", "1"],
         locationType: "receptacle",
       });
       const levelB = await locationRepository.create({
+        ...testCtx,
         moduleId: mod.id,
         label: "2",
         pathSegments: ["MUSE", "2"],
         locationType: "receptacle",
       });
 
-      const insert = await insertRepository.create({ name: "Construction screws" });
-      await insertRepository.place({ id: insert.id, locationId: levelA.id });
+      const insert = await insertRepository.create({
+        ...testCtx,
+        name: "Construction screws",
+      });
+      await insertRepository.place({
+        ...testCtx,
+        id: insert.id,
+        locationId: levelA.id,
+      });
 
       // Create a cell "A3" inside the insert at level 1
       const cell = await locationRepository.create({
+        ...testCtx,
         moduleId: mod.id,
         parentId: levelA.id,
         label: "A3",
@@ -469,13 +587,27 @@ describe("insertRepository", () => {
       });
 
       // Disable the cell — this is an override on the cell row
-      await locationRepository.disable({ id: cell.id, reason: "cracked" });
+      await locationRepository.disable({
+        ...testCtx,
+        id: cell.id,
+        reason: "cracked",
+      });
 
       // Move insert from level 1 to level 2
-      await insertRepository.removeFromLocation({ id: insert.id });
-      await insertRepository.place({ id: insert.id, locationId: levelB.id });
+      await insertRepository.removeFromLocation({
+        ...testCtx,
+        id: insert.id,
+      });
+      await insertRepository.place({
+        ...testCtx,
+        id: insert.id,
+        locationId: levelB.id,
+      });
 
-      const moved = await locationRepository.findById({ id: cell.id });
+      const moved = await locationRepository.findById({
+        orgId: testCtx.orgId,
+        id: cell.id,
+      });
       expect(moved).not.toBeNull();
       expect(moved!.insertId).toBe(insert.id);
       expect(moved!.parentId).toBe(levelB.id);
@@ -487,42 +619,62 @@ describe("insertRepository", () => {
 
     it("refuses to place into a receptacle that already holds another insert", async () => {
       const mod = await moduleRepository.create({
+        ...testCtx,
         name: "MUSE",
         primaryDimensionLabel: "level",
         primaryDimensionCount: 11,
       });
       const level = await locationRepository.create({
+        ...testCtx,
         moduleId: mod.id,
         label: "1",
         pathSegments: ["MUSE", "1"],
         locationType: "receptacle",
       });
 
-      const a = await insertRepository.create({ name: "first" });
-      const b = await insertRepository.create({ name: "second" });
-      await insertRepository.place({ id: a.id, locationId: level.id });
+      const a = await insertRepository.create({ ...testCtx, name: "first" });
+      const b = await insertRepository.create({ ...testCtx, name: "second" });
+      await insertRepository.place({
+        ...testCtx,
+        id: a.id,
+        locationId: level.id,
+      });
 
       await expect(
-        insertRepository.place({ id: b.id, locationId: level.id })
+        insertRepository.place({
+          ...testCtx,
+          id: b.id,
+          locationId: level.id,
+        })
       ).rejects.toThrow(/already holds/);
     });
 
     it("unplace leaves cells with insert_id set, parent_id null, path = cell label", async () => {
       const mod = await moduleRepository.create({
+        ...testCtx,
         name: "MUSE",
         primaryDimensionLabel: "level",
         primaryDimensionCount: 11,
       });
       const level = await locationRepository.create({
+        ...testCtx,
         moduleId: mod.id,
         label: "1",
         pathSegments: ["MUSE", "1"],
         locationType: "receptacle",
       });
-      const insert = await insertRepository.create({ name: "orphan" });
-      await insertRepository.place({ id: insert.id, locationId: level.id });
+      const insert = await insertRepository.create({
+        ...testCtx,
+        name: "orphan",
+      });
+      await insertRepository.place({
+        ...testCtx,
+        id: insert.id,
+        locationId: level.id,
+      });
 
       const cell = await locationRepository.create({
+        ...testCtx,
         moduleId: mod.id,
         parentId: level.id,
         label: "A1",
@@ -531,9 +683,15 @@ describe("insertRepository", () => {
         insertId: insert.id,
       });
 
-      await insertRepository.removeFromLocation({ id: insert.id });
+      await insertRepository.removeFromLocation({
+        ...testCtx,
+        id: insert.id,
+      });
 
-      const unplaced = await locationRepository.findById({ id: cell.id });
+      const unplaced = await locationRepository.findById({
+        orgId: testCtx.orgId,
+        id: cell.id,
+      });
       expect(unplaced!.insertId).toBe(insert.id);
       expect(unplaced!.parentId).toBeNull();
       expect(unplaced!.path).toBe("A1");
@@ -541,14 +699,17 @@ describe("insertRepository", () => {
 
     it("materializes cells at creation time (unplaced, module null, path = label)", async () => {
       const template = await templateRepository.create({
+        ...testCtx,
         name: "Plano 3600 test",
       });
       const version = await templateRepository.getVersion({
+        orgId: testCtx.orgId,
         templateId: template.id,
         version: 1,
       });
 
       const insert = await insertRepository.create({
+        ...testCtx,
         name: "fresh",
         templateId: template.id,
         templateVersionId: version!.id,
@@ -569,6 +730,7 @@ describe("insertRepository", () => {
         expect(cell.insertId).toBe(insert.id);
         expect(cell.moduleId).toBeNull();
         expect(cell.parentId).toBeNull();
+        expect(cell.ownerOrgId).toBe(testCtx.orgId);
         // Path is just the cell label pre-placement
         expect(cell.path).toBe(cell.label);
       }
@@ -576,18 +738,22 @@ describe("insertRepository", () => {
 
     it("place fills in moduleId + parentId + path on an unplaced insert", async () => {
       const template = await templateRepository.create({
+        ...testCtx,
         name: "Plano 3600 test",
       });
       const version = await templateRepository.getVersion({
+        orgId: testCtx.orgId,
         templateId: template.id,
         version: 1,
       });
       const mod = await moduleRepository.create({
+        ...testCtx,
         name: "MUSE",
         primaryDimensionLabel: "level",
         primaryDimensionCount: 11,
       });
       const level = await locationRepository.create({
+        ...testCtx,
         moduleId: mod.id,
         label: "1",
         pathSegments: ["MUSE", "1"],
@@ -595,15 +761,23 @@ describe("insertRepository", () => {
       });
 
       const insert = await insertRepository.create({
+        ...testCtx,
         name: "fresh",
         templateId: template.id,
         templateVersionId: version!.id,
         rows: 2,
         columns: 3,
       });
-      await insertRepository.place({ id: insert.id, locationId: level.id });
+      await insertRepository.place({
+        ...testCtx,
+        id: insert.id,
+        locationId: level.id,
+      });
 
-      const cells = await locationRepository.findChildren({ parentId: level.id });
+      const cells = await locationRepository.findChildren({
+        orgId: testCtx.orgId,
+        parentId: level.id,
+      });
       expect(cells).toHaveLength(6);
       for (const cell of cells) {
         expect(cell.insertId).toBe(insert.id);
@@ -615,20 +789,30 @@ describe("insertRepository", () => {
 
     it("deleting the insert cascades its cells", async () => {
       const mod = await moduleRepository.create({
+        ...testCtx,
         name: "MUSE",
         primaryDimensionLabel: "level",
         primaryDimensionCount: 11,
       });
       const level = await locationRepository.create({
+        ...testCtx,
         moduleId: mod.id,
         label: "1",
         pathSegments: ["MUSE", "1"],
         locationType: "receptacle",
       });
-      const insert = await insertRepository.create({ name: "to delete" });
-      await insertRepository.place({ id: insert.id, locationId: level.id });
+      const insert = await insertRepository.create({
+        ...testCtx,
+        name: "to delete",
+      });
+      await insertRepository.place({
+        ...testCtx,
+        id: insert.id,
+        locationId: level.id,
+      });
 
       const cell = await locationRepository.create({
+        ...testCtx,
         moduleId: mod.id,
         parentId: level.id,
         label: "A1",
@@ -637,9 +821,12 @@ describe("insertRepository", () => {
         insertId: insert.id,
       });
 
-      await insertRepository.remove({ id: insert.id });
+      await insertRepository.remove({ ...testCtx, id: insert.id });
 
-      const gone = await locationRepository.findById({ id: cell.id });
+      const gone = await locationRepository.findById({
+        orgId: testCtx.orgId,
+        id: cell.id,
+      });
       expect(gone).toBeNull();
     });
   });
@@ -647,37 +834,49 @@ describe("insertRepository", () => {
   describe("listWithDetails", () => {
     it("returns inserts with template + location + module joined", async () => {
       const template = await templateRepository.create({
+        ...testCtx,
         name: "Plano 3600",
       });
       const version = await templateRepository.getVersion({
+        orgId: testCtx.orgId,
         templateId: template.id,
         version: 1,
       });
       const mod = await moduleRepository.create({
+        ...testCtx,
         name: "MUSE",
         primaryDimensionLabel: "level",
         primaryDimensionCount: 3,
       });
       const level = await locationRepository.create({
+        ...testCtx,
         moduleId: mod.id,
         label: "1",
         pathSegments: ["MUSE", "1"],
         locationType: "receptacle",
       });
       const placed = await insertRepository.create({
+        ...testCtx,
         name: "Plano #1",
         templateId: template.id,
         templateVersionId: version!.id,
       });
-      await insertRepository.place({ id: placed.id, locationId: level.id });
+      await insertRepository.place({
+        ...testCtx,
+        id: placed.id,
+        locationId: level.id,
+      });
 
       await insertRepository.create({
+        ...testCtx,
         name: "Plano #2 (on shelf)",
         templateId: template.id,
         templateVersionId: version!.id,
       });
 
-      const all = await insertRepository.listWithDetails();
+      const all = await insertRepository.listWithDetails({
+        orgId: testCtx.orgId,
+      });
       expect(all).toHaveLength(2);
       const p1 = all.find((i) => i.name === "Plano #1")!;
       expect(p1.templateName).toBe("Plano 3600");
@@ -685,18 +884,21 @@ describe("insertRepository", () => {
       expect(p1.moduleName).toBe("MUSE");
 
       const unplacedList = await insertRepository.listWithDetails({
+        orgId: testCtx.orgId,
         placement: "unplaced",
       });
       expect(unplacedList).toHaveLength(1);
       expect(unplacedList[0].name).toBe("Plano #2 (on shelf)");
 
       const placedList = await insertRepository.listWithDetails({
+        orgId: testCtx.orgId,
         placement: "placed",
       });
       expect(placedList).toHaveLength(1);
       expect(placedList[0].name).toBe("Plano #1");
 
       const filteredByTemplate = await insertRepository.listWithDetails({
+        orgId: testCtx.orgId,
         templateId: template.id,
       });
       expect(filteredByTemplate).toHaveLength(2);

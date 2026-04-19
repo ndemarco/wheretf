@@ -1,8 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { locationRepository } from "@/repositories/locationRepository";
+import { requireContext } from "@/lib/auth/route";
 
 export async function POST(request: NextRequest) {
   try {
+    const ctx = await requireContext();
     const body = await request.json();
     const { originId, aliasIds } = body ?? {};
     if (!originId || !Array.isArray(aliasIds)) {
@@ -11,7 +13,12 @@ export async function POST(request: NextRequest) {
         { status: 400 }
       );
     }
-    const result = await locationRepository.merge({ originId, aliasIds });
+    const result = await locationRepository.merge({
+      userId: ctx.userId,
+      orgId: ctx.activeOrgId,
+      originId,
+      aliasIds,
+    });
     return NextResponse.json({ merge: result });
   } catch (err) {
     const message = err instanceof Error ? err.message : "Unexpected error";

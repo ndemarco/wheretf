@@ -1,13 +1,43 @@
 import { db } from "@/db/connection";
-import { templates, templateVersions } from "@/db/schema";
+import { templates, templateVersions, assignments, items } from "@/db/schema";
 import { eq } from "drizzle-orm";
+
+// itemRepository and assignmentRepository haven't been migrated to org
+// scope yet (Phase C.2d). These helpers seed scoped rows directly so
+// the locationRepository checks (which DO filter by org) can see them.
+async function seedScopedAssignment({
+  locationId,
+  itemName = "test item",
+  assignmentType = "placed",
+}: {
+  locationId: string;
+  itemName?: string;
+  assignmentType?: string;
+}) {
+  const [item] = await db
+    .insert(items)
+    .values({ name: itemName, ownerOrgId: testCtx.orgId })
+    .returning();
+  const [asg] = await db
+    .insert(assignments)
+    .values({
+      ownerOrgId: testCtx.orgId,
+      itemId: item.id,
+      locationId,
+      assignmentType,
+    })
+    .returning();
+  return { item, assignment: asg };
+}
 import { interfaceTypeRepository } from "@/repositories/interfaceTypeRepository";
 import { locationRepository } from "@/repositories/locationRepository";
 import { moduleRepository } from "@/repositories/moduleRepository";
 import { transactionRepository } from "@/repositories/transactionRepository";
+import { testCtx } from "../setup";
 
 async function createTestModule() {
   return moduleRepository.create({
+    ...testCtx,
     name: "MUSE",
     primaryDimensionLabel: "level",
     primaryDimensionCount: 11,
@@ -20,6 +50,7 @@ describe("locationRepository", () => {
       const module = await createTestModule();
 
       const location = await locationRepository.create({
+        ...testCtx,
         moduleId: module.id,
         label: "3",
         pathSegments: ["MUSE", "3"],
@@ -32,12 +63,14 @@ describe("locationRepository", () => {
       expect(location.path).toBe("MUSE:3");
       expect(location.pathSegments).toEqual(["MUSE", "3"]);
       expect(location.locationType).toBe("fixed");
+      expect(location.ownerOrgId).toBe(testCtx.orgId);
     });
 
     it("auto-creates a single_instance template when templateVersionId is omitted", async () => {
       const module = await createTestModule();
 
       const location = await locationRepository.create({
+        ...testCtx,
         moduleId: module.id,
         label: "shelf",
         pathSegments: ["AD-HOC", "shelf"],
@@ -58,6 +91,9 @@ describe("locationRepository", () => {
 
       expect(template.scope).toBe("single_instance");
       expect(template.name).toBe("ad-hoc: AD-HOC:shelf");
+      // Ad-hoc template + version must be org-private, not global.
+      expect(template.ownerOrgId).toBe(testCtx.orgId);
+      expect(version.ownerOrgId).toBe(testCtx.orgId);
     });
 
     it("uses provided templateVersionId when given", async () => {
@@ -74,6 +110,7 @@ describe("locationRepository", () => {
         .returning();
 
       const location = await locationRepository.create({
+        ...testCtx,
         moduleId: module.id,
         label: "A1",
         pathSegments: ["MUSE", "3", "A1"],
@@ -87,10 +124,12 @@ describe("locationRepository", () => {
     it("creates a receptacle with accepted interface types", async () => {
       const module = await createTestModule();
       const plano = await interfaceTypeRepository.create({
+        ...testCtx,
         identifier: "plano-3600",
       });
 
       const location = await locationRepository.create({
+        ...testCtx,
         moduleId: module.id,
         label: "A1",
         pathSegments: ["MUSE", "3", "A1"],
@@ -101,6 +140,7 @@ describe("locationRepository", () => {
       expect(location.locationType).toBe("receptacle");
 
       const accepted = await locationRepository.getAcceptedInterfaces({
+        orgId: testCtx.orgId,
         locationId: location.id,
       });
       expect(accepted).toHaveLength(1);
@@ -111,6 +151,7 @@ describe("locationRepository", () => {
       const module = await createTestModule();
 
       const parent = await locationRepository.create({
+        ...testCtx,
         moduleId: module.id,
         label: "3",
         pathSegments: ["MUSE", "3"],
@@ -118,6 +159,7 @@ describe("locationRepository", () => {
       });
 
       const child = await locationRepository.create({
+        ...testCtx,
         moduleId: module.id,
         parentId: parent.id,
         label: "A1",
@@ -133,6 +175,7 @@ describe("locationRepository", () => {
       const module = await createTestModule();
 
       const location = await locationRepository.create({
+        ...testCtx,
         moduleId: module.id,
         label: "B2",
         pathSegments: ["MUSE", "3", "B2"],
@@ -149,6 +192,7 @@ describe("locationRepository", () => {
       const module = await createTestModule();
 
       const location = await locationRepository.create({
+        ...testCtx,
         moduleId: module.id,
         label: "3",
         pathSegments: ["MUSE", "3"],
@@ -156,7 +200,10 @@ describe("locationRepository", () => {
         metadata: { notes: "top shelf" },
       });
 
-      const found = await locationRepository.findById({ id: location.id });
+      const found = await locationRepository.findById({
+        orgId: testCtx.orgId,
+        id: location.id,
+      });
       expect(found?.metadata).toEqual({ notes: "top shelf" });
     });
 
@@ -164,18 +211,23 @@ describe("locationRepository", () => {
       const module = await createTestModule();
 
       const location = await locationRepository.create({
+        ...testCtx,
         moduleId: module.id,
         label: "3",
         pathSegments: ["MUSE", "3"],
         locationType: "fixed",
       });
 
-      const txns = await transactionRepository.listRecent();
+      const txns = await transactionRepository.listRecent({
+        orgId: testCtx.orgId,
+      });
       const createTx = txns.find((t) => t.actionType === "location.create");
       expect(createTx).toBeDefined();
       expect(createTx!.entityType).toBe("location");
       expect(createTx!.entityId).toBe(location.id);
       expect(createTx!.beforeState).toBeNull();
+      expect(createTx!.actorUserId).toBe(testCtx.userId);
+      expect(createTx!.ownerOrgId).toBe(testCtx.orgId);
     });
   });
 
@@ -183,19 +235,24 @@ describe("locationRepository", () => {
     it("returns the location by ID", async () => {
       const module = await createTestModule();
       const created = await locationRepository.create({
+        ...testCtx,
         moduleId: module.id,
         label: "3",
         pathSegments: ["MUSE", "3"],
         locationType: "fixed",
       });
 
-      const found = await locationRepository.findById({ id: created.id });
+      const found = await locationRepository.findById({
+        orgId: testCtx.orgId,
+        id: created.id,
+      });
       expect(found).not.toBeNull();
       expect(found!.label).toBe("3");
     });
 
     it("returns null for nonexistent ID", async () => {
       const found = await locationRepository.findById({
+        orgId: testCtx.orgId,
         id: "00000000-0000-0000-0000-000000000000",
       });
       expect(found).toBeNull();
@@ -206,6 +263,7 @@ describe("locationRepository", () => {
     it("finds a location by module and path", async () => {
       const module = await createTestModule();
       await locationRepository.create({
+        ...testCtx,
         moduleId: module.id,
         label: "3",
         pathSegments: ["MUSE", "3"],
@@ -213,6 +271,7 @@ describe("locationRepository", () => {
       });
 
       const found = await locationRepository.findByPath({
+        orgId: testCtx.orgId,
         moduleId: module.id,
         path: "MUSE:3",
       });
@@ -223,6 +282,7 @@ describe("locationRepository", () => {
     it("returns null for nonexistent path", async () => {
       const module = await createTestModule();
       const found = await locationRepository.findByPath({
+        orgId: testCtx.orgId,
         moduleId: module.id,
         path: "MUSE:99",
       });
@@ -234,12 +294,14 @@ describe("locationRepository", () => {
     it("returns all locations in a module", async () => {
       const module = await createTestModule();
       await locationRepository.create({
+        ...testCtx,
         moduleId: module.id,
         label: "3",
         pathSegments: ["MUSE", "3"],
         locationType: "fixed",
       });
       await locationRepository.create({
+        ...testCtx,
         moduleId: module.id,
         label: "4",
         pathSegments: ["MUSE", "4"],
@@ -247,6 +309,7 @@ describe("locationRepository", () => {
       });
 
       const results = await locationRepository.findByModuleId({
+        orgId: testCtx.orgId,
         moduleId: module.id,
       });
       expect(results).toHaveLength(2);
@@ -257,6 +320,7 @@ describe("locationRepository", () => {
     it("returns direct children of a location", async () => {
       const module = await createTestModule();
       const parent = await locationRepository.create({
+        ...testCtx,
         moduleId: module.id,
         label: "3",
         pathSegments: ["MUSE", "3"],
@@ -264,6 +328,7 @@ describe("locationRepository", () => {
       });
 
       await locationRepository.create({
+        ...testCtx,
         moduleId: module.id,
         parentId: parent.id,
         label: "A1",
@@ -271,6 +336,7 @@ describe("locationRepository", () => {
         locationType: "receptacle",
       });
       await locationRepository.create({
+        ...testCtx,
         moduleId: module.id,
         parentId: parent.id,
         label: "A2",
@@ -279,6 +345,7 @@ describe("locationRepository", () => {
       });
 
       const children = await locationRepository.findChildren({
+        orgId: testCtx.orgId,
         parentId: parent.id,
       });
       expect(children).toHaveLength(2);
@@ -287,6 +354,7 @@ describe("locationRepository", () => {
     it("returns empty array when no children exist", async () => {
       const module = await createTestModule();
       const location = await locationRepository.create({
+        ...testCtx,
         moduleId: module.id,
         label: "3",
         pathSegments: ["MUSE", "3"],
@@ -294,6 +362,7 @@ describe("locationRepository", () => {
       });
 
       const children = await locationRepository.findChildren({
+        orgId: testCtx.orgId,
         parentId: location.id,
       });
       expect(children).toHaveLength(0);
@@ -304,6 +373,7 @@ describe("locationRepository", () => {
     it("updates fields and returns the updated location", async () => {
       const module = await createTestModule();
       const created = await locationRepository.create({
+        ...testCtx,
         moduleId: module.id,
         label: "3",
         pathSegments: ["MUSE", "3"],
@@ -311,6 +381,7 @@ describe("locationRepository", () => {
       });
 
       const updated = await locationRepository.update({
+        ...testCtx,
         id: created.id,
         locationType: "receptacle",
       });
@@ -318,13 +389,16 @@ describe("locationRepository", () => {
       expect(updated.locationType).toBe("receptacle");
 
       const plano = await interfaceTypeRepository.create({
+        ...testCtx,
         identifier: "plano-3600",
       });
       await locationRepository.setAcceptedInterfaces({
+        ...testCtx,
         locationId: created.id,
         interfaceTypeIds: [plano.id],
       });
       const accepted = await locationRepository.getAcceptedInterfaces({
+        orgId: testCtx.orgId,
         locationId: created.id,
       });
       expect(accepted.map((a) => a.identifier)).toEqual(["plano-3600"]);
@@ -333,6 +407,7 @@ describe("locationRepository", () => {
     it("logs a transaction with before and after state", async () => {
       const module = await createTestModule();
       const created = await locationRepository.create({
+        ...testCtx,
         moduleId: module.id,
         label: "3",
         pathSegments: ["MUSE", "3"],
@@ -340,11 +415,14 @@ describe("locationRepository", () => {
       });
 
       await locationRepository.update({
+        ...testCtx,
         id: created.id,
         label: "3-updated",
       });
 
-      const txns = await transactionRepository.listRecent();
+      const txns = await transactionRepository.listRecent({
+        orgId: testCtx.orgId,
+      });
       const updateTx = txns.find((t) => t.actionType === "location.update");
       expect(updateTx).toBeDefined();
       expect(updateTx!.beforeState).toBeTruthy();
@@ -354,6 +432,7 @@ describe("locationRepository", () => {
     it("throws for nonexistent location", async () => {
       await expect(
         locationRepository.update({
+          ...testCtx,
           id: "00000000-0000-0000-0000-000000000000",
           label: "GHOST",
         })
@@ -365,30 +444,37 @@ describe("locationRepository", () => {
     it("deletes the location", async () => {
       const module = await createTestModule();
       const created = await locationRepository.create({
+        ...testCtx,
         moduleId: module.id,
         label: "3",
         pathSegments: ["MUSE", "3"],
         locationType: "fixed",
       });
 
-      await locationRepository.remove({ id: created.id });
+      await locationRepository.remove({ ...testCtx, id: created.id });
 
-      const found = await locationRepository.findById({ id: created.id });
+      const found = await locationRepository.findById({
+        orgId: testCtx.orgId,
+        id: created.id,
+      });
       expect(found).toBeNull();
     });
 
     it("logs a transaction", async () => {
       const module = await createTestModule();
       const created = await locationRepository.create({
+        ...testCtx,
         moduleId: module.id,
         label: "3",
         pathSegments: ["MUSE", "3"],
         locationType: "fixed",
       });
 
-      await locationRepository.remove({ id: created.id });
+      await locationRepository.remove({ ...testCtx, id: created.id });
 
-      const txns = await transactionRepository.listRecent();
+      const txns = await transactionRepository.listRecent({
+        orgId: testCtx.orgId,
+      });
       const deleteTx = txns.find((t) => t.actionType === "location.delete");
       expect(deleteTx).toBeDefined();
       expect(deleteTx!.afterState).toBeNull();
@@ -397,6 +483,7 @@ describe("locationRepository", () => {
     it("throws for nonexistent location", async () => {
       await expect(
         locationRepository.remove({
+          ...testCtx,
           id: "00000000-0000-0000-0000-000000000000",
         })
       ).rejects.toThrow("not found");
@@ -407,6 +494,7 @@ describe("locationRepository", () => {
     it("disables a location with reason", async () => {
       const module = await createTestModule();
       const created = await locationRepository.create({
+        ...testCtx,
         moduleId: module.id,
         label: "3",
         pathSegments: ["MUSE", "3"],
@@ -414,6 +502,7 @@ describe("locationRepository", () => {
       });
 
       const disabled = await locationRepository.disable({
+        ...testCtx,
         id: created.id,
         reason: "Broken shelf",
       });
@@ -423,37 +512,31 @@ describe("locationRepository", () => {
     });
 
     it("refuses to disable a location with active assignments", async () => {
-      const { assignmentRepository } = await import(
-        "@/repositories/assignmentRepository"
-      );
-      const { itemRepository } = await import(
-        "@/repositories/itemRepository"
-      );
       const module = await createTestModule();
       const loc = await locationRepository.create({
+        ...testCtx,
         moduleId: module.id,
         label: "A1",
         pathSegments: ["MUSE", "3", "A1"],
         locationType: "leaf",
       });
-      const item = await itemRepository.create({ name: "Resistor" });
-      await assignmentRepository.create({
-        itemId: item.id,
-        locationId: loc.id,
-        assignmentType: "placed",
-      });
+      await seedScopedAssignment({ locationId: loc.id, itemName: "Resistor" });
 
       await expect(
-        locationRepository.disable({ id: loc.id })
+        locationRepository.disable({ ...testCtx, id: loc.id })
       ).rejects.toThrow(/active assignments/);
 
-      const after = await locationRepository.findById({ id: loc.id });
+      const after = await locationRepository.findById({
+        orgId: testCtx.orgId,
+        id: loc.id,
+      });
       expect(after?.isDisabled).toBe(false);
     });
 
     it("enables a previously disabled location", async () => {
       const module = await createTestModule();
       const created = await locationRepository.create({
+        ...testCtx,
         moduleId: module.id,
         label: "3",
         pathSegments: ["MUSE", "3"],
@@ -461,11 +544,15 @@ describe("locationRepository", () => {
       });
 
       await locationRepository.disable({
+        ...testCtx,
         id: created.id,
         reason: "Broken shelf",
       });
 
-      const enabled = await locationRepository.enable({ id: created.id });
+      const enabled = await locationRepository.enable({
+        ...testCtx,
+        id: created.id,
+      });
       expect(enabled.isDisabled).toBe(false);
       expect(enabled.disableReason).toBeNull();
     });
@@ -473,16 +560,19 @@ describe("locationRepository", () => {
     it("logs transactions for disable and enable", async () => {
       const module = await createTestModule();
       const created = await locationRepository.create({
+        ...testCtx,
         moduleId: module.id,
         label: "3",
         pathSegments: ["MUSE", "3"],
         locationType: "fixed",
       });
 
-      await locationRepository.disable({ id: created.id });
-      await locationRepository.enable({ id: created.id });
+      await locationRepository.disable({ ...testCtx, id: created.id });
+      await locationRepository.enable({ ...testCtx, id: created.id });
 
-      const txns = await transactionRepository.listRecent();
+      const txns = await transactionRepository.listRecent({
+        orgId: testCtx.orgId,
+      });
       expect(txns.find((t) => t.actionType === "location.disable")).toBeDefined();
       expect(txns.find((t) => t.actionType === "location.enable")).toBeDefined();
     });
@@ -492,6 +582,7 @@ describe("locationRepository", () => {
     it("sets capacity clamps and reason", async () => {
       const module = await createTestModule();
       const loc = await locationRepository.create({
+        ...testCtx,
         moduleId: module.id,
         label: "A1",
         pathSegments: ["MUSE", "3", "A1"],
@@ -499,6 +590,7 @@ describe("locationRepository", () => {
       });
 
       const restricted = await locationRepository.restrict({
+        ...testCtx,
         id: loc.id,
         maxHeightMm: 60,
         reason: "Must slide under shelf above",
@@ -513,18 +605,23 @@ describe("locationRepository", () => {
     it("clearRestrict removes all clamps", async () => {
       const module = await createTestModule();
       const loc = await locationRepository.create({
+        ...testCtx,
         moduleId: module.id,
         label: "A1",
         pathSegments: ["MUSE", "3", "A1"],
         locationType: "leaf",
       });
       await locationRepository.restrict({
+        ...testCtx,
         id: loc.id,
         maxWidthMm: 100,
         maxHeightMm: 50,
         reason: "tight",
       });
-      const cleared = await locationRepository.clearRestrict({ id: loc.id });
+      const cleared = await locationRepository.clearRestrict({
+        ...testCtx,
+        id: loc.id,
+      });
       expect(cleared.maxWidthMm).toBeNull();
       expect(cleared.maxHeightMm).toBeNull();
       expect(cleared.maxDepthMm).toBeNull();
@@ -534,13 +631,20 @@ describe("locationRepository", () => {
     it("logs a transaction", async () => {
       const module = await createTestModule();
       const loc = await locationRepository.create({
+        ...testCtx,
         moduleId: module.id,
         label: "A1",
         pathSegments: ["MUSE", "3", "A1"],
         locationType: "leaf",
       });
-      await locationRepository.restrict({ id: loc.id, maxHeightMm: 45 });
-      const txns = await transactionRepository.listRecent();
+      await locationRepository.restrict({
+        ...testCtx,
+        id: loc.id,
+        maxHeightMm: 45,
+      });
+      const txns = await transactionRepository.listRecent({
+        orgId: testCtx.orgId,
+      });
       expect(
         txns.find((t) => t.actionType === "location.restrict")
       ).toBeDefined();
@@ -558,6 +662,7 @@ describe("locationRepository", () => {
       for (const [r, c, label] of rc) {
         out.push(
           await locationRepository.create({
+            ...testCtx,
             moduleId,
             parentId,
             label,
@@ -575,6 +680,7 @@ describe("locationRepository", () => {
     it("merges 2 adjacent cells under same parent", async () => {
       const module = await createTestModule();
       const parent = await locationRepository.create({
+        ...testCtx,
         moduleId: module.id,
         label: "1",
         pathSegments: ["MUSE", "1"],
@@ -586,17 +692,22 @@ describe("locationRepository", () => {
       ]);
 
       await locationRepository.merge({
+        ...testCtx,
         originId: a.id,
         aliasIds: [b.id],
       });
 
-      const after = await locationRepository.findById({ id: b.id });
+      const after = await locationRepository.findById({
+        orgId: testCtx.orgId,
+        id: b.id,
+      });
       expect(after?.mergedIntoId).toBe(a.id);
     });
 
     it("refuses non-adjacent merge", async () => {
       const module = await createTestModule();
       const parent = await locationRepository.create({
+        ...testCtx,
         moduleId: module.id,
         label: "1",
         pathSegments: ["MUSE", "1"],
@@ -607,19 +718,25 @@ describe("locationRepository", () => {
         [0, 2, "A3"],
       ]);
       await expect(
-        locationRepository.merge({ originId: a.id, aliasIds: [b.id] })
+        locationRepository.merge({
+          ...testCtx,
+          originId: a.id,
+          aliasIds: [b.id],
+        })
       ).rejects.toThrow(/contiguous/);
     });
 
     it("refuses merge across different parents", async () => {
       const module = await createTestModule();
       const p1 = await locationRepository.create({
+        ...testCtx,
         moduleId: module.id,
         label: "1",
         pathSegments: ["MUSE", "1"],
         locationType: "receptacle",
       });
       const p2 = await locationRepository.create({
+        ...testCtx,
         moduleId: module.id,
         label: "2",
         pathSegments: ["MUSE", "2"],
@@ -628,13 +745,18 @@ describe("locationRepository", () => {
       const [a] = await createGridCells(module.id, p1.id, [[0, 0, "A1"]]);
       const [b] = await createGridCells(module.id, p2.id, [[0, 0, "A1"]]);
       await expect(
-        locationRepository.merge({ originId: a.id, aliasIds: [b.id] })
+        locationRepository.merge({
+          ...testCtx,
+          originId: a.id,
+          aliasIds: [b.id],
+        })
       ).rejects.toThrow(/same parent/);
     });
 
     it("refuses merge when any cell is disabled", async () => {
       const module = await createTestModule();
       const parent = await locationRepository.create({
+        ...testCtx,
         moduleId: module.id,
         label: "1",
         pathSegments: ["MUSE", "1"],
@@ -644,21 +766,24 @@ describe("locationRepository", () => {
         [0, 0, "A1"],
         [0, 1, "A2"],
       ]);
-      await locationRepository.disable({ id: b.id, reason: "cracked" });
+      await locationRepository.disable({
+        ...testCtx,
+        id: b.id,
+        reason: "cracked",
+      });
       await expect(
-        locationRepository.merge({ originId: a.id, aliasIds: [b.id] })
+        locationRepository.merge({
+          ...testCtx,
+          originId: a.id,
+          aliasIds: [b.id],
+        })
       ).rejects.toThrow(/disabled/);
     });
 
     it("refuses merge with active assignments", async () => {
-      const { assignmentRepository } = await import(
-        "@/repositories/assignmentRepository"
-      );
-      const { itemRepository } = await import(
-        "@/repositories/itemRepository"
-      );
       const module = await createTestModule();
       const parent = await locationRepository.create({
+        ...testCtx,
         moduleId: module.id,
         label: "1",
         pathSegments: ["MUSE", "1"],
@@ -668,20 +793,20 @@ describe("locationRepository", () => {
         [0, 0, "A1"],
         [0, 1, "A2"],
       ]);
-      const item = await itemRepository.create({ name: "x" });
-      await assignmentRepository.create({
-        itemId: item.id,
-        locationId: b.id,
-        assignmentType: "placed",
-      });
+      await seedScopedAssignment({ locationId: b.id });
       await expect(
-        locationRepository.merge({ originId: a.id, aliasIds: [b.id] })
+        locationRepository.merge({
+          ...testCtx,
+          originId: a.id,
+          aliasIds: [b.id],
+        })
       ).rejects.toThrow(/assignments/);
     });
 
     it("unmerge clears all aliases", async () => {
       const module = await createTestModule();
       const parent = await locationRepository.create({
+        ...testCtx,
         moduleId: module.id,
         label: "1",
         pathSegments: ["MUSE", "1"],
@@ -693,12 +818,19 @@ describe("locationRepository", () => {
         [0, 2, "A3"],
       ]);
       await locationRepository.merge({
+        ...testCtx,
         originId: a.id,
         aliasIds: [b.id, c.id],
       });
-      const res = await locationRepository.unmerge({ originId: a.id });
+      const res = await locationRepository.unmerge({
+        ...testCtx,
+        originId: a.id,
+      });
       expect(res.aliasCount).toBe(2);
-      const after = await locationRepository.findById({ id: b.id });
+      const after = await locationRepository.findById({
+        orgId: testCtx.orgId,
+        id: b.id,
+      });
       expect(after?.mergedIntoId).toBeNull();
     });
   });
@@ -707,18 +839,23 @@ describe("locationRepository", () => {
     it("splits a leaf into named children", async () => {
       const module = await createTestModule();
       const parent = await locationRepository.create({
+        ...testCtx,
         moduleId: module.id,
         label: "drawer 1",
         pathSegments: ["MUSE", "drawer 1"],
         locationType: "leaf",
       });
       const children = await locationRepository.divide({
+        ...testCtx,
         parentId: parent.id,
         labels: ["front", "rear"],
       });
       expect(children).toHaveLength(2);
       expect(children.map((c) => c.label).sort()).toEqual(["front", "rear"]);
-      const after = await locationRepository.findById({ id: parent.id });
+      const after = await locationRepository.findById({
+        orgId: testCtx.orgId,
+        id: parent.id,
+      });
       expect(after?.locationType).toBe("fixed");
       expect(after?.subdivisionSource).toBe("ad_hoc");
     });
@@ -726,19 +863,7 @@ describe("locationRepository", () => {
     it("refuses divide with fewer than 2 labels", async () => {
       const module = await createTestModule();
       const parent = await locationRepository.create({
-        moduleId: module.id,
-        label: "d",
-        pathSegments: ["MUSE", "d"],
-        locationType: "leaf",
-      });
-      await expect(
-        locationRepository.divide({ parentId: parent.id, labels: ["only"] })
-      ).rejects.toThrow(/at least two/);
-    });
-
-    it("refuses divide with duplicate labels", async () => {
-      const module = await createTestModule();
-      const parent = await locationRepository.create({
+        ...testCtx,
         moduleId: module.id,
         label: "d",
         pathSegments: ["MUSE", "d"],
@@ -746,6 +871,25 @@ describe("locationRepository", () => {
       });
       await expect(
         locationRepository.divide({
+          ...testCtx,
+          parentId: parent.id,
+          labels: ["only"],
+        })
+      ).rejects.toThrow(/at least two/);
+    });
+
+    it("refuses divide with duplicate labels", async () => {
+      const module = await createTestModule();
+      const parent = await locationRepository.create({
+        ...testCtx,
+        moduleId: module.id,
+        label: "d",
+        pathSegments: ["MUSE", "d"],
+        locationType: "leaf",
+      });
+      await expect(
+        locationRepository.divide({
+          ...testCtx,
           parentId: parent.id,
           labels: ["a", "a"],
         })
@@ -753,27 +897,18 @@ describe("locationRepository", () => {
     });
 
     it("refuses divide when parent has active assignments", async () => {
-      const { assignmentRepository } = await import(
-        "@/repositories/assignmentRepository"
-      );
-      const { itemRepository } = await import(
-        "@/repositories/itemRepository"
-      );
       const module = await createTestModule();
       const parent = await locationRepository.create({
+        ...testCtx,
         moduleId: module.id,
         label: "d",
         pathSegments: ["MUSE", "d"],
         locationType: "leaf",
       });
-      const item = await itemRepository.create({ name: "x" });
-      await assignmentRepository.create({
-        itemId: item.id,
-        locationId: parent.id,
-        assignmentType: "placed",
-      });
+      await seedScopedAssignment({ locationId: parent.id });
       await expect(
         locationRepository.divide({
+          ...testCtx,
           parentId: parent.id,
           labels: ["a", "b"],
         })
@@ -783,18 +918,26 @@ describe("locationRepository", () => {
     it("undivide removes children and restores parent to leaf", async () => {
       const module = await createTestModule();
       const parent = await locationRepository.create({
+        ...testCtx,
         moduleId: module.id,
         label: "d",
         pathSegments: ["MUSE", "d"],
         locationType: "leaf",
       });
       await locationRepository.divide({
+        ...testCtx,
         parentId: parent.id,
         labels: ["a", "b"],
       });
-      const res = await locationRepository.undivide({ parentId: parent.id });
+      const res = await locationRepository.undivide({
+        ...testCtx,
+        parentId: parent.id,
+      });
       expect(res.removed).toBe(2);
-      const after = await locationRepository.findById({ id: parent.id });
+      const after = await locationRepository.findById({
+        orgId: testCtx.orgId,
+        id: parent.id,
+      });
       expect(after?.locationType).toBe("leaf");
       expect(after?.subdivisionSource).toBeNull();
     });
@@ -804,12 +947,14 @@ describe("locationRepository", () => {
     it("sets a merge alias", async () => {
       const module = await createTestModule();
       const loc1 = await locationRepository.create({
+        ...testCtx,
         moduleId: module.id,
         label: "A1",
         pathSegments: ["MUSE", "3", "A1"],
         locationType: "receptacle",
       });
       const loc2 = await locationRepository.create({
+        ...testCtx,
         moduleId: module.id,
         label: "A2",
         pathSegments: ["MUSE", "3", "A2"],
@@ -817,6 +962,7 @@ describe("locationRepository", () => {
       });
 
       const merged = await locationRepository.setMergeAlias({
+        ...testCtx,
         id: loc1.id,
         mergedIntoId: loc2.id,
       });
@@ -827,12 +973,14 @@ describe("locationRepository", () => {
     it("clears a merge alias", async () => {
       const module = await createTestModule();
       const loc1 = await locationRepository.create({
+        ...testCtx,
         moduleId: module.id,
         label: "A1",
         pathSegments: ["MUSE", "3", "A1"],
         locationType: "receptacle",
       });
       const loc2 = await locationRepository.create({
+        ...testCtx,
         moduleId: module.id,
         label: "A2",
         pathSegments: ["MUSE", "3", "A2"],
@@ -840,23 +988,29 @@ describe("locationRepository", () => {
       });
 
       await locationRepository.setMergeAlias({
+        ...testCtx,
         id: loc1.id,
         mergedIntoId: loc2.id,
       });
 
-      const cleared = await locationRepository.clearMergeAlias({ id: loc1.id });
+      const cleared = await locationRepository.clearMergeAlias({
+        ...testCtx,
+        id: loc1.id,
+      });
       expect(cleared.mergedIntoId).toBeNull();
     });
 
     it("logs transactions for set and clear", async () => {
       const module = await createTestModule();
       const loc1 = await locationRepository.create({
+        ...testCtx,
         moduleId: module.id,
         label: "A1",
         pathSegments: ["MUSE", "3", "A1"],
         locationType: "receptacle",
       });
       const loc2 = await locationRepository.create({
+        ...testCtx,
         moduleId: module.id,
         label: "A2",
         pathSegments: ["MUSE", "3", "A2"],
@@ -864,12 +1018,18 @@ describe("locationRepository", () => {
       });
 
       await locationRepository.setMergeAlias({
+        ...testCtx,
         id: loc1.id,
         mergedIntoId: loc2.id,
       });
-      await locationRepository.clearMergeAlias({ id: loc1.id });
+      await locationRepository.clearMergeAlias({
+        ...testCtx,
+        id: loc1.id,
+      });
 
-      const txns = await transactionRepository.listRecent();
+      const txns = await transactionRepository.listRecent({
+        orgId: testCtx.orgId,
+      });
       expect(
         txns.find((t) => t.actionType === "location.setMergeAlias")
       ).toBeDefined();

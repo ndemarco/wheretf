@@ -2,13 +2,15 @@ import { NextResponse } from "next/server";
 import { aspectRepository } from "@/repositories/aspectRepository";
 import { parameterDefinitionRepository } from "@/repositories/parameterDefinitionRepository";
 import { itemRepository } from "@/repositories/itemRepository";
+import { requireContext, errorResponse } from "@/lib/auth/route";
 
 export async function GET() {
   try {
+    const ctx = await requireContext();
     const [paramChecks, aspectChecks, valueChecks] = await Promise.all([
-      parameterDefinitionRepository.audit(),
-      aspectRepository.audit(),
-      itemRepository.auditParameterValues(),
+      parameterDefinitionRepository.audit({ orgId: ctx.activeOrgId }),
+      aspectRepository.audit({ orgId: ctx.activeOrgId }),
+      itemRepository.auditParameterValues({ orgId: ctx.activeOrgId }),
     ]);
     const checks = [...paramChecks, ...aspectChecks, ...valueChecks];
     return NextResponse.json({
@@ -16,9 +18,6 @@ export async function GET() {
       runAt: new Date().toISOString(),
     });
   } catch (err) {
-    return NextResponse.json(
-      { error: err instanceof Error ? err.message : "Unexpected error" },
-      { status: 500 }
-    );
+    return errorResponse(err);
   }
 }
