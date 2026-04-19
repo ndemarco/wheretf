@@ -1,6 +1,13 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+  type Dispatch,
+  type SetStateAction,
+} from "react";
 import Spinner from "@/app/components/Spinner";
 
 // ───────────────────────── Types ─────────────────────────
@@ -801,7 +808,7 @@ function DetailForm({
   onDelete,
 }: {
   draft: FormDraft;
-  setDraft: (d: FormDraft | ((d: FormDraft) => FormDraft)) => void;
+  setDraft: Dispatch<SetStateAction<FormDraft | null>>;
   isCreating: boolean;
   activeItem: InterfaceType | null | undefined;
   activeUsage: UsageCounts | undefined;
