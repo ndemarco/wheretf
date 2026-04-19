@@ -9,10 +9,17 @@ import {
   unique,
 } from "drizzle-orm/pg-core";
 import { items } from "./items";
+import { orgs } from "./orgs";
+
+// Isolation for every table in this file: additive. NULL = global
+// taxonomy (seeded, shared). Set = org-private addition layered on top.
 
 // System-managed visual labels for items
 export const categories = pgTable("categories", {
   id: uuid("id").primaryKey().defaultRandom(),
+  ownerOrgId: uuid("owner_org_id").references(() => orgs.id, {
+    onDelete: "cascade",
+  }),
   name: text("name").notNull().unique(),
   icon: text("icon"), // short icon key / emoji; fallback when `svg` is null
   svg: text("svg"), // inline SVG markup — preferred over `icon` when set
@@ -25,6 +32,9 @@ export const categories = pgTable("categories", {
 // Reusable parameter specs — atomic unit of item description
 export const parameterDefinitions = pgTable("parameter_definitions", {
   id: uuid("id").primaryKey().defaultRandom(),
+  ownerOrgId: uuid("owner_org_id").references(() => orgs.id, {
+    onDelete: "cascade",
+  }),
   name: text("name").notNull().unique(),
   dataType: text("data_type").notNull(), // "numeric" | "text" | "boolean" | "enum"
   unit: text("unit"), // mm, inches, V, ohms — null if dimensionless
@@ -39,6 +49,9 @@ export const parameterDefinitions = pgTable("parameter_definitions", {
 // Reusable parameter groups describing one facet of an item
 export const aspects = pgTable("aspects", {
   id: uuid("id").primaryKey().defaultRandom(),
+  ownerOrgId: uuid("owner_org_id").references(() => orgs.id, {
+    onDelete: "cascade",
+  }),
   name: text("name").notNull().unique(),
   description: text("description"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
@@ -50,6 +63,9 @@ export const aspectParameters = pgTable(
   "aspect_parameters",
   {
     id: uuid("id").primaryKey().defaultRandom(),
+    ownerOrgId: uuid("owner_org_id").references(() => orgs.id, {
+      onDelete: "cascade",
+    }),
     aspectId: uuid("aspect_id")
       .notNull()
       .references(() => aspects.id, { onDelete: "cascade" }),
@@ -68,6 +84,9 @@ export const itemCategories = pgTable(
   "item_categories",
   {
     id: uuid("id").primaryKey().defaultRandom(),
+    ownerOrgId: uuid("owner_org_id").references(() => orgs.id, {
+      onDelete: "cascade",
+    }),
     itemId: uuid("item_id")
       .notNull()
       .references(() => items.id, { onDelete: "cascade" }),
@@ -85,6 +104,9 @@ export const itemAspects = pgTable(
   "item_aspects",
   {
     id: uuid("id").primaryKey().defaultRandom(),
+    ownerOrgId: uuid("owner_org_id").references(() => orgs.id, {
+      onDelete: "cascade",
+    }),
     itemId: uuid("item_id")
       .notNull()
       .references(() => items.id, { onDelete: "cascade" }),
@@ -99,6 +121,9 @@ export const itemAspects = pgTable(
 // Named classification system — carries lookup tables, linked to aspects via aspect_standards
 export const standards = pgTable("standards", {
   id: uuid("id").primaryKey().defaultRandom(),
+  ownerOrgId: uuid("owner_org_id").references(() => orgs.id, {
+    onDelete: "cascade",
+  }),
   name: text("name").notNull().unique(),
   description: text("description"),
   domainTag: text("domain_tag"), // e.g., "Unified Thread Standard" for UNC/UNF grouping
@@ -111,6 +136,9 @@ export const aspectStandards = pgTable(
   "aspect_standards",
   {
     id: uuid("id").primaryKey().defaultRandom(),
+    ownerOrgId: uuid("owner_org_id").references(() => orgs.id, {
+      onDelete: "cascade",
+    }),
     aspectId: uuid("aspect_id")
       .notNull()
       .references(() => aspects.id, { onDelete: "cascade" }),
@@ -127,6 +155,9 @@ export const standardParameters = pgTable(
   "standard_parameters",
   {
     id: uuid("id").primaryKey().defaultRandom(),
+    ownerOrgId: uuid("owner_org_id").references(() => orgs.id, {
+      onDelete: "cascade",
+    }),
     standardId: uuid("standard_id")
       .notNull()
       .references(() => standards.id, { onDelete: "cascade" }),
@@ -144,6 +175,9 @@ export const standardDesignations = pgTable(
   "standard_designations",
   {
     id: uuid("id").primaryKey().defaultRandom(),
+    ownerOrgId: uuid("owner_org_id").references(() => orgs.id, {
+      onDelete: "cascade",
+    }),
     standardId: uuid("standard_id")
       .notNull()
       .references(() => standards.id, { onDelete: "cascade" }),
@@ -160,6 +194,9 @@ export const itemStandards = pgTable(
   "item_standards",
   {
     id: uuid("id").primaryKey().defaultRandom(),
+    ownerOrgId: uuid("owner_org_id").references(() => orgs.id, {
+      onDelete: "cascade",
+    }),
     itemId: uuid("item_id")
       .notNull()
       .references(() => items.id, { onDelete: "cascade" }),
@@ -181,6 +218,9 @@ export const itemParameterValues = pgTable(
   "item_parameter_values",
   {
     id: uuid("id").primaryKey().defaultRandom(),
+    ownerOrgId: uuid("owner_org_id").references(() => orgs.id, {
+      onDelete: "cascade",
+    }),
     itemId: uuid("item_id")
       .notNull()
       .references(() => items.id, { onDelete: "cascade" }),

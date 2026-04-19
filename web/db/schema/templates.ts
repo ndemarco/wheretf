@@ -9,9 +9,15 @@ import {
   numeric,
   unique,
 } from "drizzle-orm/pg-core";
+import { orgs } from "./orgs";
 
 export const templates = pgTable("templates", {
   id: uuid("id").primaryKey().defaultRandom(),
+  // Isolation: additive. NULL = global template catalog (e.g. Plano 3600);
+  // set = custom template owned by that org.
+  ownerOrgId: uuid("owner_org_id").references(() => orgs.id, {
+    onDelete: "cascade",
+  }),
   name: text("name").notNull(),
   description: text("description"),
   currentVersion: integer("current_version").notNull().default(1),
@@ -25,6 +31,10 @@ export const templates = pgTable("templates", {
 
 export const templateVersions = pgTable("template_versions", {
   id: uuid("id").primaryKey().defaultRandom(),
+  // Isolation: additive, follows parent template.
+  ownerOrgId: uuid("owner_org_id").references(() => orgs.id, {
+    onDelete: "cascade",
+  }),
   templateId: uuid("template_id")
     .notNull()
     .references(() => templates.id),
@@ -71,6 +81,11 @@ export const templateVersions = pgTable("template_versions", {
 
 export const interfaceTypes = pgTable("interface_types", {
   id: uuid("id").primaryKey().defaultRandom(),
+  // Isolation: additive. NULL = global interface contract (admin-seeded);
+  // set = org-private contract.
+  ownerOrgId: uuid("owner_org_id").references(() => orgs.id, {
+    onDelete: "cascade",
+  }),
   // IMPORTANT: identifier is a mutable display slug. All references to
   // interface types MUST be by `id` (UUID). Never join on `identifier`.
   // See specification/interface-type-management.md — load-bearing invariant.
@@ -90,6 +105,10 @@ export const templateVersionInterfacesProvided = pgTable(
   "template_version_interfaces_provided",
   {
     id: uuid("id").primaryKey().defaultRandom(),
+    // Isolation: additive, follows parent template version.
+    ownerOrgId: uuid("owner_org_id").references(() => orgs.id, {
+      onDelete: "cascade",
+    }),
     templateVersionId: uuid("template_version_id")
       .notNull()
       .references(() => templateVersions.id, { onDelete: "cascade" }),
@@ -104,6 +123,10 @@ export const templateVersionInterfacesAccepted = pgTable(
   "template_version_interfaces_accepted",
   {
     id: uuid("id").primaryKey().defaultRandom(),
+    // Isolation: additive, follows parent template version.
+    ownerOrgId: uuid("owner_org_id").references(() => orgs.id, {
+      onDelete: "cascade",
+    }),
     templateVersionId: uuid("template_version_id")
       .notNull()
       .references(() => templateVersions.id, { onDelete: "cascade" }),
@@ -118,6 +141,10 @@ export const locationInterfacesAccepted = pgTable(
   "location_interfaces_accepted",
   {
     id: uuid("id").primaryKey().defaultRandom(),
+    // Isolation: isolated (locations are isolated; junction follows).
+    ownerOrgId: uuid("owner_org_id").references(() => orgs.id, {
+      onDelete: "cascade",
+    }),
     // FK to locations added in the locations schema to avoid circular import;
     // logically this is locations.id with ON DELETE CASCADE. Constraint added
     // manually in the migration.

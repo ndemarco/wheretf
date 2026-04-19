@@ -1,3 +1,5 @@
+export * from "./auth";
+export * from "./orgs";
 export * from "./modules";
 export * from "./templates";
 export * from "./locations";

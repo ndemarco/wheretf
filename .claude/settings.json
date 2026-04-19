@@ -1,4 +1,14 @@
 {
+  "permissions": {
+    "allow": [
+      "Bash(DATABASE_URL=\"postgresql://wheretf:wheretf@localhost:5432/wheretf_test\" npx vitest run)",
+      "WebSearch",
+      "WebFetch(domain:forum.figma.com)"
+    ],
+    "additionalDirectories": [
+      "/home/nick/projects/nickydoes/wheretf/web/app/api/modules"
+    ]
+  },
   "hooks": {
     "PreToolUse": [
       {
@@ -10,15 +20,6 @@
           }
         ]
       }
-    ]
-  },
-  "permissions": {
-    "allow": [
-      "Bash(DATABASE_URL=\"postgresql://wheretf:wheretf@localhost:5432/wheretf_test\" npx vitest run)",
-      "WebSearch"
-    ],
-    "additionalDirectories": [
-      "/home/nick/projects/nickydoes/wheretf/web/app/api/modules"
     ]
   }
 }
