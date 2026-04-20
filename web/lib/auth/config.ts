@@ -85,28 +85,29 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
     signIn: "/login",
   },
   callbacks: {
-    async signIn({ user }) {
-      if (!user.id) return false;
-      const existing = await db
-        .select({ orgId: userOrgs.orgId })
-        .from(userOrgs)
-        .where(eq(userOrgs.userId, user.id))
-        .limit(1);
-      if (existing.length === 0) {
-        const displayName = user.name ?? user.email?.split("@")[0] ?? "workspace";
-        const slug = `org-${user.id.slice(0, 8)}`;
-        const [org] = await db
-          .insert(orgs)
-          .values({ name: `${displayName}'s workspace`, slug, plan: "free" })
-          .returning({ id: orgs.id });
-        await db
-          .insert(userOrgs)
-          .values({ userId: user.id, orgId: org.id, role: "owner" });
-      }
-      return true;
-    },
+    // jwt fires after the adapter has written the user row, making it the
+    // correct place to provision the default org. signIn fires before the
+    // adapter for OIDC providers, so user_id FK constraints fail there.
     async jwt({ token, user }) {
-      if (user?.id) token.sub = user.id;
+      if (user?.id) {
+        token.sub = user.id;
+        const existing = await db
+          .select({ orgId: userOrgs.orgId })
+          .from(userOrgs)
+          .where(eq(userOrgs.userId, user.id))
+          .limit(1);
+        if (existing.length === 0) {
+          const displayName = user.name ?? user.email?.split("@")[0] ?? "workspace";
+          const slug = `org-${user.id.slice(0, 8)}`;
+          const [org] = await db
+            .insert(orgs)
+            .values({ name: `${displayName}'s workspace`, slug, plan: "free" })
+            .returning({ id: orgs.id });
+          await db
+            .insert(userOrgs)
+            .values({ userId: user.id, orgId: org.id, role: "owner" });
+        }
+      }
       return token;
     },
     async session({ session, token }) {
