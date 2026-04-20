@@ -5,8 +5,14 @@ import { eq } from "drizzle-orm";
 import bcrypt from "bcryptjs";
 import { db } from "@/db/connection";
 import { users, accounts, sessions, verificationTokens } from "@/db/schema";
+import { orgs, userOrgs } from "@/db/schema/orgs";
 
 const isProd = process.env.NODE_ENV === "production";
+// Escape hatch so a production build can still expose the dev-impersonate
+// provider when explicitly opted in. Intended for the staging/preview
+// environments during early testing; must not be set in real production.
+const allowDevImpersonate =
+  !isProd || process.env.ALLOW_DEV_IMPERSONATE === "1";
 
 const homelabIssuer = process.env.AUTH_HOMELAB_ISSUER;
 const homelabClientId = process.env.AUTH_HOMELAB_CLIENT_ID;
@@ -44,7 +50,7 @@ if (homelabIssuer && homelabClientId && homelabClientSecret) {
   });
 }
 
-if (!isProd) {
+if (allowDevImpersonate) {
   providers.push(
     Credentials({
       id: "dev-impersonate",
@@ -79,6 +85,26 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
     signIn: "/login",
   },
   callbacks: {
+    async signIn({ user }) {
+      if (!user.id) return false;
+      const existing = await db
+        .select({ orgId: userOrgs.orgId })
+        .from(userOrgs)
+        .where(eq(userOrgs.userId, user.id))
+        .limit(1);
+      if (existing.length === 0) {
+        const displayName = user.name ?? user.email?.split("@")[0] ?? "workspace";
+        const slug = `org-${user.id.slice(0, 8)}`;
+        const [org] = await db
+          .insert(orgs)
+          .values({ name: `${displayName}'s workspace`, slug, plan: "free" })
+          .returning({ id: orgs.id });
+        await db
+          .insert(userOrgs)
+          .values({ userId: user.id, orgId: org.id, role: "owner" });
+      }
+      return true;
+    },
     async jwt({ token, user }) {
       if (user?.id) token.sub = user.id;
       return token;

@@ -1,14 +1,19 @@
 import { signIn } from "@/lib/auth/config";
 
-// Minimal stub — Phase D will replace this with a proper UI.
-// Email+password hits the credentials provider; the dev-impersonate
-// form is only rendered in non-production and trusts any email.
+// Force dynamic rendering so process.env is read at request time,
+// not baked in at build time (needed for runtime-injected container env vars).
+export const dynamic = "force-dynamic";
 
 async function credentialsSignIn(formData: FormData) {
   "use server";
   const email = String(formData.get("email") ?? "");
   const password = String(formData.get("password") ?? "");
   await signIn("credentials", { email, password, redirectTo: "/" });
+}
+
+async function homelabSignIn() {
+  "use server";
+  await signIn("homelab", { redirectTo: "/" });
 }
 
 async function devImpersonate(formData: FormData) {
@@ -18,11 +23,30 @@ async function devImpersonate(formData: FormData) {
 }
 
 export default function LoginPage() {
-  const isProd = process.env.NODE_ENV === "production";
+  const allowDevImpersonate =
+    process.env.NODE_ENV !== "production" ||
+    process.env.ALLOW_DEV_IMPERSONATE === "1";
+
+  const homelabConfigured = !!(
+    process.env.AUTH_HOMELAB_ISSUER &&
+    process.env.AUTH_HOMELAB_CLIENT_ID &&
+    process.env.AUTH_HOMELAB_CLIENT_SECRET
+  );
 
   return (
     <div className="max-w-md mx-auto mt-16 p-6">
       <h1 className="text-2xl font-bold mb-6">Sign in</h1>
+
+      {homelabConfigured && (
+        <form action={homelabSignIn} className="mb-6">
+          <button
+            type="submit"
+            className="w-full border border-accent text-accent rounded px-4 py-2 font-medium hover:bg-accent hover:text-white transition-colors"
+          >
+            Sign in with Homelab IdP
+          </button>
+        </form>
+      )}
 
       <form action={credentialsSignIn} className="space-y-3 mb-10">
         <input
@@ -49,7 +73,7 @@ export default function LoginPage() {
         </button>
       </form>
 
-      {!isProd && (
+      {allowDevImpersonate && (
         <form action={devImpersonate} className="space-y-3 pt-6 border-t">
           <p className="text-xs uppercase tracking-wide text-neutral-500">
             Dev impersonate (non-prod only)
