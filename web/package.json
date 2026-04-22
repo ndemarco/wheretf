@@ -14,7 +14,12 @@
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate",
     "db:studio": "drizzle-kit studio",
-    "db:seed": "tsx db/seed.ts"
+    "db:seed": "tsx db/seeds/index.ts all",
+    "db:seed:taxonomy": "tsx db/seeds/index.ts taxonomy",
+    "db:seed:interfaces": "tsx db/seeds/index.ts interface_types",
+    "db:seed:templates": "tsx db/seeds/index.ts templates",
+    "db:seed:items": "tsx db/seeds/index.ts items",
+    "db:seed:modules": "tsx db/seeds/index.ts modules"
   },
   "dependencies": {
     "@auth/drizzle-adapter": "^1.11.2",

@@ -12,14 +12,19 @@ that keep things sane.
    ```bash
    git checkout -b feat/your-thing
    ```
-3. Set up a dev env:
+3. Set up a dev env. You need a local PostgreSQL 16 instance. Simplest:
    ```bash
-   docker compose -f docker-compose.dev.yml up -d   # postgres
+   docker run -d --name wheretf-pg \
+     -e POSTGRES_USER=wheretf -e POSTGRES_PASSWORD=wheretf -e POSTGRES_DB=wheretf \
+     -p 5432:5432 postgres:16
    cd web
    npm install
+   cp .env.example .env.local   # then edit DATABASE_URL if it's not the default
    npm run db:migrate
+   npm run db:seed               # optional sample data
    npm run dev
    ```
+   (The project's own dev env runs on a homelab LXC and isn't relevant for external contributors.)
 4. Make your change. Small, focused commits are easier to review.
 5. Run tests:
    ```bash
