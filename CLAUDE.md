@@ -13,13 +13,19 @@ Next.js (App Router) + React, PostgreSQL, Tailwind v4. Storage grid rendered as 
 
 ## Dev Commands
 
-From `web/`:
-- `npm run dev` — next dev (requires local PostgreSQL)
+Primary dev env is the `wheretf-dev` LXC. `npm run dev` runs there under systemd (`wheretf-dev.service`); edit via VS Code Remote-SSH. See [specification/deployment.md](specification/deployment.md) "Dev environment (wheretf-dev LXC)".
+
+From `web/` (on the LXC for dev, locally for contributors running their own Postgres):
+- `npm run dev` — next dev
 - `npm test` — Vitest unit and integration tests
 - `npm run test:watch` — Vitest in watch mode
 - `npm run db:migrate` — run Drizzle migrations
 - `npm run db:generate` — generate migration from schema changes
 - `npm run db:studio` — Drizzle Studio (database browser)
+- `npm run db:seed` — seed all slices (taxonomy → interfaces → templates → items → modules)
+- `npm run db:seed:<slice>` — seed a single slice; slices: `taxonomy`, `interfaces`, `templates`, `items`, `modules`. Each is idempotent and fails fast if a dependency slice hasn't run.
+
+Fast prod deploy (from the LXC): `./scripts/deploy-prod.sh`. See [specification/deployment.md](specification/deployment.md) "Fast-deploy path".
 
 ## Testing
 

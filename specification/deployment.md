@@ -18,7 +18,7 @@ private infrastructure repo and is not part of this codebase.
 | `web/Dockerfile` | Multi-stage: `deps`, `builder`, `migrator`, `runner`. |
 | `web/.dockerignore` | Keeps `node_modules`, `.next`, secrets, and local Claude state out of the build context. |
 | `docker-compose.yml` | Reference compose at repo root: runs app + Postgres + migration job end-to-end on a laptop. |
-| `docker-compose.dev.yml` | Dev-only Postgres. Used with `npm run dev` against the host. |
+| `scripts/deploy-prod.sh` | Fast-deploy from `wheretf-dev` LXC to `wheretf-prod`, bypassing GHA. See "Fast-deploy path" below. |
 | `web/app/api/health/route.ts` | Liveness probe. Always 200 if Node is servicing HTTP. |
 | `web/app/api/health/ready/route.ts` | Readiness probe. 200 if `SELECT 1` round-trips to Postgres; 503 otherwise. |
 | `web/db/migrations/meta/_journal.json` | Drizzle journal — authoritative, covers 0000..head. `drizzle-kit migrate` is a no-op against a DB at head, and applies everything against a fresh DB. |
@@ -167,13 +167,198 @@ The prod DB should take automated dumps at least hourly.
 
 | Environment | Database | Auth | Purpose |
 |-------------|----------|------|---------|
-| Local dev | Local Postgres via `docker-compose.dev.yml` | None (to come) | Development, manual testing |
+| LXC dev (`wheretf-dev`) | Postgres 16 inside LXC | Authentik OIDC (live) | Primary development host; `npm run dev` under systemd, VS Code Remote-SSH |
+| External contributor | Own local Postgres | None / impersonate | Outside contributors; see CONTRIBUTING.md |
 | CI | Ephemeral Postgres service container | None | Automated tests |
-| Staging | Homelab Postgres (separate DB) | OIDC (to come) | Pre-prod smoke |
-| Production | Homelab Postgres (prod DB) | OIDC (to come) | Live app |
+| Staging | Homelab Postgres (separate DB) | Authentik OIDC | Pre-prod smoke (deferred) |
+| Production (`wheretf-prod`) | Homelab Postgres (prod DB) | Authentik OIDC | Live app |
 
 Same image across staging and prod — they differ only in
 `DATABASE_URL` and (eventually) auth config.
+
+---
+
+## Dev environment (`wheretf-dev` LXC)
+
+This is the living contract between the app repo and the infra repo
+for the dev environment. The infra agent provisions; the app repo
+consumes. Either side edits this section and tells the other to
+re-pull when the contract changes.
+
+### Proxmox LXC
+
+- Hostname: `wheretf-dev`; FQDN: `wheretf-dev.<homelab-domain>`.
+- Features: `nesting=1,keyctl=1` (Node + Docker need them).
+- Resources: 4 vCPU / 4 GB RAM / 20 GB rootfs (tune to taste).
+- Distribution: Debian 12 or Ubuntu 22.04.
+
+### Packages inside the LXC
+
+- `nodejs` 20.x (via NodeSource)
+- `postgresql-16` (running, initdb'd)
+- `docker.io` + `docker-buildx` (LXC doubles as the fast-deploy
+  builder — see "Fast-deploy path")
+- `git`, `curl`, `jq`
+
+### Accounts + repo
+
+- Unix user `dev`, in `sudo` and `docker` groups, with authorized
+  keys for nick + `claude-bot`.
+- `/opt/wheretf` owned by `dev`, git clone of the repo.
+
+### Postgres (dev)
+
+- DB `wheretf_dev` owned by Unix-socket role `wheretf`.
+- Connection string: `postgresql://wheretf@/wheretf_dev?host=/var/run/postgresql`
+  (peer auth, no password).
+
+### systemd
+
+`/etc/systemd/system/wheretf-dev.service`:
+
+```
+[Unit]
+Description=WhereTF dev server (next dev)
+After=network.target postgresql.service
+Wants=postgresql.service
+
+[Service]
+Type=simple
+User=dev
+WorkingDirectory=/opt/wheretf/web
+EnvironmentFile=/etc/wheretf/dev.env
+ExecStart=/usr/bin/npm run dev
+Restart=on-failure
+RestartSec=5
+LimitNOFILE=65535
+
+[Install]
+WantedBy=multi-user.target
+```
+
+`/etc/wheretf/dev.env` (mode `0640`, owner `root:dev`):
+
+```
+DATABASE_URL=postgresql://wheretf@/wheretf_dev?host=/var/run/postgresql
+AUTH_URL=https://wheretf-dev.<homelab-domain>
+NEXTAUTH_URL=https://wheretf-dev.<homelab-domain>
+AUTH_HOMELAB_ISSUER=https://authentik.<homelab-domain>/application/o/wheretf/
+AUTH_HOMELAB_CLIENT_ID=<fill from Authentik>
+AUTH_HOMELAB_CLIENT_SECRET=<fill from Authentik>
+NEXTAUTH_SECRET=<openssl rand -base64 32>
+NODE_ENV=development
+```
+
+### Reverse proxy
+
+Caddy (on whichever host runs homelab Caddy):
+
+```
+wheretf-dev.<homelab-domain> {
+    reverse_proxy <lxc-ip>:3000 {
+        header_up Host {host}
+    }
+}
+```
+
+Caddy proxies websockets by default — Next HMR needs this.
+
+### Authentik OIDC provider
+
+The WhereTF OIDC provider's Redirect URIs list must include both:
+
+- `https://wheretf-dev.<homelab-domain>/api/auth/callback/homelab`
+- `https://wheretf.<homelab-domain>/api/auth/callback/homelab`
+
+Scopes: `openid profile email`. Issuer URL must match
+`AUTH_HOMELAB_ISSUER` in dev.env and prod.env exactly (trailing
+slash matters). Verify from the LXC:
+
+```
+curl -sSf "$AUTH_HOMELAB_ISSUER/.well-known/openid-configuration" | jq .issuer
+```
+
+### Acceptance tests (infra agent verifies before handoff)
+
+1. `systemctl status wheretf-dev` → `active (running)` ≥5 min, no restart loop.
+2. `curl -I https://wheretf-dev.<homelab-domain>/api/health` → `200`.
+3. `curl https://wheretf-dev.<homelab-domain>/api/health/ready` → `200`.
+4. Issuer well-known doc echoes `AUTH_HOMELAB_ISSUER`.
+5. Authentik UI shows both redirect URIs on the provider.
+6. `docker build --target runner -t tmp .` from `/opt/wheretf/web` completes (proves Docker works in the LXC).
+7. SSH `dev@wheretf-dev` → `wheretf-prod` works passwordlessly.
+
+---
+
+## Fast-deploy path
+
+`scripts/deploy-prod.sh` is the inner-loop deploy tool. It runs on
+the `wheretf-dev` LXC, builds the runner + migrator images locally
+(single-arch, warm BuildKit cache), ships them to `wheretf-prod`
+over the homelab LAN, runs the migrator as a one-shot, hot-swaps
+the app container, and gates on `/api/health/ready`.
+
+GHA (`.github/workflows/ci.yml`) remains authoritative for
+`ghcr.io/.../web:latest` and tagged releases — the fast-path is an
+override for active shipping, not a replacement.
+
+### Prod host contract (`wheretf-prod`)
+
+The infra repo provisions:
+
+- Docker installed and running.
+- SSH key-auth from `wheretf-dev` → `wheretf-prod` (passwordless).
+- `/etc/wheretf/prod.env` (mode `0640`) — same keys as dev.env but
+  with prod values: prod `DATABASE_URL`, prod `AUTH_HOMELAB_*`,
+  `NEXTAUTH_SECRET`, `NODE_ENV=production`,
+  `AUTH_URL=https://wheretf.<homelab-domain>`.
+- `/opt/wheretf/docker-compose.prod.yml`:
+
+```yaml
+services:
+  web:
+    image: wheretf/web:${TAG:-latest}
+    env_file: /etc/wheretf/prod.env
+    ports:
+      - "3000:3000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+  postgres:
+    image: postgres:16
+    env_file: /etc/wheretf/prod.env
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U wheretf"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    restart: unless-stopped
+volumes:
+  pgdata:
+```
+
+The `${TAG:-latest}` substitution is what lets `TAG=fastdeploy-<sha>
+docker compose up -d --no-deps web` hot-swap the app without
+touching Postgres. Data is preserved by the `pgdata` volume across
+every deploy.
+
+### Budget
+
+Warm BuildKit cache, small code diff:
+
+- Build (runner + migrator, single-arch): ~15–30 s
+- `docker save | ssh | docker load` (~180 MB over gigabit): ~5–10 s
+- Migrator one-shot + app restart + readiness: ~5–10 s
+- **Total: ~30–50 s warm.** Cold first run: 60–90 s.
+
+### Backups
+
+Prod must run automated `pg_dump` at least hourly to an external
+location — the rollback path for a bad migration is restore from
+the last pre-deploy dump.
 
 ---
 

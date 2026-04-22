@@ -2,7 +2,8 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import Image from "next/image";
 
 type NavItem = {
   href: string;
@@ -131,9 +132,113 @@ const navSections: NavSection[] = [
   },
 ];
 
+type UserProps = {
+  id: string;
+  name?: string | null;
+  email?: string | null;
+  image?: string | null;
+} | null;
+
 const STORAGE_KEY = "wheretf.sidebar.expanded";
 
-export default function Sidebar() {
+function initials(user: NonNullable<UserProps>): string {
+  const src = user.name ?? user.email ?? "";
+  return src
+    .split(/[\s@]+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((w) => w[0].toUpperCase())
+    .join("");
+}
+
+function UserAvatar({
+  user,
+  expanded,
+  onSignOut,
+}: {
+  user: NonNullable<UserProps>;
+  expanded: boolean;
+  onSignOut: () => Promise<void>;
+}) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    function handleClick(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    }
+    document.addEventListener("mousedown", handleClick);
+    return () => document.removeEventListener("mousedown", handleClick);
+  }, [open]);
+
+  const avatar = user.image ? (
+    <Image
+      src={user.image}
+      alt={user.name ?? "User"}
+      width={28}
+      height={28}
+      className="rounded-full object-cover w-7 h-7 shrink-0"
+    />
+  ) : (
+    <span className="w-7 h-7 rounded-full bg-accent/20 text-accent text-xs font-semibold flex items-center justify-center shrink-0 select-none">
+      {initials(user)}
+    </span>
+  );
+
+  return (
+    <div ref={ref} className="relative">
+      <button
+        onClick={() => setOpen((v) => !v)}
+        className="w-full flex items-center gap-2 px-2 py-2 rounded-md hover:bg-slate-700/60 transition-colors text-left"
+        title={expanded ? undefined : (user.name ?? user.email ?? "Account")}
+      >
+        {avatar}
+        {expanded && (
+          <span className="flex flex-col min-w-0">
+            <span className="text-xs font-medium text-slate-200 truncate leading-tight">
+              {user.name ?? user.email}
+            </span>
+            {user.name && user.email && (
+              <span className="text-[10px] text-slate-500 truncate leading-tight">
+                {user.email}
+              </span>
+            )}
+          </span>
+        )}
+      </button>
+
+      {open && (
+        <div className="absolute bottom-full left-0 mb-1 w-52 bg-slate-800 border border-slate-700 rounded-lg shadow-xl py-1 z-50">
+          <div className="px-3 py-2 border-b border-slate-700">
+            <p className="text-xs font-semibold text-slate-200 truncate">
+              {user.name ?? user.email}
+            </p>
+            {user.email && (
+              <p className="text-[10px] text-slate-500 truncate">{user.email}</p>
+            )}
+          </div>
+          <form action={onSignOut}>
+            <button
+              type="submit"
+              className="w-full text-left px-3 py-2 text-xs text-slate-400 hover:text-slate-200 hover:bg-slate-700/60 transition-colors"
+            >
+              Sign out
+            </button>
+          </form>
+        </div>
+      )}
+    </div>
+  );
+}
+
+export default function Sidebar({
+  user,
+  onSignOut,
+}: {
+  user: UserProps;
+  onSignOut: () => Promise<void>;
+}) {
   const pathname = usePathname();
   const [expanded, setExpanded] = useState(true);
   const [hydrated, setHydrated] = useState(false);
@@ -207,7 +312,7 @@ export default function Sidebar() {
         </button>
       </div>
 
-      <div className="flex flex-col flex-1 gap-4 px-2 py-3">
+      <div className="flex flex-col flex-1 gap-4 px-2 py-3 overflow-y-auto">
         {navSections.map((section, sectionIdx) => (
           <div
             key={section.label ?? `section-${sectionIdx}`}
@@ -281,6 +386,11 @@ export default function Sidebar() {
           </div>
         ))}
       </div>
+      {user && (
+        <div className="px-2 pb-2 pt-1 border-t border-slate-700/50 shrink-0">
+          <UserAvatar user={user} expanded={expanded} onSignOut={onSignOut} />
+        </div>
+      )}
     </nav>
   );
 }

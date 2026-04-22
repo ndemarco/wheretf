@@ -8,18 +8,5 @@
     "additionalDirectories": [
       "/home/nick/projects/nickydoes/wheretf/web/app/api/modules"
     ]
-  },
-  "hooks": {
-    "PreToolUse": [
-      {
-        "matcher": "Bash",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "echo \"$CLAUDE_TOOL_INPUT\" | grep -qE '(npm test|npx vitest|vitest run)' && /home/nick/projects/nickydoes/wheretf/.claude/hooks/check-docker.sh || true"
-          }
-        ]
-      }
-    ]
   }
 }
