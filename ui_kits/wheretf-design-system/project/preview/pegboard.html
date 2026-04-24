@@ -1,0 +1,30 @@
+<!doctype html>
+<html>
+<head><meta charset="utf-8"><link rel="stylesheet" href="../colors_and_type.css">
+<style>
+  html,body{margin:0;background:var(--bg);color:var(--fg)}
+  .card{padding:0;box-sizing:border-box;display:grid;grid-template-columns:1fr 1fr;height:100%;min-height:200px}
+  .half{padding:22px 24px;position:relative}
+  .light{background:#fafaf7;color:#141210}
+  .dark{background:#0f0d0b;color:#f5efe5}
+  .pegboard{background-image:radial-gradient(circle,currentColor 1px,transparent 1.5px);background-size:18px 18px;background-position:0 0;opacity:.18;position:absolute;inset:0;pointer-events:none}
+  .title{font:600 11px/1 var(--font-sans);letter-spacing:.1em;text-transform:uppercase;opacity:.7;margin:0 0 12px;position:relative}
+  .head{font:700 20px/1.15 var(--font-sans);letter-spacing:-.01em;margin:0 0 8px;position:relative}
+  .sub{font:400 13px/1.5 var(--font-sans);opacity:.75;margin:0;position:relative}
+</style></head>
+<body>
+<div class="card">
+  <div class="half light">
+    <div class="pegboard"></div>
+    <p class="title">Pegboard · light</p>
+    <p class="head">Warm off-white</p>
+    <p class="sub">18px dotted grid, 18% opacity. Used behind hero units + empty states. Never the whole page.</p>
+  </div>
+  <div class="half dark">
+    <div class="pegboard"></div>
+    <p class="title">Pegboard · dark</p>
+    <p class="head">Warm near-black</p>
+    <p class="sub">Same grid, same restraint. Bg is <code style="font-family:var(--font-mono);font-size:11px">#0f0d0b</code>, never pure #000.</p>
+  </div>
+</div>
+</body></html>

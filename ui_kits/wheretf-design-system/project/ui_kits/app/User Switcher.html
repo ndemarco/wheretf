@@ -1,0 +1,530 @@
+<!doctype html>
+<html data-theme="dark" lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>WhereTF · User Switcher</title>
+  <link rel="icon" href="../../assets/favicon.svg">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap">
+  <link rel="stylesheet" href="app.css?v=4">
+  <link rel="stylesheet" href="user-switcher.css?v=2">
+  <style>
+    /* -------- Canvas frame setup ------- */
+    html, body { margin: 0; height: 100%; background: var(--bg); color: var(--fg); overflow: hidden; }
+    #root { height: 100vh; }
+
+    /* The artboard hosts a cropped sidebar so the popover reads in context. */
+    .frame {
+      position: relative;
+      width: 100%;
+      height: 100%;
+      background: var(--bg);
+      display: grid;
+      overflow: hidden;
+    }
+    .frame--expanded { grid-template-columns: 220px 1fr; }
+    .frame--collapsed { grid-template-columns: 56px 1fr; }
+
+    .frame .sb {
+      /* copy basic sidebar structure from app.css but trimmed for the frame */
+      background: var(--bg-soft);
+      border-right: 1px solid var(--line);
+      display: flex;
+      flex-direction: column;
+      padding: 10px 8px;
+    }
+    .frame--collapsed .sb { align-items: center; padding: 10px 4px; }
+
+    .frame .sb__head {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 6px 8px 12px;
+    }
+    .frame--collapsed .sb__head { justify-content: center; padding: 6px 0 12px; }
+    .frame .sb__brand { display: flex; align-items: center; gap: 8px; font: 700 15px/1 var(--font-sans); color: var(--brand); letter-spacing: -.01em; }
+    .frame .sb__toggle { background: transparent; border: 0; color: var(--fg-3); cursor: pointer; padding: 4px; border-radius: 6px; }
+    .frame .sb__toggle:hover { background: var(--surface); color: var(--fg); }
+
+    .frame .sb-nav { display: flex; flex-direction: column; gap: 1px; }
+    .frame .sb-nav__item {
+      display: flex; align-items: center; gap: 10px;
+      padding: 8px 10px; background: transparent; border: 0; border-radius: 6px;
+      cursor: pointer; color: var(--fg-2); font: 500 13px/1 var(--font-sans);
+      text-align: left; width: 100%;
+    }
+    .frame--collapsed .sb-nav__item { justify-content: center; padding: 10px; width: 40px; height: 40px; }
+    .frame .sb-nav__item:hover { background: var(--surface); color: var(--fg); }
+    .frame .sb-nav__item.is-active { background: var(--brand-wash); color: var(--brand-ink); }
+    .frame .sb-nav__item.is-active .ic { color: var(--brand-ink); }
+    .frame .sb-nav__item .ic { color: var(--fg-3); }
+    .frame .sb-nav__divider {
+      padding: 14px 10px 6px; font: 600 10px/1 var(--font-sans);
+      letter-spacing: .14em; text-transform: uppercase; color: var(--fg-3);
+    }
+    .frame--collapsed .sb-nav__divider { padding: 12px 0 4px; text-align: center; }
+    .frame--collapsed .sb-nav__divider span { display: none; }
+    .frame--collapsed .sb-nav__divider::before {
+      content: ''; display: block; width: 20px; height: 1px; background: var(--line); margin: 0 auto;
+    }
+
+    .frame .sb__spacer { flex: 1; }
+
+    /* "Main" placeholder — a ghost of the app content */
+    .frame .main {
+      padding: 24px 32px;
+      background: var(--bg);
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+      overflow: hidden;
+    }
+    .frame .main__topbar {
+      display: flex; align-items: center; justify-content: space-between;
+      padding-bottom: 14px; border-bottom: 1px solid var(--line);
+    }
+    .frame .main__title { font: 700 18px/1.1 var(--font-sans); color: var(--fg); margin: 0; }
+    .frame .main__subtitle { font: 500 12px/1.2 var(--font-sans); color: var(--fg-3); margin-top: 4px; }
+    .frame .main__grid {
+      flex: 1;
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+      gap: 10px;
+      align-content: start;
+      opacity: .45;
+    }
+    .frame .ghost-card {
+      aspect-ratio: 4 / 3;
+      background: var(--surface);
+      border: 1px solid var(--line);
+      border-radius: var(--r-3);
+      position: relative;
+      overflow: hidden;
+    }
+    .frame .ghost-card::before {
+      content: '';
+      position: absolute; inset: 8px 10px auto 10px; height: 10px;
+      background: var(--fg-mute); border-radius: 2px; opacity: .4;
+    }
+    .frame .ghost-card::after {
+      content: ''; position: absolute; left: 10px; right: 30%; bottom: 10px; height: 6px;
+      background: var(--fg-mute); border-radius: 2px; opacity: .25;
+    }
+
+    /* Callout labels on the states artboard */
+    .states-grid {
+      position: relative;
+      width: 100%;
+      height: 100%;
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      grid-auto-rows: min-content;
+      gap: 20px;
+      padding: 24px;
+      background: var(--bg);
+      overflow: auto;
+      align-content: start;
+    }
+    .state-cell {
+      background: var(--bg-soft);
+      border: 1px solid var(--line);
+      border-radius: var(--r-3);
+      padding: 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      min-height: 120px;
+    }
+    .state-cell__label {
+      font: 700 10px/1 var(--font-sans);
+      letter-spacing: .14em;
+      text-transform: uppercase;
+      color: var(--fg-3);
+    }
+    .state-cell__note {
+      font: 500 11px/1.5 var(--font-sans);
+      color: var(--fg-2);
+    }
+    .state-cell__mount {
+      position: relative;
+      min-height: 56px;
+    }
+
+    /* Tweaks */
+    .tweaks {
+      position: fixed;
+      right: 16px;
+      bottom: 16px;
+      width: 280px;
+      background: var(--surface);
+      border: 1px solid var(--line-strong);
+      border-radius: var(--r-4);
+      box-shadow: var(--shadow-3);
+      padding: 14px;
+      z-index: 100;
+      display: none;
+    }
+    .tweaks.is-on { display: block; }
+    .tweaks__title { font: 700 12px/1 var(--font-sans); letter-spacing: .1em; text-transform: uppercase; color: var(--fg-2); margin-bottom: 12px; }
+    .tweaks__row { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 6px 0; font: 500 12px/1.2 var(--font-sans); color: var(--fg); }
+    .tweaks__row label { color: var(--fg-2); }
+    .tweaks__row select { background: var(--surface-2); color: var(--fg); border: 1px solid var(--line); border-radius: 4px; padding: 4px 6px; font: 500 12px/1 var(--font-sans); }
+    .tweaks__row input[type="checkbox"] { accent-color: var(--brand); }
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+
+  <script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+
+  <script type="text/babel" src="design-canvas.jsx"></script>
+  <script type="text/babel" src="UserSwitcher.jsx"></script>
+
+  <script type="text/babel">
+    const { useState, useEffect } = React;
+
+    // One source of truth \u2014 personas live inside UserSwitcher.jsx and
+    // are exposed as window.USER_SWITCHER_DEV_PERSONAS. We index by id here.
+    const USERS = Object.fromEntries(
+      window.USER_SWITCHER_DEV_PERSONAS.map(p => [p.id, p])
+    );
+
+    const NAV_MAIN = [
+      { id: 'modules',  label: 'Modules',  icon: 'grid' },
+      { id: 'inserts',  label: 'Inserts',  icon: 'layers' },
+      { id: 'items',    label: 'Items',    icon: 'box' },
+      { id: 'activity', label: 'Activity', icon: 'activity' },
+    ];
+    const NAV_ADMIN = [
+      { id: 'new-module', label: 'New Module', icon: 'plus-square' },
+      { id: 'templates',  label: 'Templates',  icon: 'template' },
+      { id: 'taxonomy',   label: 'Taxonomy',   icon: 'tree' },
+    ];
+
+    /** Sidebar chrome wrapper for the canvas frames. Owns the nav, footers a UserSwitcher slot. */
+    function SidebarFrame({ collapsed, children }) {
+      const mkItem = (n, active) => (
+        <button
+          key={n.id}
+          className={`sb-nav__item ${active ? 'is-active' : ''}`}
+          title={collapsed ? n.label : undefined}
+        >
+          <i className={`ic ic-${n.icon}`} />
+          {!collapsed && <span>{n.label}</span>}
+        </button>
+      );
+      return (
+        <aside className="sb">
+          <div className="sb__head">
+            {!collapsed && (
+              <div className="sb__brand">
+                <img src="../../assets/monogram.svg" width={22} height={26} alt="" />
+                <span>WhereTF</span>
+              </div>
+            )}
+            {collapsed && (
+              <img src="../../assets/monogram.svg" width={22} height={26} alt="" />
+            )}
+            {!collapsed && (
+              <button className="sb__toggle" aria-label="Collapse">
+                <i className={`ic ic-chev-${collapsed ? 'right' : 'left'}`} />
+              </button>
+            )}
+          </div>
+
+          <nav className="sb-nav">
+            {NAV_MAIN.map((n, i) => mkItem(n, i === 1))}
+          </nav>
+
+          <div className="sb-nav__divider"><span>ADMIN</span></div>
+          <nav className="sb-nav">{NAV_ADMIN.map(n => mkItem(n))}</nav>
+
+          <div className="sb__spacer" />
+          {children /* UserSwitcher mounts here */}
+        </aside>
+      );
+    }
+
+    /** Ghost main content — a hint of the app behind the sidebar. */
+    function GhostMain({ title = 'Inserts', subtitle = 'Bench organizer · 12 inserts · 180 bins' }) {
+      return (
+        <div className="main">
+          <div className="main__topbar">
+            <div>
+              <h1 className="main__title">{title}</h1>
+              <div className="main__subtitle">{subtitle}</div>
+            </div>
+          </div>
+          <div className="main__grid">
+            {Array.from({ length: 18 }).map((_, i) => <div key={i} className="ghost-card" />)}
+          </div>
+        </div>
+      );
+    }
+
+    // ---------- Artboard: Expanded · Closed (anchor) ----------
+    function ArtboardClosed({ user }) {
+      return (
+        <div className="frame frame--expanded">
+          <SidebarFrame collapsed={false}>
+            <UserSwitcher user={user} collapsed={false} forceOpen={false} version="v1.4.2" buildChannel="dev build" devHost="parts-bench.test" />
+          </SidebarFrame>
+          <GhostMain />
+        </div>
+      );
+    }
+
+    // ---------- Artboard: Expanded · Menu open ----------
+    function ArtboardOpen({ user, devMode }) {
+      return (
+        <div className="frame frame--expanded">
+          <SidebarFrame collapsed={false}>
+            <UserSwitcher user={user} collapsed={false} devMode={devMode} forceOpen={true} version="v1.4.2" buildChannel="dev build" devHost="parts-bench.test" />
+          </SidebarFrame>
+          <GhostMain />
+        </div>
+      );
+    }
+
+    // ---------- Artboard: Expanded · Persona submenu open ----------
+    function ArtboardPersona({ user, devMode }) {
+      return (
+        <div className="frame frame--expanded">
+          <SidebarFrame collapsed={false}>
+            <UserSwitcher
+              user={user}
+              collapsed={false}
+              devMode={devMode}
+              forceOpen={true}
+              forcePersonaOpen={true}
+              version="v1.4.2"
+              buildChannel="dev build"
+              devHost="parts-bench.test"
+            />
+          </SidebarFrame>
+          <GhostMain />
+        </div>
+      );
+    }
+
+    // ---------- Artboard: Collapsed · Menu open (popover to the right) ----------
+    function ArtboardCollapsed({ user, devMode }) {
+      return (
+        <div className="frame frame--collapsed">
+          <SidebarFrame collapsed={true}>
+            <UserSwitcher
+              user={user}
+              collapsed={true}
+              devMode={devMode}
+              forceOpen={true}
+              version="v1.4.2"
+              buildChannel="dev build"
+              devHost="parts-bench.test"
+            />
+          </SidebarFrame>
+          <GhostMain />
+        </div>
+      );
+    }
+
+    // ---------- Artboard: States inventory ----------
+    function ArtboardStates({ user, devMode }) {
+      const jules = USERS.jules;
+      const oidc  = USERS.oidc;
+      const cells = [
+        {
+          label: 'Trigger · rest',
+          note: 'Default state in an expanded sidebar. Ghost border, no background.',
+          node: <UserSwitcher user={user} collapsed={false} forceOpen={false} />
+        },
+        {
+          label: 'Trigger · hover',
+          note: 'Surface lift + hairline border. Caret holds.',
+          node: <div className="us-preview-hover"><UserSwitcher user={user} collapsed={false} forceOpen={false} /></div>
+        },
+        {
+          label: 'Trigger · OIDC (no role)',
+          note: 'First-login homelab user — no org membership yet. Sub-line reads "Pending setup" instead of faking a plan.',
+          node: <UserSwitcher user={oidc} collapsed={false} forceOpen={false} />
+        },
+        {
+          label: 'Collapsed · rest',
+          note: '32px hit target, tooltip on hover. Popover edge-detects and flips left when it would overflow the viewport.',
+          node: <div style={{display:'flex', justifyContent:'center'}}>
+            <UserSwitcher user={user} collapsed={true} forceOpen={false} />
+          </div>
+        },
+        {
+          label: 'Persona · switching',
+          note: 'Spinner replaces caret; row disabled while signIn() runs.',
+          node: <UserSwitcher
+            user={user} collapsed={false} devMode={devMode}
+            forceOpen={true} forcePersonaOpen={true} switchingTo={'taylor'}
+          />,
+          tall: true,
+        },
+        {
+          label: 'Persona · switch failed',
+          note: 'signIn() rejected — inline error under the row, menu stays open so the dev can retry.',
+          node: <UserSwitcher
+            user={user} collapsed={false} devMode={devMode}
+            forceOpen={true} forcePersonaOpen={true}
+            switchError={{ personaId: 'taylor', message: 'signIn failed: 401 — persona cookie not rewritten' }}
+          />,
+          tall: true,
+        },
+        {
+          label: 'Platform admin visible',
+          note: 'users.isAdmin === true — extra row above Settings routes to /admin. Orthogonal to org role.',
+          node: <UserSwitcher user={jules} collapsed={false} devMode={devMode} forceOpen={true} />,
+          tall: true,
+        },
+        {
+          label: 'Sign-out · confirm',
+          note: 'Inline confirm — avoids a modal for a 2-click action.',
+          node: <UserSwitcher
+            user={user} collapsed={false} devMode={devMode}
+            forceOpen={true} forceSignOutConfirm={true}
+          />,
+          tall: true,
+        },
+      ];
+      return (
+        <div className="states-grid">
+          {cells.map((c, i) => (
+            <div key={i} className="state-cell" style={c.tall ? {gridRow: 'span 2'} : undefined}>
+              <div className="state-cell__label">{c.label}</div>
+              <div className="state-cell__mount" style={{minHeight: c.tall ? 460 : 56, background: 'var(--bg)', borderRadius: 'var(--r-2)', border: '1px dashed var(--line)', padding: '10px'}}>
+                {c.node}
+              </div>
+              <div className="state-cell__note">{c.note}</div>
+            </div>
+          ))}
+        </div>
+      );
+    }
+
+    // ---------- Tweaks ----------
+    const TWEAK_DEFAULTS = /*EDITMODE-BEGIN*/{
+      "theme": "dark",
+      "activeUser": "drew",
+      "devMode": true
+    }/*EDITMODE-END*/;
+
+    function useTweaks() {
+      const [t, setT] = useState(TWEAK_DEFAULTS);
+      const [on, setOn] = useState(false);
+      useEffect(() => {
+        const onMsg = (e) => {
+          if (!e.data || typeof e.data !== 'object') return;
+          if (e.data.type === '__activate_edit_mode') setOn(true);
+          if (e.data.type === '__deactivate_edit_mode') setOn(false);
+        };
+        window.addEventListener('message', onMsg);
+        window.parent.postMessage({ type: '__edit_mode_available' }, '*');
+        return () => window.removeEventListener('message', onMsg);
+      }, []);
+      useEffect(() => {
+        document.documentElement.setAttribute('data-theme', t.theme);
+      }, [t.theme]);
+      const patch = (edits) => {
+        setT(prev => ({ ...prev, ...edits }));
+        window.parent.postMessage({ type: '__edit_mode_set_keys', edits }, '*');
+      };
+      return { t, on, patch };
+    }
+
+    function TweakPanel({ t, on, patch }) {
+      return (
+        <div className={`tweaks ${on ? 'is-on' : ''}`}>
+          <div className="tweaks__title">Tweaks</div>
+          <div className="tweaks__row">
+            <label>Theme</label>
+            <select value={t.theme} onChange={e => patch({theme: e.target.value})}>
+              <option value="dark">dark</option>
+              <option value="light">light</option>
+            </select>
+          </div>
+          <div className="tweaks__row">
+            <label>Active user</label>
+            <select value={t.activeUser} onChange={e => patch({activeUser: e.target.value})}>
+              <option value="drew">Drew · Free · Owner</option>
+              <option value="taylor">Taylor · Pro · Owner</option>
+              <option value="sam">Sam · Pro · Admin</option>
+              <option value="jules">Jules · Support · Platform admin</option>
+              <option value="oidc">Pat · OIDC no-role</option>
+            </select>
+          </div>
+          <div className="tweaks__row">
+            <label>Dev mode (persona switcher)</label>
+            <input
+              type="checkbox"
+              checked={t.devMode}
+              onChange={e => patch({devMode: e.target.checked})}
+            />
+          </div>
+        </div>
+      );
+    }
+
+    // ---------- App ----------
+    function App() {
+      const { t, on, patch } = useTweaks();
+      const user = USERS[t.activeUser] || USERS.drew;
+      const dev  = t.devMode;
+
+      const artboards = [
+        {
+          id: 'closed',
+          label: 'A · Anchor — trigger at rest',
+          width: 1280, height: 760,
+          render: () => <ArtboardClosed user={user} />,
+        },
+        {
+          id: 'open',
+          label: 'B · Menu open — full popover',
+          width: 1280, height: 760,
+          render: () => <ArtboardOpen user={user} devMode={dev} />,
+        },
+        {
+          id: 'persona',
+          label: 'C · Persona submenu open (dev-only)',
+          width: 1280, height: 860,
+          render: () => <ArtboardPersona user={user} devMode={dev} />,
+        },
+        {
+          id: 'collapsed',
+          label: 'D · Collapsed sidebar — popover opens right',
+          width: 1100, height: 760,
+          render: () => <ArtboardCollapsed user={user} devMode={dev} />,
+        },
+        {
+          id: 'states',
+          label: 'E · States inventory',
+          width: 1280, height: 960,
+          render: () => <ArtboardStates user={user} devMode={dev} />,
+        },
+      ];
+
+      return (
+        <>
+          <DesignCanvas title="User Switcher — sidebar bottom" storageKey="wtf-userswitch-canvas">
+            <DCSection id="main" title="User switcher · expanded & collapsed · dev tools">
+              {artboards.map(a => (
+                <DCArtboard key={a.id} id={a.id} label={a.label} width={a.width} height={a.height}>
+                  {a.render()}
+                </DCArtboard>
+              ))}
+            </DCSection>
+          </DesignCanvas>
+          <TweakPanel t={t} on={on} patch={patch} />
+        </>
+      );
+    }
+
+    ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+  </script>
+</body>
+</html>

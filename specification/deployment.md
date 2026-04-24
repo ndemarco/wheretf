@@ -167,7 +167,7 @@ The prod DB should take automated dumps at least hourly.
 
 | Environment | Database | Auth | Purpose |
 |-------------|----------|------|---------|
-| Local dev | Local Postgres via `docker-compose.dev.yml` | None (to come) | Development, manual testing |
+| Local dev | Local Postgres via `docker-compose.dev.yml` (Docker Desktop / Engine on the dev host) — never a remote DB | Credentials + dev-impersonate (4 preset users on `/login`) | Development, manual testing |
 | CI | Ephemeral Postgres service container | None | Automated tests |
 | Staging | Homelab Postgres (separate DB) | OIDC (to come) | Pre-prod smoke |
 | Production | Homelab Postgres (prod DB) | OIDC (to come) | Live app |
@@ -195,129 +195,17 @@ Nothing app-side configures files, rotation, or remote sinks.
 
 ---
 
-## Future work — TODOs so the deploy system knows what's coming
+## Auth + multi-tenancy roadmap
 
-These are **planned, not implemented.** Deployment as described above
-works without them. When any one of them lands, this doc and the
-deployment system both get revisited.
+Deployment works today without auth. Auth phases and isolation
+model are tracked separately — see [auth-roadmap.md](auth-roadmap.md).
+Key deployment hooks:
 
-### Identity provider (external dependency)
-
-The homelab team deploys and operates the OIDC IdP (Authentik /
-Keycloak / Zitadel, TBD) — **out of scope for WhereTF**. WhereTF
-consumes it as an OIDC client. The homelab OIDC provider is
-registered only when `AUTH_HOMELAB_ISSUER`, `AUTH_HOMELAB_CLIENT_ID`,
-and `AUTH_HOMELAB_CLIENT_SECRET` are set; customer credentials and
-dev impersonate work without it.
-
-Until the IdP is live, WhereTF runs with customer credentials only
-and must not be internet-reachable.
-
-### Authentication
-
-Auth.js v5 (next-auth) in `web/`. Hybrid providers:
-
-- **Homelab IdP OIDC** — env-gated, for staff/admin federation.
-- **Credentials** — email + password (bcryptjs), for customer
-  accounts. Signup endpoint creates a `users` row and a default owner
-  `orgs` row with `plan = 'free'`.
-- **Dev impersonate** — registered only when
-  `NODE_ENV !== "production"`, lets any email through for local dev.
-
-**Session strategy: JWT.** Auth.js v5 requires JWT sessions when a
-Credentials provider is in play. The JWT carries `sub` (user id);
-per-request authz hydrates orgs and active role from the database.
-
-**CSRF**: Auth.js covers `/api/auth/*`; mutation routes call
-`requireCsrf()` from `web/lib/auth/csrf.ts`.
-
-### Authorization
-
-Model: **org-scoped, role per user-org pair, three-mode data
-isolation.**
-
-- New tables:
-  - `users`, `accounts`, `sessions`, `verification_tokens` (Auth.js)
-  - `orgs (id, name, slug, plan: 'free' | 'paid', ...)`
-  - `user_orgs (user_id, org_id, role)`, roles
-    `owner | admin | member | viewer`, PK `(user_id, org_id)`
-- Every authenticated request carries
-  `{ userId, activeOrgId, role }`, hydrated in `web/middleware.ts`
-  from the session + `wtf-active-org` cookie (fallback = user's
-  first org).
-- Isolation mode per table:
-  - **isolated** — `ownerOrgId NOT NULL`, strict filter
-    `ownerOrgId = :orgId`.
-    Tables: `modules`, `inserts`, `locations`, `assignments`,
-    `location_interfaces_accepted`, `transactions`.
-  - **additive** — `ownerOrgId` nullable. Read union
-    `(ownerOrgId IS NULL OR ownerOrgId = :orgId)`. Writes default to
-    the active org; writing a global row (`ownerOrgId = NULL`)
-    requires elevated permission.
-    Tables: `templates`, `template_versions`,
-    `template_version_interfaces_provided`,
-    `template_version_interfaces_accepted`, `items`, `item_aspects`,
-    `item_parameter_values`, `item_categories`, `item_standards`,
-    `co_storability`, `categories`, `parameter_definitions`,
-    `aspects`, `aspect_parameters`, `standards`,
-    `standard_parameters`, `standard_designations`,
-    `aspect_standards`, `interface_types`.
-  - **open** — no `ownerOrgId`, global only.
-    Tables: none at launch.
-- **Private items** are additive `items` rows with
-  `ownerOrgId IS NOT NULL`. Free tier rejects private inserts; paid
-  tier allows. No separate table, no visibility enum.
-- **Global catalog edit policy**: any signed-in user may create or
-  edit global rows. Every write lands in `transactions` with actor
-  `userId`. No moderation UI at launch.
-- Enforcement app-layer in repositories. Postgres RLS is a future
-  refinement, not scheduled.
-
-### Plan gating
-
-`orgs.plan` drives two gates at launch:
-
-1. **Seat limit** — free orgs reject a 2nd `user_orgs` insert.
-2. **Private items** — free orgs reject `items` inserts with
-   `ownerOrgId != null`.
-
-Parametric metadata is in-app readable for any signed-in user, free
-or paid. External API access (API keys) is paid-only; enforcement
-ships with the API keys phase.
-
-Billing integration is a separate phase (product TBD). Until it
-lands, `orgs.plan` is toggled by a platform admin (`users.is_admin`)
-via an admin-only endpoint.
-
-### API access + rate limiting (future phase)
-
-Two surfaces:
-
-1. **Internal** — session auth + CSRF for mutations. Generous
-   per-user limits (e.g. 60 rps burst, 300 rpm sustained).
-2. **External** — `api_keys` table with hashed keys, scopes, per-key
-   rate limits tied to `orgs.plan`. Paid-only.
-
-Limiter: token bucket, sliding window. In-memory in dev; Redis in
-prod.
-
-Middleware in `web/middleware.ts` intercepts `/api/*`, runs auth +
-rate-limit + org hydration before the route handler. Exempts
-`/api/health*` and `/api/auth/*`.
-
-### Multi-tenancy migration (execution order)
-
-1. Add `ownerOrgId uuid` nullable to every additive + isolated table
-   (no FK yet).
-2. Create `users`, `accounts`, `sessions`, `verification_tokens`,
-   `orgs`, `user_orgs`. Insert a default org and assign the current
-   single user as `owner`.
-3. Backfill isolated tables to the default org. Additive tables stay
-   `NULL` — they become the global catalog.
-4. Add FK `ownerOrgId → orgs.id` on every touched table. Flip
-   `NOT NULL` on isolated tables.
-5. Repo refactor: every method takes `{ userId, orgId, ... }`.
-6. Two-org isolation integration test per repo.
-
-None of the above blocks the deploy work. Ship the image now; layer
-auth + tenancy in when the org model lands.
+- **OIDC IdP** is an external dependency (homelab team operates
+  Authentik/Keycloak/Zitadel, TBD). WhereTF only registers the
+  Homelab provider when `AUTH_HOMELAB_ISSUER`,
+  `AUTH_HOMELAB_CLIENT_ID`, `AUTH_HOMELAB_CLIENT_SECRET` are set.
+  Until IdP is live, do not expose WhereTF to the internet.
+- **API rate limiting** (future) — token-bucket limiter in
+  `web/middleware.ts` around `/api/*`. External API keys are
+  paid-only; ships with the API-keys phase.

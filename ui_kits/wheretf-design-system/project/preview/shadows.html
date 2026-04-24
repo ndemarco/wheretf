@@ -1,0 +1,23 @@
+<!doctype html>
+<html>
+<head><meta charset="utf-8"><link rel="stylesheet" href="../colors_and_type.css">
+<style>
+  html,body{margin:0;background:#f7f5f2;color:var(--fg)}
+  .card{padding:30px 26px;box-sizing:border-box;display:flex;gap:32px;align-items:center;flex-wrap:wrap;justify-content:center}
+  .u{display:flex;flex-direction:column;align-items:center;gap:10px}
+  .b{background:#fff;width:110px;height:80px;border-radius:12px}
+  .b.s1{box-shadow:0 1px 0 rgba(20,18,16,.04),0 1px 2px rgba(20,18,16,.06)}
+  .b.s2{box-shadow:0 2px 4px rgba(20,18,16,.06),0 8px 20px rgba(20,18,16,.08)}
+  .b.s3{box-shadow:0 10px 30px rgba(20,18,16,.15)}
+  .b.inset{box-shadow:inset 0 1px 0 rgba(255,255,255,.6),inset 0 -1px 0 rgba(20,18,16,.06);background:var(--brand);height:44px;width:110px;border-radius:10px}
+  .lbl{font:600 12px/1.2 var(--font-mono);color:var(--fg)}
+  .sub{font:500 10px/1.2 var(--font-mono);color:var(--fg-3);letter-spacing:.06em;text-transform:uppercase}
+</style></head>
+<body>
+<div class="card">
+  <div class="u"><div class="b s1"></div><div class="lbl">shadow-1</div><div class="sub">hairline lift</div></div>
+  <div class="u"><div class="b s2"></div><div class="lbl">shadow-2</div><div class="sub">card hover</div></div>
+  <div class="u"><div class="b s3"></div><div class="lbl">shadow-3</div><div class="sub">modal</div></div>
+  <div class="u"><div class="b inset"></div><div class="lbl">inset highlight</div><div class="sub">primary btn</div></div>
+</div>
+</body></html>

@@ -1,0 +1,25 @@
+<!doctype html>
+<html>
+<head><meta charset="utf-8"><link rel="stylesheet" href="../colors_and_type.css">
+<style>
+  html,body{margin:0;background:var(--bg);color:var(--fg)}
+  .card{padding:18px 24px;box-sizing:border-box}
+  .title{font:600 12px/1.2 var(--font-sans);letter-spacing:.08em;text-transform:uppercase;color:var(--fg-2);margin-bottom:12px}
+  .grid{display:grid;grid-template-columns:repeat(12,1fr);gap:12px}
+  .cell{display:flex;flex-direction:column;align-items:center;gap:4px;padding:8px 0;border-radius:8px;background:var(--surface);color:var(--fg)}
+  .cell svg{width:26px;height:26px;color:var(--fg)}
+  .lbl{font:500 9px/1.1 var(--font-mono);color:var(--fg-3);letter-spacing:.04em;text-transform:uppercase;text-align:center}
+</style></head>
+<body>
+<div class="card">
+  <div class="title">Iconography · 2.5px stroke, rounded, currentColor</div>
+  <div class="grid" id="g"></div>
+</div>
+<script>
+  const icons = ['module','bin','item','search','scan','pin','barcode','plus','check','close','filter','settings','user','menu','grid','folder','sparkle','chevron-right','chevron-down','arrow-right','part-chip','part-nut','part-resistor','part-spool'];
+  const g = document.getElementById('g');
+  Promise.all(icons.map(n=>fetch(`../assets/icons/${n}.svg`).then(r=>r.text()))).then(svgs=>{
+    g.innerHTML = svgs.map((s,i)=>`<div class="cell">${s}<div class="lbl">${icons[i]}</div></div>`).join('');
+  });
+</script>
+</body></html>

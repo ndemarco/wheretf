@@ -122,6 +122,12 @@ The parametric system and aspects defined here are the foundation for whatever f
 
 ---
 
+## Synonyms
+
+Aspects and parameter definitions can carry alternate names (aliases) for trade-vocabulary mismatch — electronics calls it "package," mechanical calls it "footprint," electrical calls a max rating "V_max" or "breakdown voltage." Canonical names still drive storage and search; aliases expand matching and flag duplicates at author time. Full spec: [taxonomy-synonyms.md](taxonomy-synonyms.md).
+
+---
+
 ## Search
 
 Search is AI-driven. Users describe what they're looking for in natural language; the system interprets the query against the parametric data.

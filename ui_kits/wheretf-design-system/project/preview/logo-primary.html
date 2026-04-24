@@ -1,0 +1,31 @@
+<!doctype html>
+<html>
+<head><meta charset="utf-8"><link rel="stylesheet" href="../colors_and_type.css">
+<style>
+  html,body{margin:0;background:var(--bg);color:var(--fg)}
+  .card{padding:24px 28px;box-sizing:border-box;display:grid;grid-template-columns:auto 1fr auto;gap:28px;align-items:center}
+  .mark img{display:block;height:120px;width:auto}
+  .meta{min-width:0}
+  .title{font:700 22px/1.1 var(--font-sans);letter-spacing:-.01em;margin:0 0 6px}
+  .sub{font:400 13px/1.5 var(--font-sans);color:var(--fg-2);margin:0;max-width:360px}
+  .tag{display:inline-block;margin-top:10px;padding:3px 9px;border-radius:999px;background:var(--brand-wash);color:var(--brand-ink);font:600 10px/1.2 var(--font-sans);letter-spacing:.08em;text-transform:uppercase}
+  .favs{display:flex;gap:14px;align-items:flex-end}
+  .fav{display:flex;flex-direction:column;align-items:center;gap:6px}
+  .fav img{display:block;border-radius:8px;box-shadow:0 1px 2px rgba(20,18,16,.15)}
+  .fav .lbl{font:500 10px/1 var(--font-mono);color:var(--fg-3);letter-spacing:.04em}
+</style></head>
+<body>
+<div class="card">
+  <div class="mark"><img src="../assets/monogram.svg" alt=""/></div>
+  <div class="meta">
+    <p class="title">Primary mark · tag-drop</p>
+    <p class="sub">A luggage tag that resolves to a pin. The eyelet above two label lines says "name this item, then find it." One shape carries both halves of the product.</p>
+    <span class="tag">Adopted</span>
+  </div>
+  <div class="favs">
+    <div class="fav"><img src="../assets/favicon.svg" width="32" height="32" alt=""/><span class="lbl">32</span></div>
+    <div class="fav"><img src="../assets/favicon.svg" width="48" height="48" alt=""/><span class="lbl">48</span></div>
+    <div class="fav"><img src="../assets/apple-touch-icon.svg" width="64" height="64" alt=""/><span class="lbl">apple</span></div>
+  </div>
+</div>
+</body></html>

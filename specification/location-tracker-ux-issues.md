@@ -209,7 +209,9 @@ Running list of issues and decisions for the `/modules` and `/modules/[id]` area
   level *before* or *after* an existing level X. No drag-to-reorder
   (too easy to foot-gun). Typically an uncommon operation since
   module structure doesn't change often.
-- **IN-2** override UX — all 4 done (Disable, Restrict, Merge, Divide)
-- **IN-3** module level header now surfaces the insert (done)
-- **IN-4** insert-first placement (done)
 - **IN-8** smart subdivision label suggestions from template
+
+### Shipped since capture
+- IN-2 override UX — Disable, Restrict, Merge, Divide all done
+- IN-3 module level header surfaces insert name
+- IN-4 insert-first placement

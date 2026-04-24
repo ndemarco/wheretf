@@ -476,3 +476,40 @@ The same bin can hang on a louver rail (overflow down) or sit on a shelf (overfl
 
 ### Interface type taxonomy is open
 The set of interface types will evolve as real storage products are modeled. The model defines the compatibility mechanism (provide/accept) but intentionally leaves the taxonomy open. Over-specifying interface types before real-world usage would create artificial constraints.
+
+---
+
+## Continuous-Dimension UI
+
+Some storage defines capacity by physical dimensions rather than discrete grid positions. Louver panels and open shelves are the primary examples.
+
+### Template configuration
+When creating a template for continuous-dimension storage, additional fields:
+- **Dimension type** — `discrete` (default, grid-based) or `continuous`
+- **Row width** — total available width per row (e.g. 36 inches)
+- **Row pitch** — vertical spacing between rows (e.g. 3.5 inches)
+- **Overflow direction** — `down` (hanging, like louver panels) or `up` (sitting, like shelves)
+
+### Visualization
+Continuous-dimension levels render differently from grids:
+- Each row is a horizontal bar showing total width.
+- Placed inserts appear as blocks within the bar, sized proportionally to their consumed width (insert width + buffer).
+- Remaining capacity is empty space; utilization percentage shown per row.
+- Overflow indicators: if an insert's height exceeds row pitch, a visual indicator extends into the adjacent row.
+
+### Placement
+Placing an insert into a continuous-dimension location:
+1. System checks dimensional fit (insert width + buffer ≤ remaining width).
+2. Insert appears in the row visualization.
+3. Ordering within a row is optional — inserts can be reordered or treated as unordered.
+
+---
+
+## Resolved design questions (historical decisions)
+
+1. **Level reordering** — deferred. No clear use case yet.
+2. **Module photos** — deferred. Metadata field supports it; upload UI comes later.
+3. **Template sharing** — no import/export. Multi-tenant: templates promoted to system level via referential links, not per-tenant copies.
+4. **Undo** — always implemented. Toast with undo button on every mutation. Undo via transaction log per `ui-paradigms.md`. Only omit undo when explicitly agreed.
+5. **Custom row/column labels** — deferred. Current options are alpha and numeric. Custom labels (e.g. color names) are a future feature.
+6. **Template version list length** — versions with 0 instances can be hidden from the UI to prevent clutter; data retained in the DB. No pagination needed if unused versions are pruned.

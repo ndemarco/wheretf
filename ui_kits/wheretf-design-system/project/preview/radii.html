@@ -1,0 +1,23 @@
+<!doctype html>
+<html>
+<head><meta charset="utf-8"><link rel="stylesheet" href="../colors_and_type.css">
+<style>
+  html,body{margin:0;background:var(--bg);color:var(--fg)}
+  .card{padding:20px 26px;box-sizing:border-box;display:flex;gap:22px;align-items:flex-end;flex-wrap:wrap}
+  .u{display:flex;flex-direction:column;align-items:center;gap:8px}
+  .b{background:var(--brand);width:72px;height:72px}
+  .lbl{font:600 12px/1.2 var(--font-mono);color:var(--fg-2)}
+  .sub{font:500 10px/1.2 var(--font-mono);color:var(--fg-3);letter-spacing:.06em;text-transform:uppercase}
+  .title{font:600 13px/1.2 var(--font-sans);letter-spacing:.08em;text-transform:uppercase;color:var(--fg-2);width:100%;margin-bottom:4px}
+</style></head>
+<body>
+<div class="card">
+  <div class="title">Radii · corner language</div>
+  <div class="u"><div class="b" style="border-radius:4px"></div><div class="lbl">4</div><div class="sub">r-1 · tag</div></div>
+  <div class="u"><div class="b" style="border-radius:6px"></div><div class="lbl">6</div><div class="sub">r-2 · input</div></div>
+  <div class="u"><div class="b" style="border-radius:10px"></div><div class="lbl">10</div><div class="sub">r-3 · card</div></div>
+  <div class="u"><div class="b" style="border-radius:14px"></div><div class="lbl">14</div><div class="sub">r-4 · hero</div></div>
+  <div class="u"><div class="b" style="border-radius:20px"></div><div class="lbl">20</div><div class="sub">r-5 · large</div></div>
+  <div class="u"><div class="b" style="border-radius:999px"></div><div class="lbl">pill</div><div class="sub">chip/btn</div></div>
+</div>
+</body></html>
