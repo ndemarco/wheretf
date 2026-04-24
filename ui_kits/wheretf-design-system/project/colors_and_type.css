@@ -1,0 +1,250 @@
+/* ==========================================================================
+   WhereTF — Colors & Type tokens
+   Bin there, found that.
+   ========================================================================== */
+
+/* ---------- Fonts ---------- */
+/* PRIMARY: Space Grotesk — geometric, slightly industrial, warm counters.
+   MONO:    JetBrains Mono — for SKUs, part numbers, location codes.
+   NUMERIC: Space Grotesk tabular nums used for quantities & coords.
+   If you have proper font files, drop them in /fonts and swap @font-face. */
+
+@import url("https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap");
+
+/* ==========================================================================
+   Brand palette — raw swatches (never reference these directly in UI; use
+   semantic tokens below)
+   ========================================================================== */
+:root {
+  /* Hero orange — the logo color, used sparingly as a signal */
+  --wtf-orange-50:  #fff4eb;
+  --wtf-orange-100: #ffe0c2;
+  --wtf-orange-200: #ffbf85;
+  --wtf-orange-300: #ff9947;
+  --wtf-orange-400: #ff7a1a;
+  --wtf-orange-500: #ff6600;   /* brand */
+  --wtf-orange-600: #e65200;
+  --wtf-orange-700: #b34000;
+  --wtf-orange-800: #802d00;
+  --wtf-orange-900: #401700;
+
+  /* Ink — warm near-blacks that live happily next to orange */
+  --wtf-ink-50:  #f7f5f2;
+  --wtf-ink-100: #ebe7e0;
+  --wtf-ink-200: #d4cec3;
+  --wtf-ink-300: #a8a094;
+  --wtf-ink-400: #767066;
+  --wtf-ink-500: #4a453d;
+  --wtf-ink-600: #2e2a24;
+  --wtf-ink-700: #1f1c17;
+  --wtf-ink-800: #141210;   /* dark surface */
+  --wtf-ink-900: #0b0a08;   /* deepest */
+
+  /* Steel — cool neutrals for data, rules, divider lines */
+  --wtf-steel-100: #eef0f2;
+  --wtf-steel-300: #b7bcc2;
+  --wtf-steel-500: #6b7280;
+  --wtf-steel-700: #343a42;
+
+  /* Semantic accents (workshop-friendly, not candy) */
+  --wtf-go:     #2f9e44;   /* "found", "in stock" */
+  --wtf-warn:   #f4b400;   /* "low", "check" */
+  --wtf-stop:   #d6453d;   /* "missing", "conflict" */
+  --wtf-info:   #3a7dd6;   /* "scan", "linked" */
+}
+
+/* ==========================================================================
+   Semantic tokens — LIGHT (default)
+   ========================================================================== */
+:root,
+[data-theme="light"] {
+  --bg:          #fafaf7;          /* page, warm off-white */
+  --bg-soft:     #f2f0ea;          /* subdued surfaces, pegboard tone */
+  --surface:     #ffffff;          /* cards */
+  --surface-2:   var(--wtf-ink-50);
+  --surface-sunk: #efece5;         /* inset / bin wells */
+  --overlay:     rgba(20,18,16,0.55);
+
+  --fg:          var(--wtf-ink-800);
+  --fg-2:        var(--wtf-ink-600);
+  --fg-3:        var(--wtf-ink-400);
+  --fg-mute:     var(--wtf-ink-300);
+  --fg-on-brand: #ffffff;
+
+  --line:        #e3ddd1;          /* warm hairline */
+  --line-strong: var(--wtf-ink-200);
+  --line-input:  var(--wtf-ink-300);
+
+  --brand:       var(--wtf-orange-500);
+  --brand-ink:   var(--wtf-orange-700);
+  --brand-wash:  var(--wtf-orange-50);
+  --brand-line:  var(--wtf-orange-200);
+
+  --focus-ring:  color-mix(in oklab, var(--wtf-orange-500) 45%, transparent);
+
+  --go:          var(--wtf-go);
+  --warn:        var(--wtf-warn);
+  --stop:        var(--wtf-stop);
+  --info:        var(--wtf-info);
+
+  --shadow-1: 0 1px 0 rgba(20,18,16,.04), 0 1px 2px rgba(20,18,16,.06);
+  --shadow-2: 0 2px 4px rgba(20,18,16,.06), 0 8px 20px rgba(20,18,16,.08);
+  --shadow-3: 0 10px 30px rgba(20,18,16,.15);
+  --shadow-inset: inset 0 1px 0 rgba(255,255,255,.6), inset 0 -1px 0 rgba(20,18,16,.06);
+}
+
+/* ==========================================================================
+   Semantic tokens — DARK (equal citizen) — cool navy-blue workshop
+   Derived from the real app: dark navy surfaces, orange only as signal.
+   ========================================================================== */
+[data-theme="dark"] {
+  --bg:          #0f1623;          /* deep navy — main app canvas */
+  --bg-soft:     #0b111c;          /* left sidebar, deeper */
+  --surface:     #151d2c;          /* panels, cards */
+  --surface-2:   #1c2636;          /* hover / raised panels */
+  --surface-sunk: #0a0f1a;         /* inset wells, bin cells */
+  --overlay:     rgba(5,8,14,0.65);
+
+  --fg:          #e6ebf3;
+  --fg-2:        #a9b3c2;
+  --fg-3:        #6b7687;
+  --fg-mute:     #455061;
+  --fg-on-brand: #0f1623;
+
+  --line:        #1f2838;          /* hairline between panels */
+  --line-strong: #2a3446;
+  --line-input:  #2a3446;
+
+  --brand:       #ff6a1a;          /* orange keeps its heat on navy */
+  --brand-ink:   #ff8a42;
+  --brand-wash:  rgba(255,106,26,.10);
+  --brand-line:  rgba(255,106,26,.40);
+
+  --focus-ring:  color-mix(in oklab, #ff6a1a 55%, transparent);
+
+  --go:   #4cc06a;
+  --warn: #ffc53d;
+  --stop: #ea5e54;
+  --info: #5a9bea;
+
+  --shadow-1: 0 1px 0 rgba(0,0,0,.4), 0 1px 2px rgba(0,0,0,.5);
+  --shadow-2: 0 2px 4px rgba(0,0,0,.4), 0 10px 24px rgba(0,0,0,.55);
+  --shadow-3: 0 14px 40px rgba(0,0,0,.7);
+  --shadow-inset: inset 0 1px 0 rgba(255,255,255,.04), inset 0 -1px 0 rgba(0,0,0,.5);
+}
+
+/* ==========================================================================
+   Type
+   ========================================================================== */
+:root {
+  --font-sans: "Space Grotesk", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+
+  /* Type scale — modular, workshop-appropriate (a bit bigger than usual) */
+  --fs-xs:   0.75rem;   /* 12 — captions, tape labels */
+  --fs-sm:   0.875rem;  /* 14 — meta, hint */
+  --fs-base: 1rem;      /* 16 — body */
+  --fs-md:   1.125rem;  /* 18 — lead body */
+  --fs-lg:   1.375rem;  /* 22 — h4 */
+  --fs-xl:   1.75rem;   /* 28 — h3 */
+  --fs-2xl:  2.25rem;   /* 36 — h2 */
+  --fs-3xl:  3rem;      /* 48 — h1 */
+  --fs-4xl:  4.25rem;   /* 68 — hero */
+  --fs-5xl:  6rem;      /* 96 — big stamp */
+
+  --lh-tight: 1.02;
+  --lh-snug:  1.15;
+  --lh-body:  1.5;
+  --lh-loose: 1.7;
+
+  --ls-tight:  -0.02em;
+  --ls-snug:   -0.01em;
+  --ls-normal: 0;
+  --ls-label:   0.08em;   /* for uppercase tape labels */
+  --ls-stamp:   0.12em;
+
+  --fw-regular: 400;
+  --fw-medium:  500;
+  --fw-semi:    600;
+  --fw-bold:    700;
+}
+
+/* ---------- Semantic type classes ---------- */
+.wtf-hero       { font: var(--fw-bold) var(--fs-4xl)/var(--lh-tight) var(--font-sans); letter-spacing: var(--ls-tight); }
+.wtf-h1, h1     { font: var(--fw-bold) var(--fs-3xl)/var(--lh-tight) var(--font-sans); letter-spacing: var(--ls-tight); }
+.wtf-h2, h2     { font: var(--fw-bold) var(--fs-2xl)/var(--lh-snug)  var(--font-sans); letter-spacing: var(--ls-snug); }
+.wtf-h3, h3     { font: var(--fw-semi) var(--fs-xl)/var(--lh-snug)  var(--font-sans); letter-spacing: var(--ls-snug); }
+.wtf-h4, h4     { font: var(--fw-semi) var(--fs-lg)/var(--lh-snug)  var(--font-sans); }
+.wtf-lead       { font: var(--fw-regular) var(--fs-md)/var(--lh-body) var(--font-sans); color: var(--fg-2); }
+.wtf-body, p    { font: var(--fw-regular) var(--fs-base)/var(--lh-body) var(--font-sans); }
+.wtf-small      { font: var(--fw-regular) var(--fs-sm)/var(--lh-body) var(--font-sans); color: var(--fg-2); }
+.wtf-caption    { font: var(--fw-medium) var(--fs-xs)/var(--lh-body) var(--font-sans); color: var(--fg-3); }
+
+/* Tape label — uppercase, tracked out, for section starts, chips, nav */
+.wtf-label {
+  font: var(--fw-semi) var(--fs-xs)/1.2 var(--font-sans);
+  letter-spacing: var(--ls-label);
+  text-transform: uppercase;
+  color: var(--fg-2);
+}
+
+/* Part number / location code / SKU — monospaced, slight tracking */
+.wtf-code, code {
+  font: var(--fw-medium) 0.92em/1.3 var(--font-mono);
+  letter-spacing: 0.01em;
+  color: var(--fg);
+}
+
+/* Big "stamp" — used for hero accents and empty-state headlines */
+.wtf-stamp {
+  font: var(--fw-bold) var(--fs-5xl)/0.95 var(--font-sans);
+  letter-spacing: var(--ls-stamp);
+  text-transform: uppercase;
+}
+
+/* Tabular figures — for quantities, coords, counts */
+.wtf-num { font-variant-numeric: tabular-nums; }
+
+/* ==========================================================================
+   Spacing, radii, motion (shared)
+   ========================================================================== */
+:root {
+  --sp-1: 4px;
+  --sp-2: 8px;
+  --sp-3: 12px;
+  --sp-4: 16px;
+  --sp-5: 24px;
+  --sp-6: 32px;
+  --sp-7: 48px;
+  --sp-8: 64px;
+  --sp-9: 96px;
+
+  --r-1: 4px;
+  --r-2: 6px;
+  --r-3: 10px;
+  --r-4: 14px;
+  --r-5: 20px;
+  --r-pill: 999px;
+
+  /* Motion — quick, physical, never bouncy-cute */
+  --ease-out: cubic-bezier(.2,.7,.2,1);
+  --ease-in:  cubic-bezier(.5,0,.75,0);
+  --ease-std: cubic-bezier(.4,0,.2,1);
+  --dur-1: 120ms;
+  --dur-2: 200ms;
+  --dur-3: 320ms;
+}
+
+/* ==========================================================================
+   Base styles
+   ========================================================================== */
+html, body {
+  background: var(--bg);
+  color: var(--fg);
+  font-family: var(--font-sans);
+  font-size: var(--fs-base);
+  line-height: var(--lh-body);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+::selection { background: var(--wtf-orange-500); color: #fff; }

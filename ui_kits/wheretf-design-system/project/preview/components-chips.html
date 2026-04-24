@@ -1,0 +1,29 @@
+<!doctype html>
+<html>
+<head><meta charset="utf-8"><link rel="stylesheet" href="../colors_and_type.css">
+<style>
+  html,body{margin:0;background:var(--bg);color:var(--fg)}
+  .card{padding:22px 26px;box-sizing:border-box;display:flex;flex-wrap:wrap;gap:10px;align-items:center}
+  .chip{display:inline-flex;align-items:center;gap:6px;padding:5px 11px;border-radius:999px;font:600 12px/1 var(--font-sans);letter-spacing:.02em}
+  .dot{width:7px;height:7px;border-radius:999px;background:currentColor}
+  .go{background:color-mix(in oklab,#2f9e44 14%, transparent);color:#1f7a2f}
+  .warn{background:color-mix(in oklab,#f4b400 18%, transparent);color:#8a6a00}
+  .stop{background:color-mix(in oklab,#d6453d 14%, transparent);color:#a0322b}
+  .info{background:color-mix(in oklab,#3a7dd6 14%, transparent);color:#2d5fa8}
+  .neutral{background:var(--surface-2);color:var(--fg-2)}
+  .brand{background:var(--brand-wash);color:var(--brand-ink)}
+  .outline{background:transparent;box-shadow:inset 0 0 0 1px var(--line-strong);color:var(--fg-2)}
+  .code{font:500 11px/1 var(--font-mono);color:var(--fg-3);letter-spacing:.04em;text-transform:uppercase;width:100%;margin-top:4px}
+</style></head>
+<body>
+<div class="card">
+  <span class="chip go"><span class="dot"></span>Found</span>
+  <span class="chip warn"><span class="dot"></span>Low</span>
+  <span class="chip stop"><span class="dot"></span>Missing</span>
+  <span class="chip info"><span class="dot"></span>Linked</span>
+  <span class="chip neutral">Uncategorized</span>
+  <span class="chip brand">Pro</span>
+  <span class="chip outline">Draft</span>
+  <div class="code">Chips · 999px radius · 500+ weight · tiny dot for semantic</div>
+</div>
+</body></html>

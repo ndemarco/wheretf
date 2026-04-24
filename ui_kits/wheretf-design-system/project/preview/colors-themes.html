@@ -1,0 +1,43 @@
+<!doctype html>
+<html data-theme="dark">
+<head><meta charset="utf-8"><link rel="stylesheet" href="../colors_and_type.css">
+<style>
+  html,body{margin:0;background:var(--bg);color:var(--fg)}
+  .wrap{display:grid;grid-template-columns:1fr 1fr;height:100%}
+  .half{padding:18px 22px;box-sizing:border-box;min-height:180px}
+  .light{background:#fafaf7;color:#141210}
+  .dark{background:#0f0d0b;color:#f5efe5}
+  .title{font:600 12px/1.2 var(--font-sans);letter-spacing:.1em;text-transform:uppercase;opacity:.7;margin-bottom:12px}
+  .tokens{display:flex;flex-direction:column;gap:8px}
+  .tkn{display:flex;align-items:center;gap:10px;font:500 12px/1.2 var(--font-mono)}
+  .sw{width:22px;height:22px;border-radius:5px;box-shadow:inset 0 0 0 1px rgba(0,0,0,.15)}
+  .lbl{font:600 13px var(--font-sans)}
+  .meta{opacity:.6}
+  .btn{display:inline-flex;align-items:center;gap:8px;padding:8px 14px;border-radius:10px;font:600 13px var(--font-sans);margin-top:10px}
+</style></head>
+<body>
+<div class="wrap">
+  <div class="half light">
+    <div class="title">Light</div>
+    <div class="tokens">
+      <div class="tkn"><div class="sw" style="background:#fafaf7"></div><span class="lbl">bg</span><span class="meta">#fafaf7</span></div>
+      <div class="tkn"><div class="sw" style="background:#ffffff"></div><span class="lbl">surface</span><span class="meta">#ffffff</span></div>
+      <div class="tkn"><div class="sw" style="background:#141210"></div><span class="lbl">fg</span><span class="meta">#141210</span></div>
+      <div class="tkn"><div class="sw" style="background:#ff6600"></div><span class="lbl">brand</span><span class="meta">#ff6600</span></div>
+      <div class="tkn"><div class="sw" style="background:#e3ddd1"></div><span class="lbl">line</span><span class="meta">#e3ddd1</span></div>
+    </div>
+    <div class="btn" style="background:#ff6600;color:#fff;box-shadow:inset 0 1px 0 rgba(255,255,255,.35)">Primary</div>
+  </div>
+  <div class="half dark">
+    <div class="title">Dark</div>
+    <div class="tokens">
+      <div class="tkn"><div class="sw" style="background:#0f0d0b;outline:1px solid #2a221c"></div><span class="lbl">bg</span><span class="meta">#0f0d0b</span></div>
+      <div class="tkn"><div class="sw" style="background:#1a1613"></div><span class="lbl">surface</span><span class="meta">#1a1613</span></div>
+      <div class="tkn"><div class="sw" style="background:#f5efe5"></div><span class="lbl">fg</span><span class="meta">#f5efe5</span></div>
+      <div class="tkn"><div class="sw" style="background:#ff7a1a"></div><span class="lbl">brand</span><span class="meta">#ff7a1a</span></div>
+      <div class="tkn"><div class="sw" style="background:#2a221c"></div><span class="lbl">line</span><span class="meta">#2a221c</span></div>
+    </div>
+    <div class="btn" style="background:#ff7a1a;color:#1a1613;box-shadow:inset 0 1px 0 rgba(255,255,255,.2)">Primary</div>
+  </div>
+</div>
+</body></html>

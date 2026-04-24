@@ -1,0 +1,31 @@
+<!doctype html>
+<html>
+<head><meta charset="utf-8"><link rel="stylesheet" href="../colors_and_type.css">
+<style>
+  html,body{margin:0;background:var(--bg);color:var(--fg)}
+  .card{padding:20px 24px;box-sizing:border-box}
+  .module{border:1px solid var(--line);border-radius:14px;overflow:hidden;background:var(--surface);box-shadow:var(--shadow-1)}
+  .mhead{display:flex;align-items:center;gap:12px;padding:12px 16px;border-bottom:1px solid var(--line);background:var(--surface-2)}
+  .mhead svg{width:22px;height:22px;color:var(--brand)}
+  .mname{font:700 15px/1.1 var(--font-sans)}
+  .mcode{font:500 11px/1 var(--font-mono);color:var(--fg-3);margin-left:auto}
+  .grid{display:grid;grid-template-columns:repeat(6,1fr);gap:6px;padding:12px;background:var(--surface-sunk)}
+  .bin{aspect-ratio:1;border-radius:6px;background:var(--surface);border:1px solid var(--line);display:flex;align-items:center;justify-content:center;font:600 10px/1 var(--font-mono);color:var(--fg-3);position:relative}
+  .bin.filled{background:var(--brand-wash);border-color:var(--brand-line);color:var(--brand-ink)}
+  .bin.active{background:var(--brand);color:#fff;border-color:var(--brand);box-shadow:0 2px 8px rgba(255,102,0,.35)}
+</style></head>
+<body>
+<div class="card">
+  <div class="module">
+    <div class="mhead">
+      <svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><rect x="6" y="6" width="36" height="36" rx="3"/><line x1="6" y1="18" x2="42" y2="18"/><line x1="6" y1="30" x2="42" y2="30"/></svg>
+      <span class="mname">Bench organizer · Left</span>
+      <span class="mcode">MOD-A</span>
+    </div>
+    <div class="grid">
+      <div class="bin filled">A1</div><div class="bin filled">A2</div><div class="bin">A3</div><div class="bin filled">A4</div><div class="bin">A5</div><div class="bin filled">A6</div>
+      <div class="bin filled">B1</div><div class="bin active">B2</div><div class="bin filled">B3</div><div class="bin">B4</div><div class="bin filled">B5</div><div class="bin">B6</div>
+    </div>
+  </div>
+</div>
+</body></html>

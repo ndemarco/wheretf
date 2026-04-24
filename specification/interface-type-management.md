@@ -2,7 +2,7 @@
 
 Admin CRUD for interface types. Integration points on templates + receptacles.
 
-See [storage-model.md](storage-model.md) lines 124-137 (concept), [storage-definition-design.md](storage-definition-design.md) (template + level editors).
+See [storage-model.md](storage-model.md) for the concept + UI configuration.
 
 ---
 
@@ -141,184 +141,34 @@ No caching. Neighbor clearance changes on every sibling mutation — cache inval
 
 ## Scope
 
-In:
-- Admin CRUD (identifier, description, physical contract notes)
-- Template editor: multi-select provided/accepted interfaces
-- Level/receptacle: multi-select accepted interfaces
+Shipped: admin CRUD at `/admin/interfaces`, template + level chip
+pickers, junction tables, archive / merge lifecycle with template
+re-versioning, unit-system modular display.
 
 Out:
 - Structured geometric contracts — deferred
 - User-submitted types + approval workflow — deferred
 - Per-org namespaces — interface types are system-global
 
----
-
-## Access Control
-
-CRUD = admin-only. Single-user today → sole user = admin. Multi-tenant future → WhereTF staff only; tenants select from catalog.
-
-Template + receptacle dropdowns (consume existing types) = all users. Not admin-gated.
+Access: CRUD admin-only (single-user = admin; multi-tenant future =
+WhereTF staff). Chip pickers open to all users.
 
 ---
 
-## Navigation
+## Load-bearing invariants
 
-```
-/admin/interfaces            — list (admin only)
-/admin/interfaces/new        — create
-/admin/interfaces/:id        — detail + edit
-```
-
-Admin section under `/admin/*`. No menu entry for non-admins. Entry point: user avatar (profile menu) dropdown → "Admin" → "Interfaces". Single avatar-menu entry covers all admin surfaces (future: categories, parameters, etc.). Short-term fallback if avatar menu not yet built: sidebar gear icon.
-
----
-
-## Interface Type List (`/admin/interfaces`)
-
-Table. Columns:
-- **Checkbox** — row select for bulk ops
-- **Identifier** (mono) — `plano-3600`
-- **Maturity** — badge: `stable` | `draft`
-- **Status** — `active` | `archived`
-- **Description** — one-line truncated
-- **Usage** — "N templates provide · M templates accept · K receptacles accept"
-- **Created** — relative date
-
-Row click → detail/edit. Archived rows dimmed.
-
-Row actions (single-row icons):
-- Archive / Unarchive (toggle)
-- Delete (only visible when `archived && usage == 0`; destructive, confirm prompt)
-
-Bulk actions (appear when 2+ rows selected):
-- **Merge into…** — selected rows = sources (merged away). Picker shows all non-selected active types as survivor candidates. Pick survivor → confirm dialog: "N references will be rewritten and M template versions minted. This hard-deletes {A, B}." → execute in transaction → toast "Merged {A, B} into {C}. 47 references updated, 12 template versions minted."
-- **Archive selected**
-- **Unarchive selected**
-
-Header actions:
-- "New Interface Type" button (top-right)
-
-Empty state: "No interface types defined. Create one to declare compatibility between inserts and receptacles." + "New Interface Type" button. Admins only reach this page.
-
-Filter: All / Active / Archived (tabs above table, default Active).
-Sort: identifier (default), usage desc, maturity, recently created.
-
----
-
-## Create / Edit (`/admin/interfaces/new`, `/admin/interfaces/:id`)
-
-Single-page form. Fields:
-- **Identifier** — required, unique, slug-style. Regex `^[a-z0-9][a-z0-9-]*$`. Mutable — references are by UUID so rename is safe. On rename, display updates everywhere (chip labels, usage rows); underlying references don't care.
-- **Description** — optional, multiline. What interface represents, common products, gotchas. Surfaces as tooltip on every chip that displays this type (template editor, level editor, usage row). Keep concise — one short paragraph max.
-- **Unit system** — optional. Toggle "This is a modular system" → reveals three per-axis rows (width, depth, height). Each row: label (short string, e.g., "u", "h") + mm value. Leave a row empty to fall back to raw-mm input on that axis. Left entirely off for fixed-form and continuous-dim interfaces. No warning on toggle-off — storage is always mm, nothing to revert.
-- **Physical contract (notes)** — optional, multiline free-form. Placeholder: "Footprint, mounting, clearance notes. Structured fields coming later." Stored `{ notes: "..." }` in `physicalContract` jsonb.
-
-**Derive from existing** — button on detail page: "Derive new interface". Opens create form pre-filled from current type (description + physical contract + unit system copied; new identifier required; maturity resets to draft). Use case: variant / successor interface that starts identical. New row, new UUID — not a version of original. No lineage tracked today. Clone is independent after creation; no linked updates.
-
-Buttons (footer):
-- Create mode: primary "Create" (→ stable) + secondary "Save as draft" (→ draft) + Cancel.
-- Edit stable: primary "Save" + Cancel. No demotion path.
-- Edit draft: primary "Save" (→ promotes to stable) + secondary "Save as draft" (→ stays draft) + Cancel.
-
-Detail header shows a small draft pill when viewing a draft. No form-level maturity control — the save action carries the intent.
-
-Lifecycle actions (Archive, Merge, Delete) live in a lifecycle menu on the detail page header, not mixed with form buttons.
-
-Save → redirect to list + toast "Interface type created: plano-3600" / "Updated" / "Published plano-3600 (draft → stable)" with undo where safe.
-
----
-
-## Template Editor Integration
-
-See [storage-definition-design.md](storage-definition-design.md) template detail right panel. Add two controls:
-
-- **Interfaces provided** — multi-select chip input (insert templates). Options from `GET /api/interface-types?status=active`. Empty allowed but placement blocked until populated.
-- **Interfaces accepted** — multi-select chip input (receptacle-producing templates, e.g., gf baseplates). Same source.
-
-Dim-input mode toggle (only shown when at least one selected interface declares `unitSystem`): "Units" / "Raw mm". Units mode shows integer steppers labeled per-axis from the interface (e.g., "Width: 2u", "Height: 3h"), with mm equivalent below. Raw mm mode = plain mm inputs. Storage is always mm regardless — unit mode just scales the stepper. Mix freely; no drift warnings.
-
-Unit source when multiple modular interfaces selected: first in list with a `unitSystem`. Axes that interface doesn't cover fall back to raw mm input.
-
-Dims are optional per-axis. All null is fine — most templates won't bother specifying dims. Only populate when dimensional fit matters (e.g., tall gf bins against drawer clearance).
-
-Chip UX:
-- Hover a chip → tooltip shows interface description. Sourced from `interfaceTypes.description`. Saves a trip to `/admin/interfaces/:id` when deciding between similar types.
-- Draft types shown with muted chip + "(draft)" suffix, sorted below stable in the picker dropdown. Maturity is independent of the status filter — drafts remain pickable.
-- Archived types never appear in picker (the `status=active` filter hides them), but already-attached archived types stay visible on the template (read-only chip, muted, tooltip notes "archived — ask admin").
-
-Both versioned. Change triggers existing "Publish as v[N]" / "Revert" flow.
-
-Template CAN populate both sides (receptacle that's also an insert). Spec `storage-model.md:130` says directionality per boundary. Both allowed, exclusive use expected.
-
----
-
-## Receptacle / Level Integration
-
-Module detail ([storage-definition-design.md §Module Detail](storage-definition-design.md)). Level rows = `locations` with `locationType = receptacle`. Add:
-
-- **Interfaces accepted** — multi-select chip input, level properties editor (right panel or level detail). Options from `GET /api/interface-types?status=active`. Same chip UX as template editor: tooltip-on-hover for description, draft/archived handling identical.
-
-Placement check → see [Placement pseudocode](#placement-pseudocode).
-
-Template-inherited accepted interfaces → not today. Direct set only.
-
----
-
-## Data Flow
-
-### Schema change (prerequisite)
-
-Current: `interfaceTypeProvided` / `interfaceTypeAccepted` = single `text` columns on `template_versions`, `locations`, `inserts`. No multiplicity. Change → **junction tables** keyed by interface type UUID:
-
-- `template_version_interfaces_provided (template_version_id, interface_type_id)` — composite PK
-- `template_version_interfaces_accepted (template_version_id, interface_type_id)` — composite PK
-- `location_interfaces_accepted (location_id, interface_type_id)` — composite PK
-
-No `insert_interfaces_provided` table. Inserts inherit provided interfaces from template. No override path.
-
-Extend `interface_types`:
-- `maturity text not null default 'draft'` — `'draft' | 'stable'`
-- `archived_at timestamp` — null = active; non-null = archived at that time
-- `unit_system jsonb` — null for fixed-form + continuous-dim interfaces; populated for modular systems. Formalized per-axis shape: `{ width: { label, mm }, depth: { label, mm }, height: { label, mm } }`. Keys match axis names exactly so UI can render steppers without a separate mapping.
-
-Template dims (`templateVersions.widthMm / heightMm / depthMm / bufferMm` etc.) stay in raw mm. All nullable — templates without dims are normal.
-
-Existing `template_versions.unit_size: text` (value like `"42mm"`) becomes redundant post-migration — its info now lives on the interface. Deprecate + drop after backfill.
-
-**Load-bearing invariant:** all references to interface types are by `interface_types.id` (UUID). Identifier (`plano-3600`) is a human-readable, mutable display slug. Never join on identifier anywhere — in migrations, queries, or code. This is what makes rename, merge, and historical stability safe. Mark with a comment in the schema file so it survives future "optimizations."
-
-Junction > `uuid[]` arrays: FK integrity, single join for "templates providing X", straightforward merge rewrites.
-
-Migration: backfill single-text identifiers → interface type UUIDs, drop text columns. Drop unresolvable values (shouldn't exist in dev).
-
-### CRUD
-
-- `GET /api/interface-types` — list. Query param `status=active|archived|all` (default `all` for admin list, `active` for chip pickers).
-- `POST /api/interface-types` — admin only. Body `{ ..., maturity }`. Maturity defaulted from the save button (stable if omitted).
-- `GET /api/interface-types/:id` — detail + usage counts.
-- `PATCH /api/interface-types/:id` — admin only. Identifier + description + physicalContract + unitSystem mutable. Maturity mutable only in the direction `draft → stable`; stable → draft returns 409.
-- `POST /api/interface-types/:id/archive` — admin only. Sets `archived_at = now()`.
-- `POST /api/interface-types/:id/unarchive` — admin only. Nulls `archived_at`.
-- `POST /api/interface-types/merge` — admin only. Body: `{ sourceIds: [...], targetId }`. Rewrites all junction rows + deletes source rows in a single transaction. Returns count of rewritten references.
-- `DELETE /api/interface-types/:id` — admin only. Blocked unless archived AND usage = 0.
-
-Routes exist at [web/app/api/interface-types/](../web/app/api/interface-types/). Need:
-- Auth gating: all mutating routes call `isAdmin({ userId })` helper. Returns `true` in single-user mode; swap for real role check when multi-tenant lands.
-- Usage count in detail response
-- Archive/unarchive + merge routes (new)
-- Delete guard: archived + usage=0
-- Junction table queries post-migration
-
----
-
-## Empty States
-
-| Context | Message | Action |
-|---|---|---|
-| Interface list, no types | "No interface types defined. Create one to declare compatibility between inserts and receptacles." | "New Interface Type" (admin only) |
-| Template editor, no types | Chip placeholder: "No interface types available. Ask admin." | Link `/admin/interfaces/new` if admin |
-| Level editor, no types | Same | Same |
-| Placement, no interface match | "Insert provides {A, B}; receptacle accepts {C}. No compatible interface." | Link edit either side |
-| Placement, interface match + dim fail | "Interface matches ({A}), insert {h}mm tall; receptacle clears {eff}mm." | Link Restrict override or template dims |
-| Placement, overflow exceeds rows | "Insert overflows {n} rows {down\|up}; {m} adjacent available." | Link receptacle layout |
+- **Reference by UUID, never identifier.** `interface_types.id` is the
+  join key; `identifier` (`plano-3600`) is a mutable display slug.
+  Never join on identifier in code or migrations. This is what makes
+  rename + merge safe. Comment in the schema file preserves it.
+- **Storage is always mm.** `interfaceTypes.unitSystem` is a display/
+  input convenience only. Templates without dims are normal — null
+  per-axis is fine. User rules the storage.
+- **Stable is terminal.** Maturity state machine is
+  `draft → stable → archived → deleted`. Demoting stable to draft is
+  blocked (ambiguous for existing references). Unused stable types
+  archive instead.
+- **Merge mints new template versions.** Interfaces are versioned
+  properties of templates. Merging rewrites junction rows and emits a
+  new version per affected template in the same transaction.
 

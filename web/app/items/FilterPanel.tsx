@@ -24,6 +24,8 @@ export default function FilterPanel({
   categoryCounts,
   activeCategoryId,
   onCategoryClick,
+  fetchError,
+  onRetry,
 }: {
   query: string;
   onQueryChange: (q: string) => void;
@@ -32,6 +34,8 @@ export default function FilterPanel({
   categoryCounts: CategoryCount[];
   activeCategoryId: string;
   onCategoryClick: (categoryId: string) => void;
+  fetchError?: string | null;
+  onRetry?: () => void;
 }) {
   const inputRef = useRef<HTMLInputElement>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout>>(null);
@@ -46,6 +50,21 @@ export default function FilterPanel({
 
   return (
     <div className="w-70 bg-slate-800 border-r border-slate-700 flex flex-col shrink-0 overflow-y-auto">
+      {fetchError && (
+        <div className="p-2 bg-rose-900/40 border-b border-rose-500/40 text-xs text-rose-200 flex items-center justify-between gap-2">
+          <span className="truncate" title={fetchError}>
+            Showing cached data — {fetchError}
+          </span>
+          {onRetry && (
+            <button
+              onClick={onRetry}
+              className="text-rose-100 hover:text-white underline shrink-0"
+            >
+              Retry
+            </button>
+          )}
+        </div>
+      )}
       {/* Search */}
       <div className="p-3 border-b border-slate-700">
         <div className="relative flex items-center">

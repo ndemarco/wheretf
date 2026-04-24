@@ -54,15 +54,24 @@ volume).
 
 ### Running the dev server instead
 
-If you want to hack on the code with hot-reload, use the dev compose:
+If you want to hack on the code with hot-reload, use the dev compose.
+Requires Docker Desktop (or Docker Engine) for the Postgres container —
+the dev DB is always local, never a remote host.
 
 ```bash
-docker compose -f docker-compose.dev.yml up -d  # postgres only
+docker compose -f docker-compose.dev.yml up -d      # postgres only, :5432
 cd web
+cp .env.local.example .env.local                    # then edit if needed
 npm install
-npm run db:migrate
-npm run dev                                      # http://localhost:3000
+npm run db:migrate                                  # creates schema + default org/user
+npm run db:seed                                     # optional: sample items, templates, modules
+npm run dev                                         # http://localhost:3000
 ```
+
+Then open `http://localhost:3000/login`. The **Dev users** panel
+(non-prod only) has one-click sign-in buttons for four preset
+personas — admin, free, pro — that auto-provision on first click.
+No password, no signup flow needed to start poking around.
 
 ### Tests
 

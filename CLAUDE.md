@@ -13,13 +13,18 @@ Next.js (App Router) + React, PostgreSQL, Tailwind v4. Storage grid rendered as 
 
 ## Dev Commands
 
+Dev DB is always local Docker: `docker compose -f docker-compose.dev.yml up -d` from repo root. Never point dev at a remote Postgres. Connection string lives in `web/.env.local` (copy from `.env.local.example`).
+
 From `web/`:
-- `npm run dev` — next dev (requires local PostgreSQL)
+- `npm run dev` — next dev (requires local Postgres + `.env.local`)
 - `npm test` — Vitest unit and integration tests
 - `npm run test:watch` — Vitest in watch mode
-- `npm run db:migrate` — run Drizzle migrations
+- `npm run db:migrate` — Drizzle migrations (also seeds `default` org/user)
+- `npm run db:seed` — sample taxonomy, items, templates, modules for UI work
 - `npm run db:generate` — generate migration from schema changes
 - `npm run db:studio` — Drizzle Studio (database browser)
+
+Sign in at `/login` — **Dev users** panel has 4 one-click personas (admin, free, pro). Non-prod only.
 
 ## Testing
 
@@ -73,12 +78,20 @@ Tailwind v4 with custom `accent` color (#ff6600 orange). Dark mode supported. Gr
 
 - [specification/project-intent.md](specification/project-intent.md) — what WhereTF is, interaction model, domain concepts
 - [specification/storage-model.md](specification/storage-model.md) — storage data model (modules, templates, inserts, overrides, paths)
-- [specification/deployment.md](specification/deployment.md) — CI/CD pipeline and deployment
 - [specification/storage-navigator-design.md](specification/storage-navigator-design.md) — grid visualization UI/UX spec
-- [specification/storage-definition-design.md](specification/storage-definition-design.md) — module/template/insert definition UI/UX spec
-- [specification/item-taxonomy.md](specification/item-taxonomy.md) — item classification (categories, parameters, aspects)
-- [specification/item-maintenance.md](specification/item-maintenance.md) — item lifecycle use cases
-- [specification/item-management-design.md](specification/item-management-design.md) — item management UI/UX spec
+- [specification/interface-type-management.md](specification/interface-type-management.md) — interface types: admin CRUD + template/receptacle integration
+- [specification/location-tracker-ux-issues.md](specification/location-tracker-ux-issues.md) — living UX issue log for `/modules` + `/templates` + `/inserts`
+- [specification/item-taxonomy.md](specification/item-taxonomy.md) — conceptual: categories, parameters, aspects
+- [specification/item-parametric-model.md](specification/item-parametric-model.md) — parameters + standards + designations: schema, unit conversion
+- [specification/taxonomy-management-design.md](specification/taxonomy-management-design.md) — `/taxonomy` admin UI spec
+- [specification/taxonomy-synonyms.md](specification/taxonomy-synonyms.md) — aspect/parameter aliases (deferred)
+- [specification/measure-family.md](specification/measure-family.md) — unit-aware value equivalence (deferred)
+- [specification/item-management-design.md](specification/item-management-design.md) — `/items` design decisions
+- [specification/item-graphics.md](specification/item-graphics.md) — per-item SVG wireframes (deferred)
 - [specification/ui-paradigms.md](specification/ui-paradigms.md) — cross-cutting UI/UX rules
+- [specification/ui-layout-patterns.md](specification/ui-layout-patterns.md) — shell + three-panel layout + design tokens
+- [specification/user-menu.md](specification/user-menu.md) — sidebar account affordance + `/settings` structure
+- [specification/auth-roadmap.md](specification/auth-roadmap.md) — auth, authz, multi-tenancy ordering
+- [specification/deployment.md](specification/deployment.md) — CI/CD pipeline and deployment
 - [specification/ai-agent-architecture.md](specification/ai-agent-architecture.md) — AI agent patterns (deferred, reference only)
-- [specification/interface-type-management.md](specification/interface-type-management.md) — admin CRUD + template/receptacle integration for interface types
+- [specification/ai-collaboration-notes.md](specification/ai-collaboration-notes.md) — notes on AI collaboration workflow (not a product spec)

@@ -1,0 +1,28 @@
+<!doctype html>
+<html>
+<head><meta charset="utf-8"><link rel="stylesheet" href="../colors_and_type.css">
+<style>
+  html,body{margin:0;background:var(--bg-soft);color:var(--fg)}
+  .card{padding:20px 24px;box-sizing:border-box;display:grid;grid-template-columns:1fr 1fr;gap:14px}
+  .item{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:14px;display:flex;gap:12px;align-items:flex-start;box-shadow:var(--shadow-1);transition:all 160ms}
+  .ico{width:40px;height:40px;flex:0 0 40px;border-radius:10px;background:var(--brand-wash);color:var(--brand-ink);display:flex;align-items:center;justify-content:center}
+  .ico svg{width:24px;height:24px}
+  .body{flex:1;min-width:0}
+  .name{font:600 14px/1.2 var(--font-sans);color:var(--fg);margin:0 0 3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .loc{font:500 11px/1.2 var(--font-mono);color:var(--fg-3);letter-spacing:.03em}
+  .meta{display:flex;gap:8px;margin-top:8px}
+  .tag{font:600 10px/1 var(--font-sans);letter-spacing:.06em;text-transform:uppercase;color:var(--fg-2);background:var(--surface-2);padding:3px 7px;border-radius:4px}
+  .qty{font:600 12px/1 var(--font-mono);color:var(--fg-2);font-variant-numeric:tabular-nums}
+</style></head>
+<body>
+<div class="card">
+  <div class="item">
+    <div class="ico"><svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polygon points="24,6 40,15 40,33 24,42 8,33 8,15"/><circle cx="24" cy="24" r="7"/></svg></div>
+    <div class="body"><p class="name">M6×30 SHCS</p><p class="loc">MOD-A · DWR-3 · BIN-B2</p><div class="meta"><span class="tag">Fastener</span><span class="qty">~40</span></div></div>
+  </div>
+  <div class="item">
+    <div class="ico"><svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="4" y1="24" x2="12" y2="24"/><path d="M 12 24 L 16 16 L 20 32 L 24 16 L 28 32 L 32 16 L 36 24"/><line x1="36" y1="24" x2="44" y2="24"/></svg></div>
+    <div class="body"><p class="name">1kΩ 0603 resistor, 1%</p><p class="loc">MOD-B · TRAY-1 · C4</p><div class="meta"><span class="tag">Component</span><span class="qty">~500</span></div></div>
+  </div>
+</div>
+</body></html>

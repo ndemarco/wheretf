@@ -1,7 +1,7 @@
 @import "tailwindcss";
 
 @theme {
-  --color-accent: #ff6600;
+  --color-accent: #ff6a1a;
   --animate-pulse-pin: pulse-pin 1.4s ease-in-out infinite;
 }
 

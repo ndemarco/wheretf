@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 820 200" width="820" height="200">
+  
+  <g transform="translate(0,0)">
+    
+    <g transform="translate(0,0) scale(0.75)">
+      <path d="M 120 10 C 59 10, 20 52, 20 108 C 20 155, 68 200, 110 243 a 14 14 0 0 0 20 0 C 172 200, 220 155, 220 108 C 220 52, 181 10, 120 10 z" fill="#ff6600"></path>
+      <g fill="#141210">
+        <rect x="68" y="60" width="32" height="32" rx="4" opacity="0.28"></rect>
+        <rect x="104" y="60" width="32" height="32" rx="4" opacity="0.28"></rect>
+        <rect x="140" y="60" width="32" height="32" rx="4" opacity="0.28"></rect>
+        <rect x="68" y="96" width="32" height="32" rx="4" opacity="0.28"></rect>
+        <rect x="104" y="96" width="32" height="32" rx="4" opacity="1"></rect>
+        <rect x="140" y="96" width="32" height="32" rx="4" opacity="0.28"></rect>
+        <rect x="68" y="132" width="32" height="32" rx="4" opacity="0.28"></rect>
+        <rect x="104" y="132" width="32" height="32" rx="4" opacity="0.28"></rect>
+        <rect x="140" y="132" width="32" height="32" rx="4" opacity="0.28"></rect>
+      </g>
+    </g>
+  </g>
+  <text x="210" y="130" class="wm">WhereTF</text>
+</svg>

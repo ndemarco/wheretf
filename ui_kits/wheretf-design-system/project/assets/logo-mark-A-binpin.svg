@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 260" width="240" height="260">
+  <g>
+    
+    <path d="M 40 20&#xA;             h 160&#xA;             a 20 20 0 0 1 20 20&#xA;             v 100&#xA;             a 20 20 0 0 1 -6 14&#xA;             l -82 82&#xA;             a 16 16 0 0 1 -24 0&#xA;             l -82 -82&#xA;             a 20 20 0 0 1 -6 -14&#xA;             v -100&#xA;             a 20 20 0 0 1 20 -20 z" fill="#ff6600"></path>
+    
+    <circle cx="120" cy="90" r="28" fill="#141210"></circle>
+    
+    <rect x="80" y="140" width="80" height="10" rx="5" fill="#141210"></rect>
+  </g>
+</svg>
