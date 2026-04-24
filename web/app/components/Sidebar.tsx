@@ -133,7 +133,7 @@ const navSections: NavSection[] = [
 
 const STORAGE_KEY = "wheretf.sidebar.expanded";
 
-export default function Sidebar() {
+export default function Sidebar({ footer }: { footer?: React.ReactNode }) {
   const pathname = usePathname();
   const [expanded, setExpanded] = useState(true);
   const [hydrated, setHydrated] = useState(false);
@@ -170,16 +170,18 @@ export default function Sidebar() {
       <div className="h-10 flex items-center px-2 border-b border-slate-700/50 shrink-0 gap-2">
         <Link href="/" className="flex items-center gap-2 min-w-0 flex-1">
           <svg
-            viewBox="0 0 32 32"
-            fill="none"
+            viewBox="0 0 240 280"
             xmlns="http://www.w3.org/2000/svg"
-            className="w-5 h-5 shrink-0 text-accent"
+            className="w-[18px] h-[21px] shrink-0"
+            aria-hidden
           >
             <path
-              d="M16 2C10.477 2 6 6.477 6 12c0 5.523 10 18 10 18s10-12.477 10-18c0-5.523-4.477-10-10-10zm0 14a4 4 0 110-8 4 4 0 010 8z"
-              fill="currentColor"
-              fillRule="evenodd"
+              d="M 40 10 h 160 a 16 16 0 0 1 16 16 v 150 a 16 16 0 0 1 -4.7 11.3 l -83.3 83.3 a 12 12 0 0 1 -16.9 0 l -83.3 -83.3 a 16 16 0 0 1 -4.7 -11.3 v -150 a 16 16 0 0 1 16 -16 z"
+              className="fill-accent"
             />
+            <circle cx="120" cy="52" r="14" className="fill-slate-900" />
+            <rect x="64" y="108" width="112" height="10" rx="5" className="fill-slate-900" opacity="0.9" />
+            <rect x="64" y="128" width="72" height="10" rx="5" className="fill-slate-900" opacity="0.55" />
           </svg>
           {expanded && (
             <span className="text-sm font-bold text-slate-200 truncate">
@@ -281,6 +283,7 @@ export default function Sidebar() {
           </div>
         ))}
       </div>
+      {footer && <div className="shrink-0">{footer}</div>}
     </nav>
   );
 }

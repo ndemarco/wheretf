@@ -55,17 +55,41 @@ if (allowDevImpersonate) {
     Credentials({
       id: "dev-impersonate",
       name: "Dev impersonate",
-      credentials: { email: { label: "Email", type: "email" } },
+      credentials: {
+        email: { label: "Email", type: "email" },
+        name: { label: "Name", type: "text" },
+        isAdmin: { label: "Admin", type: "text" },
+        plan: { label: "Plan", type: "text" },
+      },
       authorize: async (raw) => {
         const email = typeof raw?.email === "string" ? raw.email.toLowerCase() : null;
+        const displayName = typeof raw?.name === "string" && raw.name ? raw.name : null;
+        const isAdmin = raw?.isAdmin === "true";
         if (!email) return null;
+
+        // Preset dev personas (Drew/Sam/Jules) are pre-seeded with org
+        // memberships by db/seed.ts. Lookup-only path preserves their
+        // seeded isAdmin + role.
         let [user] = await db.select().from(users).where(eq(users.email, email));
-        if (!user) {
-          [user] = await db
-            .insert(users)
-            .values({ email, name: email.split("@")[0] })
-            .returning();
+        if (user) {
+          return { id: user.id, email: user.email, name: user.name, image: user.image };
         }
+
+        // Fallback for unseeded emails (free-form impersonate): create
+        // the user and a solo org so switching lands somewhere non-empty.
+        [user] = await db
+          .insert(users)
+          .values({ email, name: displayName ?? email.split("@")[0], isAdmin })
+          .returning();
+        const slug = `org-${user.id.slice(0, 8)}`;
+        const [org] = await db
+          .insert(orgs)
+          .values({ name: `${user.name}'s workspace`, slug, plan: "free" })
+          .returning({ id: orgs.id });
+        await db
+          .insert(userOrgs)
+          .values({ userId: user.id, orgId: org.id, role: "admin" });
+
         return { id: user.id, email: user.email, name: user.name, image: user.image };
       },
     }),

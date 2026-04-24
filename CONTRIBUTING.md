@@ -12,14 +12,19 @@ that keep things sane.
    ```bash
    git checkout -b feat/your-thing
    ```
-3. Set up a dev env:
+3. Set up a dev env. Dev always uses a **local** Postgres from
+   Docker Desktop (or Docker Engine) — never a remote DB host.
    ```bash
-   docker compose -f docker-compose.dev.yml up -d   # postgres
+   docker compose -f docker-compose.dev.yml up -d   # postgres on :5432
    cd web
+   cp .env.local.example .env.local                 # defaults match the compose
    npm install
-   npm run db:migrate
-   npm run dev
+   npm run db:migrate                               # schema + default org/user
+   npm run db:seed                                  # optional sample catalog
+   npm run dev                                      # http://localhost:3000
    ```
+   Sign in at `/login` via the **Dev users** panel — four one-click
+   personas (admin, free, pro) that provision on first click.
 4. Make your change. Small, focused commits are easier to review.
 5. Run tests:
    ```bash

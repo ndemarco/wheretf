@@ -2,7 +2,7 @@
  * Seed script: creates sample taxonomy data and items for UI development.
  * Run: cd web && npx tsx db/seed.ts
  */
-import { eq } from "drizzle-orm";
+import { and, eq, or } from "drizzle-orm";
 import { db } from "./connection";
 import { categoryRepository } from "../repositories/categoryRepository";
 import { parameterDefinitionRepository } from "../repositories/parameterDefinitionRepository";
@@ -21,10 +21,20 @@ import {
   orgs,
   users,
 } from "./schema";
+import { userOrgs } from "./schema/orgs";
+import { DEV_PERSONAS } from "../lib/auth/dev-personas";
 
 async function getSeedCtx() {
-  const [org] = await db.select().from(orgs).where(eq(orgs.slug, "default"));
-  if (!org) throw new Error("default org not seeded — run migrations first");
+  // Repurpose the migration-seeded `default` org as `bench`.
+  // Idempotent: second run matches by new slug and no-ops.
+  await db
+    .update(orgs)
+    .set({ slug: "bench", name: "The Bench", plan: "pro" })
+    .where(or(eq(orgs.slug, "default"), eq(orgs.slug, "bench")));
+
+  const [org] = await db.select().from(orgs).where(eq(orgs.slug, "bench"));
+  if (!org) throw new Error("Bench org missing — run migrations first");
+
   const [user] = await db
     .select()
     .from(users)
@@ -33,10 +43,48 @@ async function getSeedCtx() {
   return { userId: user.id, orgId: org.id };
 }
 
+async function seedDevPersonas(benchOrgId: string) {
+  for (const p of DEV_PERSONAS) {
+    let [u] = await db.select().from(users).where(eq(users.email, p.email));
+    if (!u) {
+      [u] = await db
+        .insert(users)
+        .values({ email: p.email, name: p.name, isAdmin: p.isAdmin })
+        .returning();
+    } else if (u.isAdmin !== p.isAdmin || u.name !== p.name) {
+      [u] = await db
+        .update(users)
+        .set({ isAdmin: p.isAdmin, name: p.name })
+        .where(eq(users.id, u.id))
+        .returning();
+    }
+
+    const [existing] = await db
+      .select()
+      .from(userOrgs)
+      .where(and(eq(userOrgs.userId, u.id), eq(userOrgs.orgId, benchOrgId)))
+      .limit(1);
+    if (!existing) {
+      await db.insert(userOrgs).values({
+        userId: u.id,
+        orgId: benchOrgId,
+        role: p.role,
+      });
+    } else if (existing.role !== p.role) {
+      await db
+        .update(userOrgs)
+        .set({ role: p.role })
+        .where(and(eq(userOrgs.userId, u.id), eq(userOrgs.orgId, benchOrgId)));
+    }
+  }
+  console.log(`Seeded ${DEV_PERSONAS.length} dev personas → Bench org.`);
+}
+
 async function seed() {
   console.log("Seeding...");
 
   const ctx = await getSeedCtx();
+  await seedDevPersonas(ctx.orgId);
 
   const existingCats = await db.select().from(categories);
   const hasTaxonomy = existingCats.length > 0;

@@ -7,7 +7,7 @@ import {
 } from "drizzle-orm/pg-core";
 import { users } from "./auth";
 
-export const orgPlans = ["free", "paid"] as const;
+export const orgPlans = ["free", "pro", "paid"] as const;
 export type OrgPlan = (typeof orgPlans)[number];
 
 export const orgRoles = ["owner", "admin", "member", "viewer"] as const;

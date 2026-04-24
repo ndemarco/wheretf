@@ -1,4 +1,5 @@
 import { signIn } from "@/lib/auth/config";
+import { DEV_PERSONAS } from "@/lib/auth/dev-personas";
 
 // Force dynamic rendering so process.env is read at request time,
 // not baked in at build time (needed for runtime-injected container env vars).
@@ -19,7 +20,9 @@ async function homelabSignIn() {
 async function devImpersonate(formData: FormData) {
   "use server";
   const email = String(formData.get("email") ?? "");
-  await signIn("dev-impersonate", { email, redirectTo: "/" });
+  const name = String(formData.get("name") ?? "");
+  const isAdmin = String(formData.get("isAdmin") ?? "false");
+  await signIn("dev-impersonate", { email, name, isAdmin, redirectTo: "/" });
 }
 
 export default function LoginPage() {
@@ -74,24 +77,34 @@ export default function LoginPage() {
       </form>
 
       {allowDevImpersonate && (
-        <form action={devImpersonate} className="space-y-3 pt-6 border-t">
+        <div className="pt-6 border-t space-y-2">
           <p className="text-xs uppercase tracking-wide text-neutral-500">
-            Dev impersonate (non-prod only)
+            Dev users (non-prod only) — all members of The Bench
           </p>
-          <input
-            name="email"
-            type="email"
-            required
-            placeholder="any@email.example"
-            className="w-full border rounded px-3 py-2 bg-transparent"
-          />
-          <button
-            type="submit"
-            className="w-full bg-neutral-200 dark:bg-neutral-800 rounded px-4 py-2 font-medium"
-          >
-            Impersonate
-          </button>
-        </form>
+          {DEV_PERSONAS.map((p) => (
+            <form key={p.email} action={devImpersonate}>
+              <input type="hidden" name="email" value={p.email} />
+              <input type="hidden" name="name" value={p.name} />
+              <input type="hidden" name="isAdmin" value={String(p.isAdmin)} />
+              <button
+                type="submit"
+                className="w-full flex items-center justify-between bg-neutral-100 dark:bg-neutral-800 hover:bg-neutral-200 dark:hover:bg-neutral-700 rounded px-4 py-2.5 transition-colors"
+              >
+                <span className="font-medium">{p.name}</span>
+                <span className="flex gap-1.5 shrink-0 text-xs">
+                  <span className="px-1.5 py-0.5 rounded border border-neutral-500/40 bg-neutral-500/10 text-neutral-400">
+                    {p.role}
+                  </span>
+                  {p.isAdmin && (
+                    <span className="px-1.5 py-0.5 rounded border border-amber-500/40 bg-amber-500/10 text-amber-400">
+                      platform admin
+                    </span>
+                  )}
+                </span>
+              </button>
+            </form>
+          ))}
+        </div>
       )}
     </div>
   );
