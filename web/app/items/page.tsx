@@ -77,6 +77,7 @@ function ItemsPageInner() {
     searchParams.get("selected")
   );
   const [loading, setLoading] = useState(true);
+  const [fetchError, setFetchError] = useState<string | null>(null);
 
   // Parse state from URL
   const query = searchParams.get("q") || "";
@@ -104,7 +105,15 @@ function ItemsPageInner() {
     [searchParams, router]
   );
 
-  // Fetch items
+  // Fetch items.
+  //
+  // Error policy — preserve last-known-good state rather than silently
+  // wiping the UI on a failed response:
+  //   - Only update `items` and `categoryCounts` on successful responses
+  //     that contain the expected shape.
+  //   - On HTTP 401, bounce to /login (session likely expired).
+  //   - Otherwise set `fetchError` so FilterPanel surfaces the problem,
+  //     and keep the previous data visible.
   const fetchItems = useCallback(async () => {
     setLoading(true);
     const params = new URLSearchParams();
@@ -119,16 +128,38 @@ function ItemsPageInner() {
         fetch(`/api/items?${params.toString()}`),
         fetch(`/api/categories/counts?${params.toString()}`),
       ]);
+
+      if (itemsRes.status === 401 || countsRes.status === 401) {
+        const next = encodeURIComponent(
+          `/items?${params.toString()}`,
+        );
+        router.replace(`/login?next=${next}`);
+        return;
+      }
+
+      if (!itemsRes.ok || !countsRes.ok) {
+        const msg = !itemsRes.ok
+          ? `items: HTTP ${itemsRes.status}`
+          : `categories: HTTP ${countsRes.status}`;
+        console.error("Failed to fetch items:", msg);
+        setFetchError(msg);
+        return;
+      }
+
       const itemsData = await itemsRes.json();
       const countsData = await countsRes.json();
-      setItems(itemsData.items || []);
-      setCategoryCounts(countsData.categories || []);
+
+      if (Array.isArray(itemsData.items)) setItems(itemsData.items);
+      if (Array.isArray(countsData.categories))
+        setCategoryCounts(countsData.categories);
+      setFetchError(null);
     } catch (err) {
       console.error("Failed to fetch items:", err);
+      setFetchError(err instanceof Error ? err.message : "Network error");
     } finally {
       setLoading(false);
     }
-  }, [query, filterParam, categoryId, sortBy, sortDirection]);
+  }, [query, filterParam, categoryId, sortBy, sortDirection, router]);
 
   useEffect(() => {
     fetchItems();
@@ -260,6 +291,8 @@ function ItemsPageInner() {
         categoryCounts={categoryCounts}
         activeCategoryId={categoryId}
         onCategoryClick={setCategoryFilter}
+        fetchError={fetchError}
+        onRetry={fetchItems}
       />
 
       <ItemGrid
